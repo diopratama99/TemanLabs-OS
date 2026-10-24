@@ -6,7 +6,7 @@
 
 **A web desktop for your Ubuntu home server**
 
-Manage Docker, files, storage, services, the network and the other computers in your home from the browser, through a polished desktop, without opening a terminal.
+Manage Docker, files, backups, storage, services, the network and the other computers in your home from the browser, through a polished desktop, without opening a terminal.
 
 **English** &nbsp;|&nbsp; [Bahasa Indonesia](README.id.md)
 
@@ -27,7 +27,7 @@ Manage Docker, files, storage, services, the network and the other computers in 
   <a href="https://github.com/diopratama99/TemanLabs-OS/stargazers"><img src="https://img.shields.io/github/stars/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Stars" /></a>
 </p>
 
-[**Install**](docs/installation.md) &nbsp;•&nbsp; [**Features**](#features) &nbsp;•&nbsp; [**Screenshots**](#screenshots) &nbsp;•&nbsp; [**Architecture**](docs/architecture.md) &nbsp;•&nbsp; [**API**](docs/architecture.md#daftar-endpoint-api)
+[**Install**](docs/installation.md) &nbsp;•&nbsp; [**Features**](#features) &nbsp;•&nbsp; [**Screenshots**](#screenshots) &nbsp;•&nbsp; [**Architecture**](docs/architecture.md) &nbsp;•&nbsp; [**API**](docs/architecture.md#api-endpoints)
 
 <br />
 
@@ -41,31 +41,63 @@ Manage Docker, files, storage, services, the network and the other computers in 
 
 <table>
   <tr>
-    <td width="33%" valign="top">
-      <h3>One binary</h3>
-      A Go backend with the React frontend embedded. Copy one file, run the installer, done.
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/one-binary.svg" width="52" height="52" alt="" />
+      <p><b>One binary</b><br /><sub>Go with the React desktop embedded. Copy one file, run the installer.</sub></p>
+      <br />
     </td>
-    <td width="33%" valign="top">
-      <h3>Hundreds of apps</h3>
-      An App Center with a page for every app (screenshots, ports, folders) and one-click updates for everything already running.
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/apps.svg" width="52" height="52" alt="" />
+      <p><b>Hundreds of apps</b><br /><sub>An App Center with a page for every app, and one-click updates.</sub></p>
+      <br />
     </td>
-    <td width="33%" valign="top">
-      <h3>Your other computers</h3>
-      Wake your PC from anywhere with Wake-on-LAN and use its screen (VNC or RDP) in a window.
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/backup.svg" width="52" height="52" alt="" />
+      <p><b>Backups built in</b><br /><sub>Apps and folders to a disk or cloud drive, encrypted, any version restorable.</sub></p>
+      <br />
     </td>
   </tr>
   <tr>
-    <td width="33%" valign="top">
-      <h3>Docker without a terminal</h3>
-      Install, change ports, folders and variables, update, open a shell in a container, and uninstall, for every Docker app.
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/health.svg" width="52" height="52" alt="" />
+      <p><b>Watches your apps</b><br /><sub>Checked every minute, restarted when stuck, with 30 days of history.</sub></p>
+      <br />
     </td>
-    <td width="33%" valign="top">
-      <h3>Complete storage</h3>
-      Format disks, mount at startup, merge disks (mergerfs), auto-mount USB, and cloud drives (Google Drive, Dropbox, OneDrive, WebDAV…).
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/docker.svg" width="52" height="52" alt="" />
+      <p><b>Docker without a terminal</b><br /><sub>Ports, folders, variables, updates, shells and startup, all from forms.</sub></p>
+      <br />
     </td>
-    <td width="33%" valign="top">
-      <h3>Secure by default</h3>
-      PBKDF2 passwords, HttpOnly sessions, login rate limiting and CSRF protection. Saved passwords never reach the browser.
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/devices.svg" width="52" height="52" alt="" />
+      <p><b>Your other computers</b><br /><sub>Wake-on-LAN from anywhere, and their screens in a window.</sub></p>
+      <br />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/share.svg" width="52" height="52" alt="" />
+      <p><b>Share with a link</b><br /><sub>Downloads or file drops for anyone, with an expiry and a password.</sub></p>
+      <br />
+    </td>
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/adblock.svg" width="52" height="52" alt="" />
+      <p><b>Ad blocking for the home</b><br /><sub>Ads, trackers and gambling sites blocked on every device on the Wi-Fi.</sub></p>
+      <br />
+    </td>
+    <td align="center" width="33%">
+      <br />
+      <img src="docs/assets/highlights/security.svg" width="52" height="52" alt="" />
+      <p><b>Secure by default</b><br /><sub>Hashed passwords, a lock screen, and saved secrets kept on the server.</sub></p>
+      <br />
     </td>
   </tr>
 </table>
@@ -78,17 +110,19 @@ One command on an Ubuntu or Debian server (amd64 or arm64):
 curl -fsSL https://github.com/diopratama99/TemanLabs-OS/releases/latest/download/install.sh | sudo bash
 ```
 
-The installer downloads the latest release, checks its checksum, installs Docker if it's missing and runs TemanLabsOS as a service. Open `http://<server-ip>:7700` and sign in with the `INITIAL_PASSWORD` the installer prints. To open it without a port (`http://<server-ip>/`), set `"addr": ":80"` in the config. Later versions install from **Settings → About → Update**.
+The installer downloads the latest release, checks its checksum, installs Docker if it's missing and runs TemanLabsOS as a service. Open `http://<server-ip>:7700` and sign in with the `INITIAL_PASSWORD` the installer prints. To open it without a port (`http://<server-ip>/`), set `"addr": ":80"` in the config. Later versions install from **Settings → General → Software Update**.
 
 The full guide (requirements, updating, configuration, development, troubleshooting) is in **[docs/installation.md](docs/installation.md)**.
 
 ## Features
 
 ### Desktop
-- **Dock** with smooth adding, reordering and removing (drag apps in from the Launcher), a floating **Launcher** with categories, “Recently Used” and folders, **Quick Search** (`Ctrl/⌘ + K`), and a menu bar that follows the app in front.
-- **Status bar** items you can click: processor (top processes), power draw in watts, network (IP addresses, speeds), and the date with a calendar.
+- **Dock** with smooth adding, reordering and removing (drag apps in from the Launcher), badges for waiting updates, and a **Trash** at its end. A floating **Launcher** with categories, recently used apps and folders, **Quick Search** (`Ctrl/⌘ + K`), and a menu bar that follows the app in front.
+- **Status bar** items you can click: processor (top processes), power draw in watts, network (IP addresses, speeds), **My Devices** (wake them from there), and the date with a calendar. **Quick Settings** has tiles for dark mode, ad blocking, Tailscale, lock and more.
+- **About This Server**: the machine's model (read from its firmware, or "Virtual server" on a VPS), processor, memory and serial number.
 - **Desktop widgets**: clock, CPU, memory, storage, network, apps, power, server, calendar, **sticky notes** and **to-do lists**.
-- Windows can be moved, resized, minimised, **snapped** to halves, quarters or thirds, and made **full screen**, with smooth animations. Light and dark themes, your own photos as wallpaper, and a glass effect you can turn off.
+- Windows can be moved, resized from any edge, minimised, **snapped** to halves, quarters or thirds, and made **full screen**, with smooth animations. Light and dark themes, an accent color, your own photos as wallpaper, and a glass effect you can turn off.
+- A **lock screen** (by hand or after a while away), and a list of the browsers signed in, to sign any out.
 - Works on a phone too: full-screen windows, sidebars become tabs, and the Dock scrolls.
 - The interface is available in **English** and **Bahasa Indonesia**.
 
@@ -97,18 +131,27 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 |---|---|
 | **App Center** | Hundreds of apps from community app stores (the official store and BigBear, and you can add more). Every app has **its own page** with screenshots, a description, tips and what it sets up (image, ports, data folders), then lets you adjust the settings before it installs. **Custom Install** takes any image or compose file. **Updates** checks for newer images, with **Update All**. |
 | **App Settings** | For every Docker app, however it was installed (App Center, your own compose file, `docker run`): change ports, volumes, variables and the image in a form or as YAML; logs; a shell inside the container; update; uninstall (optionally with its data). |
+| **Settings → Applications** | Every installed app on one page: start and stop, its address, **whether it starts with the server**, updates, and its **health**: responding or not, uptime over 24 hours, 7 and 30 days, past outages, and **restart when it stops responding**. A Node.js app run by pm2 can **move into Docker** (same files, Node version and user; put back by itself if it doesn't answer), and back. |
 | **App windows** | Apps open in their own window. Apps that refuse to be embedded are shown through a built-in proxy, and apps behind an HTTP Basic login (such as Supabase Studio) are **signed in from the window** instead of the browser's dialog. |
-| **System Monitor** | CPU, memory, network and disk per container, plus systemd services, processes and listening ports. |
+| **System Monitor** | CPU, memory, network and disk per container, systemd services, processes and listening ports, and **History**: an hour to 30 days of CPU, memory, temperature, network, disk and power, with the busiest moments. |
 | **Kubernetes** | Install k3s, then manage Deployments, StatefulSets, DaemonSets, Pods, Services, PVCs and Events: scale, rolling update and rollback, logs, describe and YAML. |
 
 ### Files & media
 | App | What it does |
 |---|---|
-| **Files** | Icon, list and gallery views, photo and video thumbnails, drag and drop, file and folder uploads, copy/cut/paste, **Open With**, and **Get Info** in its own window (size, dates, permissions, disk, media details). |
+| **Files** | Icon, list and gallery views, photo and video thumbnails, drag and drop, file and folder uploads, copy/cut/paste, **Open With**, and **Get Info** in its own window. **Recents**, color **Tags**, and a **Trash** you can put things back from (each disk has its own, so even big folders move there at once; emptied after 30 days). |
+| **Share links** | Right-click a file or folder → **Share Link…** to let anyone download it (a folder as browsable files or a zip), or a folder → **Request Files…** to let anyone send files into it without seeing what's there. Links can expire and have a password. |
 | **Code** | A Monaco-based editor (the editor inside VS Code) with an explorer, search, tabs and a terminal. |
 | **Image Viewer · Video Player · Music Player** | Open media straight from Files and step through it with the arrow keys. The Video Player has its own controls (10-second skips, speed, full screen) and **continues where you left off**, on any device. |
 | **Remux** | Change video and sound formats on the server with ffmpeg: remux to MP4, MKV or TS in seconds without losing quality, convert to H.264, H.265, VP9 or AV1, resize, or keep just the sound (MP3, M4A, FLAC), with a queue and progress. |
 | **File Sharing** | Share folders over SMB (Samba) and manage its users from the web. |
+
+### Backup & the network
+| Where | What it does |
+|---|---|
+| **Settings → Backup** | Backup plans with [restic](https://restic.net/): **every app's settings and data** (their compose folders and mounts, found from Docker) plus any folders, to another disk or a cloud drive (Google Drive and the others rclone connects), daily, weekly or by hand. Apps can be paused while they're copied so databases stay in one piece. Browse any version and restore files to where they came from (the apps involved are stopped meanwhile) or into a new folder. A **recovery key** reads the backups on a reinstalled server. |
+| **Settings → Ad Blocking** | AdGuard Home for the whole home: three strengths, plus lists for gambling sites, pop-up ads, phone makers' built-in ads and Indonesian ad servers, statistics per device, an allow list, and steps for when ads still get through. |
+| **Settings → Remote Access** | Reach the server from anywhere with Tailscale, step by step. |
 
 ### Server tools
 | App | What it does |
@@ -121,14 +164,30 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 | **Log Viewer** | The systemd journal by category or by service. |
 | **Network Tools** | Interfaces, ping, traceroute, DNS, active connections and the firewall (ufw). |
 | **Scheduled Tasks** | Per-user cron jobs and systemd timers. |
-| **Settings** | Appearance, **language**, account, Linux users and groups, date and time zone, and TemanLabsOS updates. |
+| **Settings** | Laid out like a desktop's own settings: network, ad blocking, remote access, backup, power, applications, general (about, software update, storage, date and time, language, startup apps, sharing), appearance, Dock, menu bar, wallpaper, lock screen, Linux users and groups, and your login. |
 
 ## Screenshots
 
 <table>
   <tr>
+    <td width="50%"><img src="docs/screenshots/backup.png" alt="Backup" /><p align="center"><b>Backup</b>: apps and folders, with every version restorable</p></td>
+    <td width="50%"><img src="docs/screenshots/history.png" alt="System Monitor history" /><p align="center"><b>History</b>: 30 days of CPU, memory, temperature, network and disk</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/apps.png" alt="Applications" /><p align="center"><b>Applications</b>: health, uptime and auto-restart for every app</p></td>
+    <td width="50%"><img src="docs/screenshots/share.png" alt="Share link" /><p align="center"><b>Share links</b>: a link to a file or folder, with an expiry</p></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/app-center.png" alt="App Center" /><p align="center"><b>App Center</b>: every app has its own page</p></td>
     <td width="50%"><img src="docs/screenshots/devices.png" alt="Devices" /><p align="center"><b>Devices</b>: Wake-on-LAN and remote screens</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/files.png" alt="Files" /><p align="center"><b>Files</b>: Recents, Trash and Tags in the sidebar</p></td>
+    <td width="50%"><img src="docs/screenshots/launcher.png" alt="Launcher" /><p align="center"><b>Launcher</b>: every app and folder</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/about.png" alt="About This Server" /><p align="center"><b>About This Server</b>: the machine, from its firmware</p></td>
+    <td width="50%"><img src="docs/screenshots/light.png" alt="Light theme" /><p align="center"><b>Light theme</b>: status bar panels and widgets</p></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/commands.png" alt="Commands" /><p align="center"><b>Commands</b>: find a command by describing it</p></td>
@@ -138,14 +197,6 @@ The full guide (requirements, updating, configuration, development, troubleshoot
     <td width="50%"><img src="docs/screenshots/monitor.png" alt="System Monitor" /><p align="center"><b>System Monitor</b>: statistics per container</p></td>
     <td width="50%"><img src="docs/screenshots/code.png" alt="Code" /><p align="center"><b>Code</b>: edit files on the server</p></td>
   </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/kubernetes.png" alt="Kubernetes" /><p align="center"><b>Kubernetes</b>: workloads, replicas and the kubectl panel</p></td>
-    <td width="50%"><img src="docs/screenshots/light.png" alt="Light theme" /><p align="center"><b>Light theme</b>: status bar panels and widgets</p></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/files.png" alt="Files" /><p align="center"><b>Files</b>: a file manager with a sidebar</p></td>
-    <td width="50%"><img src="docs/screenshots/launcher.png" alt="Launcher" /><p align="center"><b>Launcher</b>: every app and folder</p></td>
-  </tr>
 </table>
 
 ## Architecture
@@ -154,11 +205,14 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 Browser ──HTTP/WebSocket──▶ temanlabsos (Go, systemd)
                               ├─ React frontend (embedded)
                               ├─ REST API /api/*  ·  WebSockets /ws/terminal, /ws/remote
+                              ├─ share-link pages /s/* (no sign-in)
                               ├─ Docker Engine ──▶ app containers
                               ├─ per-app proxies ──▶ apps shown in windows
+                              ├─ background: history, app health, backup schedule
                               ├─ guacd (container) ──▶ VNC / RDP to other computers
+                              ├─ AdGuard Home (container) ──▶ DNS for the home
                               ├─ k3s / kubectl ──▶ Kubernetes cluster (optional)
-                              └─ system tools: systemctl, journalctl, apt, ufw, smbd, lsblk, ffmpeg, rclone…
+                              └─ system tools: systemctl, journalctl, apt, ufw, smbd, lsblk, ffmpeg, rclone, restic…
 ```
 
 <details>
@@ -169,10 +223,11 @@ Browser ──HTTP/WebSocket──▶ temanlabsos (Go, systemd)
 │  ├─ App.tsx               The desktop: windows, Dock, Launcher, menu bar
 │  ├─ api/                  httpApi.ts (server), mockApi.ts + mockSystem.ts (sample data), types.ts
 │  ├─ components/           Window, Dock, Launcher, QuickSearch, MenuBar, Glass, widgets, dialogs
+│  │  └─ settings/          Settings sections: server, desktop, applications, backup
 │  ├─ windows/              Each app: Files, AppCenter, Devices, SystemMonitor, Terminal, …
 │  ├─ hooks/  lib/          State, helpers, command library, settings
 │  └─ styles/               base.css (theme tokens), glass.css (glass effect), app.css (layout)
-├─ server/                  Go backend, one file per area (docker.go, devices.go, files.go, smb.go, …)
+├─ server/                  Go backend, one file per area (docker.go, backups.go, health.go, files.go, …)
 ├─ deploy/install.sh        systemd installer
 ├─ scripts/build-server.mjs Builds the frontend, embeds it and cross-compiles the Linux binary
 └─ docs/                    Documentation and screenshots
@@ -189,24 +244,24 @@ How it works, and every API endpoint, is in **[docs/architecture.md](docs/archit
 
 - **Sign-in**:
   - Passwords are hashed with PBKDF2-SHA256.
-  - Session cookies are `HttpOnly` and `SameSite=Lax`, valid for 30 days.
+  - Session cookies are `HttpOnly` and `SameSite=Lax`, valid for 30 days. Every signed-in browser is listed in Settings and can be signed out.
   - An IP is locked out for a while after 8 failed sign-ins in 10 minutes.
+  - The screen can lock by itself after a while away; a locked session can do nothing until it's unlocked.
 - Cross-site requests are refused, and input is validated before it's used in a system command.
-- Passwords for other computers' screens and for apps' own logins stay on the server (readable by root only); the browser never gets them back.
-- System folders, important users and important services are protected from being deleted through the UI.
+- Passwords for other computers' screens and for apps' own logins stay on the server (readable by root only); the browser never gets them back. Backups are encrypted with a key that only the server holds.
+- **Share links** open only what was shared: paths can't leave the shared folder (not even through symlinks), hidden files stay hidden, and password tries are limited. They're reachable wherever TemanLabsOS is; use a separate public address for links you send outside.
+- System folders, important users and important services are protected from being deleted or stopped through the UI.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [Installation](docs/installation.md) | Requirements, install and update, configuration, development, troubleshooting |
-| [Architecture](docs/architecture.md) | How the frontend and backend work, adding an app, the API endpoints |
-
-The documentation pages are in Indonesian.
+| Installation · [English](docs/installation.md) · [Bahasa Indonesia](docs/installation.id.md) | Requirements, install and update, configuration, development, troubleshooting |
+| Architecture · [English](docs/architecture.md) · [Bahasa Indonesia](docs/architecture.id.md) | How the frontend and backend work, adding an app, the API endpoints |
 
 ## Credits
 
-Built with [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty) and [k3s](https://k3s.io/). App icons from [selfh.st/icons](https://selfh.st/icons/).
+Built with [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [restic](https://restic.net/), [rclone](https://rclone.org/), [AdGuard Home](https://adguard.com/adguard-home/overview.html), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty) and [k3s](https://k3s.io/). App icons from [selfh.st/icons](https://selfh.st/icons/). Block lists by [HaGeZi](https://github.com/hagezi/dns-blocklists) and [ABPindo](https://github.com/ABPindo/indonesianadblockrules).
 
 TemanLabsOS is an independent project and isn't affiliated with any operating system vendor. Third-party app names and logos in the App Center belong to their owners.
 

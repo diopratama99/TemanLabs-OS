@@ -28,6 +28,7 @@ export type SystemWindowId =
   | 'commands'
   | 'devices'
   | 'settings'
+  | 'about'
 export type WindowId = SystemWindowId | `app:${string}` | `info:${string}` | `remote:${string}`
 
 export interface Frame {
@@ -98,6 +99,13 @@ function zoneAt(x: number, y: number): SnapZone | null {
   return null
 }
 const canSnap = () => window.innerWidth > 720
+
+// Resizing from any edge or corner; the smallest size matches .window's min-width/min-height.
+type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+const EDGES: Edge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
+const MIN_WIDTH = 360
+const MIN_HEIGHT = 260
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi))
 
 /** Layouts offered when the pointer rests on the green button, as rows of zones. */
 const LAYOUTS: SnapZone[][] = [['left', 'right'], ['l3', 'm3', 'r3'], ['tl', 'tr', 'bl', 'br'], ['fill']]
@@ -216,6 +224,7 @@ export function Window({
   // user last resized it to).
   const [size, setSize] = useState({ width: frame.width, height: frame.height })
   const drag = useRef<{ dx: number; dy: number; x: number; y: number; free: boolean } | null>(null)
+  const resizing = useRef<{ edge: Edge; x: number; y: number; box: { x: number; y: number; w: number; h: number } } | null>(null)
   const [preview, setPreview] = useState<SnapZone | null>(null)
   const [snapMenu, setSnapMenu] = useState<DOMRect | null>(null)
   const menuTimer = useRef(0)
@@ -372,6 +381,41 @@ export function Window({
     if (zone) snapTo(zone)
   }
 
+  const onResizeDown = (edge: Edge) => (e: PointerEvent<HTMLDivElement>) => {
+    const el = ref.current
+    if (!el || laidOut || e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    onFocus?.()
+    resizing.current = { edge, x: e.clientX, y: e.clientY, box: { x: pos.x, y: pos.y, w: el.offsetWidth, h: el.offsetHeight } }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onResizeMove = (e: PointerEvent<HTMLDivElement>) => {
+    const r = resizing.current
+    if (!r) return
+    const { edge, box } = r
+    const dx = e.clientX - r.x
+    const dy = e.clientY - r.y
+    let { x, y, w, h } = box
+    const top = MENUBAR_HEIGHT + 4
+    // The far edge stays put; the near one follows the pointer, within the desktop.
+    if (edge.includes('e')) w = clamp(box.w + dx, MIN_WIDTH, window.innerWidth - box.x - 8)
+    if (edge.includes('w')) {
+      w = clamp(box.w - dx, MIN_WIDTH, box.x + box.w - 8)
+      x = box.x + box.w - w
+    }
+    if (edge.includes('s')) h = clamp(box.h + dy, MIN_HEIGHT, window.innerHeight - box.y - 8)
+    if (edge.includes('n')) {
+      h = clamp(box.h - dy, MIN_HEIGHT, box.y + box.h - top)
+      y = box.y + box.h - h
+    }
+    setPos({ x, y })
+    setSize({ width: w, height: h })
+  }
+  const endResize = () => {
+    resizing.current = null
+  }
+
   // Layouts under the green button while the pointer rests on it.
   useEffect(() => () => clearTimeout(menuTimer.current), [])
   const greenEnter = (e: PointerEvent<HTMLButtonElement>) => {
@@ -508,6 +552,19 @@ export function Window({
           </WindowActiveContext.Provider>
         </WindowIdContext.Provider>
       </div>
+      {!laidOut &&
+        !minimized &&
+        EDGES.map(edge => (
+          <div
+            key={edge}
+            className={`win-resize is-${edge}`}
+            onPointerDown={onResizeDown(edge)}
+            onPointerMove={onResizeMove}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            aria-hidden
+          />
+        ))}
       {preview && createPortal(<div className="snap-preview" style={{ ...zoneBox(preview), zIndex: z - 1 }} aria-hidden />, document.body)}
       {snapMenu &&
         createPortal(

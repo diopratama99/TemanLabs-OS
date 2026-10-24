@@ -86,6 +86,190 @@ export interface FileEntry {
   kind: FileKind
   size?: number
   modified: string
+  /** The whole path, for files listed away from their folder (Recents, a tag). */
+  path?: string
+}
+
+/** One stretch of the server's history (averages; cpuMax is the busiest moment). */
+export interface HistoryPoint {
+  t: number
+  cpu: number
+  cpuMax: number
+  /** Percent of memory used. */
+  mem: number
+  temp: number
+  /** Bytes a second. */
+  rx: number
+  tx: number
+  read: number
+  write: number
+  load: number
+  watts: number
+}
+
+export type HistoryRange = '1h' | '24h' | '7d' | '30d'
+
+export interface HistoryData {
+  /** Seconds each point covers. */
+  step: number
+  /** When recording began (unix seconds). */
+  since: number
+  /** null where the server was off. */
+  points: (HistoryPoint | null)[]
+}
+
+export interface AppIncident {
+  start: string
+  /** Missing while it's still down. */
+  end?: string
+  reason: string
+  /** TemanLabsOS restarted it. */
+  restarted?: boolean
+}
+
+export interface AppHealth {
+  id: string
+  status: 'up' | 'down' | 'stopped' | 'starting' | 'unknown'
+  since?: string
+  checked?: string
+  error?: string
+  autoRestart: boolean
+  uptime24h: number
+  uptime7d: number
+  uptime30d: number
+  watching: string
+  incidents: AppIncident[]
+}
+
+/** Whether a native app can move into Docker, and how it would run there. */
+export interface MovePreview {
+  possible: boolean
+  /** Why not, when it can't. */
+  reason?: string
+  /** Its pm2 name. */
+  name?: string
+  project?: string
+  folder?: string
+  node?: string
+  compose?: string
+}
+
+/** A Docker app that came from pm2, and can go back. */
+export interface MovedApp {
+  app: string
+  name: string
+  project: string
+  compose: string
+  moved: string
+}
+
+export type BackupSchedule = 'manual' | 'daily' | 'weekly'
+
+/** What a backup plan is set to; also the body for creating or changing one. */
+export interface BackupPlanSettings {
+  name: string
+  /** Every Docker app's settings and data. */
+  apps: boolean
+  paths: string[]
+  /** A folder, or "rclone:<remote>:<folder>" for a cloud drive. */
+  dest: string
+  schedule: BackupSchedule
+  /** HH:MM, the server's time. */
+  time: string
+  /** 0 = Sunday, for weekly. */
+  weekday: number
+  keep: number
+  pauseApps: boolean
+}
+
+export interface BackupPlan extends BackupPlanSettings {
+  id: string
+  created: string
+  lastRun?: string
+  lastOk: boolean
+  lastError?: string
+  lastWarning?: string
+  lastAdded?: number
+  lastTotal?: number
+  lastFiles?: number
+  running: boolean
+  nextRun?: string
+  destFree?: number
+  /** On the same disk as the apps' data. */
+  sameDisk?: boolean
+}
+
+export interface BackupsInfo {
+  /** restic, the backup engine. */
+  installed: boolean
+  installing: boolean
+  plans: BackupPlan[]
+}
+
+export interface BackupDestination {
+  label: string
+  dest: string
+  cloud?: boolean
+  free?: number
+}
+
+export interface BackupApp {
+  id: string
+  name: string
+  paths: string[]
+}
+
+export interface BackupVersion {
+  id: string
+  time: string
+  paths: string[]
+  host: string
+  /** Made by this plan, not another one (or another server) saving to the same place. */
+  mine: boolean
+}
+
+export interface BackupFile {
+  name: string
+  path: string
+  folder: boolean
+  size?: number
+  modified?: string
+}
+
+/** A link that lets anyone who has it download a file or folder, or send files into a folder. */
+export interface ShareLink {
+  id: string
+  path: string
+  name: string
+  folder: boolean
+  /** Visitors send files in, and can't see what's there. */
+  upload: boolean
+  created: string
+  expires?: string
+  expired: boolean
+  hasPassword: boolean
+  downloads: number
+  uploads: number
+  /** What it shared was deleted or moved. */
+  missing?: boolean
+}
+
+export interface ShareLinks {
+  /** The address links are given out with; empty for this desktop's own. */
+  baseUrl: string
+  links: ShareLink[]
+}
+
+export type TagColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray'
+
+export interface TrashItem {
+  id: string
+  name: string
+  /** The folder it was deleted from, where Put Back returns it. */
+  from: string
+  deleted: string
+  kind: FileKind
+  size?: number
 }
 
 export interface SearchMatch {
@@ -139,6 +323,8 @@ export interface AppFrame {
 
 export interface Session {
   authenticated: boolean
+  /** Signed in, but behind the lock screen until the password is entered again. */
+  locked?: boolean
   hostname: string
   /** Only sent once signed in: the file manager's root and the terminal user's home. */
   root?: string
@@ -678,6 +864,32 @@ export interface CloudInfo {
 }
 
 /** TemanLabsOS's own version and the newest GitHub release. */
+/** An app and whether it starts by itself when the server boots. */
+export interface StartupApp {
+  id: string
+  name: string
+  icon: string
+  iconUrl?: string
+  color: [string, string]
+  enabled: boolean
+  /** Always starts (ssh, TemanLabsOS itself). */
+  locked?: boolean
+}
+
+/** What the server is, from its firmware. */
+export interface HardwareInfo {
+  vendor?: string
+  model?: string
+  /** The maker's number for the model (Lenovo's machine type), when the model is a name. */
+  modelNumber?: string
+  kind: 'mini' | 'desktop' | 'laptop' | 'allinone' | 'server' | 'board' | 'virtual' | 'unknown'
+  /** The hypervisor, for a virtual server. */
+  virtualization?: string
+  serial?: string
+  /** The firmware's year. */
+  year?: string
+}
+
 export interface ReleaseStatus {
   current: string
   latest?: string
@@ -892,4 +1104,45 @@ export interface FoundDevice {
   ports: number[] | null
   self?: boolean
   router?: boolean
+}
+
+// ----- Ad blocking (AdGuard Home, run by the server) -----
+
+export interface AdblockStatus {
+  docker: boolean
+  installed: boolean
+  running: boolean
+  installing: boolean
+  step?: string
+  error?: string
+  /** Blocking is on; while paused, the seconds left. */
+  protection: boolean
+  pausedFor?: number
+  /** Rules in the block lists. */
+  rules: number
+  /** Domains let through anyway. */
+  allowed: string[]
+  /** Extra lists that are on (gambling, strict, indonesia, bypass) and their rule counts. */
+  lists: Record<string, number>
+  stats?: {
+    queries: number
+    blocked: number
+    avgMs: number
+    topBlocked: { name: string; count: number }[] | null
+    topClients: { name: string; count: number; label?: string }[] | null
+  }
+  version?: string
+  /** Running but not answering yet (still starting). */
+  unresponsive?: boolean
+}
+
+/** A browser signed in to TemanLabsOS (Settings → Login & Password). */
+export interface SignedInBrowser {
+  id: string
+  current: boolean
+  created?: string
+  seen?: string
+  addr?: string
+  agent?: string
+  locked?: boolean
 }

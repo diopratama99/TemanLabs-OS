@@ -1,73 +1,80 @@
-# Instalasi TemanLabsOS
+# Installing TemanLabsOS
 
-Panduan memasang TemanLabsOS di server, mengubah konfigurasi, menjalankan versi development, dan mengatasi masalah umum.
+How to install TemanLabsOS on a server, change its configuration, run the development version, and fix common problems.
+
+**English** &nbsp;|&nbsp; [Bahasa Indonesia](installation.id.md)
 
 ---
 
-## Daftar isi
+## Contents
 
-- [Persyaratan](#persyaratan)
-- [Instalasi di server](#instalasi-di-server)
-- [Update](#update)
-- [Konfigurasi](#konfigurasi)
-- [Perintah berguna](#perintah-berguna)
+- [Requirements](#requirements)
+- [Installing on a server](#installing-on-a-server)
+- [Updating](#updating)
+- [Configuration](#configuration)
+- [Useful commands](#useful-commands)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
-## Persyaratan
+## Requirements
 
 **Server**
-- Ubuntu 22.04 / 24.04 (sudah diuji di 24.04) dengan systemd.
-- Docker Engine (untuk App Center dan System Monitor).
-- Opsional, untuk fitur tertentu: CasaOS (membaca app-nya), `ffmpeg` (thumbnail video, dipasang otomatis oleh installer), `smartmontools`, `samba`, `ufw`, `udisks2`.
-- Kubernetes **tidak perlu disiapkan**: k3s bisa dipasang langsung dari app Kubernetes.
+- Ubuntu 22.04 / 24.04 (tested on 24.04) with systemd.
+- Docker Engine (for the App Center, System Monitor and most features).
+- Optional, for some features:
+  - `ffmpeg`: video thumbnails and Remux (the installer adds it).
+  - `restic`: backups. Install it from **Settings → Backup** when you set one up.
+  - `rclone`: cloud drives, and backups to them.
+  - `smartmontools`, `samba`, `ufw`, `udisks2`: disk health, file sharing, the firewall, USB drives.
+  - CasaOS: its apps are read too, if it's there.
+- Kubernetes **doesn't need setting up**: k3s can be installed from the Kubernetes app.
 
-**Komputer untuk build**
-- Node.js 20.19+ atau 22.12+.
+**Computer to build on**
+- Node.js 20.19+ or 22.12+.
 - Go 1.27+.
 
-**Browser**: Chrome, Edge, atau Brave untuk efek kaca penuh. Firefox dan Safari tetap bisa dipakai dengan efek blur yang lebih sederhana.
+**Browser**: Chrome, Edge or Brave for the full glass effect. Firefox and Safari work too, with a simpler blur.
 
 ---
 
-## Instalasi di server
+## Installing on a server
 
-### Cara cepat (satu perintah)
+### Quick install (one command)
 
 ```bash
 curl -fsSL https://github.com/diopratama99/TemanLabs-OS/releases/latest/download/install.sh | sudo bash
 ```
 
-Script ini:
-- mendeteksi arsitektur server (amd64 / arm64),
-- memasang Docker lewat get.docker.com kalau belum ada (lewati dengan `TEMANLABS_SKIP_DOCKER=1`),
-- mengunduh binary dari GitHub Releases dan mencocokkannya dengan `SHA256SUMS`,
-- menjalankan installer service (sama dengan cara manual di bawah).
+The script:
+- detects the server's architecture (amd64 / arm64),
+- installs Docker through get.docker.com if it's missing (skip with `TEMANLABS_SKIP_DOCKER=1`),
+- downloads the binary from GitHub Releases and checks it against `SHA256SUMS`,
+- runs the service installer (the same as the manual way below).
 
-Opsi lewat variabel lingkungan, misalnya `curl … | sudo TEMANLABS_VERSION=v1.0.0 bash`:
+Options are environment variables, for example `curl … | sudo TEMANLABS_VERSION=v1.0.0 bash`:
 
-| Variabel | Arti |
+| Variable | Meaning |
 |---|---|
-| `TEMANLABS_VERSION` | Pasang rilis tertentu, bukan yang terbaru |
-| `TEMANLABS_USER` | User Linux untuk Terminal dan pemilik file baru (bawaan: user yang memakai sudo) |
-| `TEMANLABS_PORT` | Port web desktop, hanya saat instalasi pertama (bawaan 7700) |
-| `TEMANLABS_SKIP_DOCKER` | `1` = jangan pasang Docker |
+| `TEMANLABS_VERSION` | Install this release instead of the latest |
+| `TEMANLABS_USER` | Linux user for the Terminal and owner of new files (default: the user running sudo) |
+| `TEMANLABS_PORT` | Port of the web desktop, on the first install only (default 7700) |
+| `TEMANLABS_SKIP_DOCKER` | `1` = don't install Docker |
 
-### Cara manual: build sendiri
+### Manual: build it yourself
 
 #### 1. Build
 
 ```bash
 npm install
 npm run build:server          # → server/bin/temanlabsos-linux-amd64
-# untuk server ARM (mis. Raspberry Pi):  node scripts/build-server.mjs arm64
+# for an ARM server (e.g. Raspberry Pi):  node scripts/build-server.mjs arm64
 ```
 
-Perintah ini mem-build frontend, meng-embed-nya ke backend, lalu meng-compile binary Linux.
+This builds the frontend, embeds it in the backend and compiles the Linux binary.
 
-#### 2. Salin ke server dan install
+#### 2. Copy it to the server and install
 
 ```bash
 scp server/bin/temanlabsos-linux-amd64 deploy/install.sh user@server:temanlabsos-deploy/
@@ -76,82 +83,82 @@ cd temanlabsos-deploy
 sudo ./install.sh ./temanlabsos-linux-amd64 <linux-user>
 ```
 
-`<linux-user>` adalah user Linux yang dipakai oleh Terminal dan menjadi pemilik file baru.
+`<linux-user>` is the Linux user the Terminal runs as, and the owner of new files.
 
-Installer akan:
-- memasang binary ke `/opt/temanlabsos/temanlabsos`,
-- membuat konfigurasi `/var/lib/temanlabsos/config.json` (mode `0600`),
-- membuat dan menyalakan systemd service `temanlabsos`,
-- pada instalasi pertama, membuat **password acak** dan mencetaknya sekali sebagai `INITIAL_PASSWORD=…`. Simpan baik-baik.
+The installer:
+- installs the binary to `/opt/temanlabsos/temanlabsos`,
+- writes the configuration `/var/lib/temanlabsos/config.json` (mode `0600`),
+- creates and starts the systemd service `temanlabsos`,
+- on the first install, makes a **random password** and prints it once as `INITIAL_PASSWORD=…`. Keep it somewhere safe.
 
-Variabel opsional:
+Optional variables:
 - `TEMANLABS_PORT=7700`
-- `TEMANLABS_ROOT=/DATA`, untuk membatasi Files ke folder data saja (bawaannya `/`, seluruh filesystem).
+- `TEMANLABS_ROOT=/DATA`, to limit Files to the data folder (the default is `/`, the whole filesystem).
 
-Contoh: `sudo TEMANLABS_ROOT=/DATA ./install.sh ./temanlabsos-linux-amd64 <linux-user>`. Variabel ini hanya dipakai saat instalasi pertama, ketika `config.json` dibuat. Setelah itu, ubah lewat [Konfigurasi](#konfigurasi).
+For example: `sudo TEMANLABS_ROOT=/DATA ./install.sh ./temanlabsos-linux-amd64 <linux-user>`. These are only used on the first install, when `config.json` is created. After that, change them in the [configuration](#configuration).
 
-#### 3. Buka
+#### 3. Open it
 
-Buka `http://<ip-server>:7700`, lalu login dengan password tadi. Password bisa diganti di **Settings → Account**.
+Open `http://<server-ip>:7700` and sign in with that password. Change it in **Settings → Login & Password**.
 
 ---
 
-## Update
+## Updating
 
-- **Dari UI**: Settings → About → *Check for Updates*. TemanLabsOS mengunduh rilis terbaru dari GitHub, mencocokkan checksum, mengganti binary-nya, lalu restart sendiri. Kalau checksum tidak cocok, tidak ada yang diubah.
-- **Dari terminal**: jalankan lagi perintah satu baris di atas.
-- **Build sendiri**: ulangi langkah manual 1–2.
+- **From the desktop**: Settings → General → Software Update → *Check for Updates*. TemanLabsOS downloads the newest release from GitHub, checks its checksum, swaps its binary and restarts itself. If the checksum doesn't match, nothing changes. Settings shows a badge when a new version is out.
+- **From a terminal**: run the one-line command above again.
+- **Your own build**: repeat manual steps 1–2.
 
-Konfigurasi dan password tidak berubah saat update.
+The configuration, password and everything in the state folder stay as they are.
 
-### Membuat rilis (untuk pengelola repo)
+### Making a release (for the repository's maintainers)
 
-Push tag versi; GitHub Actions (`.github/workflows/release.yml`) mem-build amd64 dan arm64 lalu membuat Release berisi binary, `install.sh`, `install-service.sh`, dan `SHA256SUMS`:
+Push a version tag. GitHub Actions (`.github/workflows/release.yml`) builds amd64 and arm64 and makes a Release with the binaries, `install.sh`, `install-service.sh` and `SHA256SUMS`:
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-> Kalau binary lama sedang berjalan, `scp` langsung ke nama yang sama bisa gagal dengan error *text file busy*. Upload dengan nama lain (mis. `.new`), lalu `mv`.
+> While the old binary runs, `scp` straight onto the same name can fail with *text file busy*. Upload it under another name (e.g. `.new`), then `mv` it.
 
 ---
 
-## Konfigurasi
+## Configuration
 
 File: `/var/lib/temanlabsos/config.json`
 
-| Kunci | Bawaan | Arti |
+| Key | Default | Meaning |
 |---|---|---|
-| `addr` | `:7700` | Alamat dan port yang didengarkan. Isi `:80` supaya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. |
-| `redirectFrom` | (kosong) | Alamat lama yang diarahkan ke `addr`, misalnya `[":7700"]` setelah pindah ke `:80`, supaya bookmark lama tetap jalan. |
-| `root` | `/` | Folder teratas untuk Files dan Code. Isi `/DATA` untuk membatasi. |
-| `user` | (dari installer) | User Linux untuk Terminal dan pemilik file baru. |
-| `stateDir` | `/var/lib/temanlabsos` | Tempat file compose app, wallpaper, dan cache thumbnail. |
-| `passwordHash` | (dibuat otomatis) | Hash PBKDF2 dari password. Jangan diedit manual; pakai `set-password`. |
+| `addr` | `:7700` | Address and port to listen on. Set `:80` to open it without a port (`http://<server-ip>/`), as long as nothing else uses port 80. |
+| `redirectFrom` | (empty) | Old addresses that redirect to `addr`, for example `[":7700"]` after moving to `:80`, so old bookmarks keep working. |
+| `root` | `/` | Top folder for Files and Code. Set `/DATA` to limit it. |
+| `user` | (from the installer) | Linux user for the Terminal and owner of new files. |
+| `stateDir` | `/var/lib/temanlabsos` | Where TemanLabsOS keeps its own files: app compose files, wallpapers, thumbnails, backup plans and the recovery key, share links, tags, the 30-day history and app health. |
+| `passwordHash` | (made automatically) | PBKDF2 hash of the password. Don't edit it by hand; use `set-password`. |
 
-Restart service setelah mengubah konfigurasi.
+Restart the service after changing the configuration.
 
-### Pindah dari CasaOS
+### Moving from CasaOS
 
-TemanLabsOS bisa berjalan bersama CasaOS. Kalau CasaOS mau dilepas dan TemanLabsOS memakai port 80:
+TemanLabsOS can run next to CasaOS. To remove CasaOS and give TemanLabsOS port 80:
 
-1. Pastikan disk data dipasang lewat `/etc/fstab` (**Disk Manager → Mount saat startup**), bukan oleh CasaOS.
-2. Backup lalu hentikan service CasaOS (`casaos`, `casaos-gateway`, `casaos-app-management`, `casaos-local-storage`, `casaos-message-bus`, `casaos-user-service`, serta `rclone` dan `devmon@devmon` yang dipasangnya), dan hapus file unit serta `/usr/bin/casaos*`.
-3. **Jangan** pakai `casaos-uninstall` kalau app-nya mau tetap jalan: script itu bisa menghapus semua container, image, dan `/DATA/AppData`. Jangan hapus juga `/var/lib/casaos/apps` (file compose app-nya, dipakai TemanLabsOS untuk mengelola app itu), `/etc/samba/smb.casa.conf` (share Samba), dan `/usr/bin/rclone` (dipakai cloud drive).
-4. Set `"addr": ":80"` dan `"redirectFrom": [":7700"]`, lalu restart TemanLabsOS. Kalau nginx terpasang dengan situs default di port 80, nonaktifkan supaya tidak berebut port saat boot.
+1. Make sure the data disks are mounted through `/etc/fstab` (**Disk Manager → Mount at startup**), not by CasaOS.
+2. Back up, then stop the CasaOS services (`casaos`, `casaos-gateway`, `casaos-app-management`, `casaos-local-storage`, `casaos-message-bus`, `casaos-user-service`, and the `rclone` and `devmon@devmon` it set up), and remove their unit files and `/usr/bin/casaos*`.
+3. **Don't** use `casaos-uninstall` if its apps should keep running: that script can remove every container, image and `/DATA/AppData`. Also keep `/var/lib/casaos/apps` (the apps' compose files, which TemanLabsOS manages them with), `/etc/samba/smb.casa.conf` (Samba shares) and `/usr/bin/rclone` (cloud drives).
+4. Set `"addr": ":80"` and `"redirectFrom": [":7700"]`, then restart TemanLabsOS. If nginx is installed with its default site on port 80, disable it so they don't race for the port at boot.
 
-App Docker tidak terpengaruh: container dijalankan ulang oleh Docker sendiri sesuai restart policy-nya.
+Docker apps aren't affected: Docker starts their containers again by their own restart policy.
 
 ---
 
-## Perintah berguna
+## Useful commands
 
 ```bash
 journalctl -u temanlabsos -f                       # log
 sudo systemctl restart temanlabsos                 # restart
 sudo systemctl status temanlabsos                  # status
-sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password   # reset password
+sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password   # reset the password
 ```
 
 ---
@@ -160,33 +167,37 @@ sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-p
 
 ```bash
 npm install
-npm run dev:mock     # UI saja, dengan data contoh di memori, tanpa server → http://localhost:5173
-npm run dev          # UI dengan hot reload, terhubung ke server TemanLabsOS sungguhan
-npm run build        # type-check + build frontend ke dist/
+npm run dev:mock     # the UI only, with sample data in memory, no server → http://localhost:5173
+npm run dev          # the UI with hot reload, talking to a real TemanLabsOS server
+npm run build        # type-check and build the frontend into dist/
 ```
 
-`npm run dev` mem-proxy `/api` dan `/ws` ke `http://localhost:7700`. Untuk memakai server lain, buat file `.env.local` (tidak ikut ter-commit):
+`npm run dev` proxies `/api` and `/ws` to `http://localhost:7700`. To use another server, create `.env.local` (not committed):
 
 ```bash
 TEMANLABS_SERVER=http://my-server:7700
 ```
 
-Atau lewat tunnel SSH: `ssh -L 7700:localhost:7700 user@server`.
+Or through an SSH tunnel: `ssh -L 7700:localhost:7700 user@server`.
 
-Kalau login di mode dev menampilkan **Bad Gateway**, artinya server tujuan tidak bisa dihubungi. Periksa `.env.local` atau tunnel-nya.
+If signing in shows **Bad Gateway** in dev mode, the server can't be reached. Check `.env.local` or the tunnel.
 
-Cara kerja kode dan daftar endpoint API ada di [architecture.md](architecture.md).
+How the code works, and every API endpoint, is in [architecture.md](architecture.md).
 
 ---
 
 ## Troubleshooting
 
-| Masalah | Solusi |
+| Problem | Fix |
 |---|---|
-| Lupa password | `sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password` |
-| Halaman tidak terbuka | `systemctl status temanlabsos`, lalu `journalctl -u temanlabsos -n 50`. Pastikan port TemanLabsOS (bawaan 7700, atau 80) diizinkan di firewall dan tidak dipakai program lain. |
-| `scp` gagal: *text file busy* | Upload dengan nama lain lalu `mv` (lihat [Update](#update)). |
-| App tidak bisa dibuka di jendela | Pakai tombol **Open in New Tab**. Beberapa app menolak ditampilkan di dalam frame. |
-| Thumbnail video tidak muncul | Install `ffmpeg`: `sudo apt install ffmpeg`. |
-| Pod Kubernetes lama di *ContainerCreating* | Image masih diunduh. Cek **Kubernetes → Events**. |
-| Efek kaca tidak muncul | Pakai browser berbasis Chromium, atau matikan *Reduce transparency* di Settings. |
+| Forgot the password | `sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password` |
+| The page doesn't open | `systemctl status temanlabsos`, then `journalctl -u temanlabsos -n 50`. Make sure TemanLabsOS's port (7700 by default, or 80) is allowed by the firewall and not used by another program. |
+| `scp` fails: *text file busy* | Upload under another name, then `mv` (see [Updating](#updating)). |
+| An app won't show in its window | Use **Open in New Tab**. Some apps refuse to be shown inside a frame. |
+| A window says *Something went wrong in this window* | Click **Reload Window**. The rest of the desktop keeps working; the message under it says what failed. |
+| Video thumbnails don't appear | Install `ffmpeg`: `sudo apt install ffmpeg`. |
+| A backup to a cloud drive fails | Check the drive is connected in **Disk Manager → Cloud Drives**. The error from the last run is shown on the backup's page. |
+| Backups can't be read after a reinstall | Enter the old recovery key in **Settings → Backup → Recovery Key → Backups from before**, then add a backup plan with the same destination. |
+| A share link doesn't open for someone else | Links use the address you opened TemanLabsOS with, which only works on your network or Tailscale. Point a public address (a Cloudflare Tunnel or Tailscale Funnel) at the server and enter it in **Settings → General → Sharing → Address for links**. |
+| Kubernetes pods stay in *ContainerCreating* | The images are still downloading. Check **Kubernetes → Events**. See also [kubernetes-lab.md](kubernetes-lab.md#10-troubleshooting). |
+| No glass effect | Use a Chromium-based browser, or turn off *Reduce Transparency* in Settings. |

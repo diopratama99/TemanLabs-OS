@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, CalendarClock, Copy, Cpu, EthernetPort, Network, Waypoints, Wifi, Zap, type LucideIcon } from 'lucide-react'
+import { Activity, CalendarClock, Copy, Cpu, EthernetPort, LoaderCircle, MonitorPlay, MonitorSmartphone, Network, Power, Waypoints, Wifi, Zap, type LucideIcon } from 'lucide-react'
 import { api } from '../api'
-import type { ProcessInfo, SystemStats } from '../api/types'
+import type { Device, DeviceStatus, ProcessInfo, RemoteEngine, SystemStats } from '../api/types'
 import { HISTORY_LENGTH, type StatsHistory } from '../hooks/useSystemStats'
 import { copyText } from '../lib/clipboard'
 import { formatSpeed } from '../lib/format'
 import { language, tr } from '../lib/i18n'
 import { Glass } from './Glass'
 import { MonthCalendar } from './MonthCalendar'
+import { KIND_ICON } from '../windows/Devices'
 
 // The panels that open from the menu bar's status items: processor, power, network, clock.
 
@@ -197,6 +198,89 @@ export function NetworkPanel({ stats, history, onOpen }: { stats: SystemStats; h
           <strong>{formatSpeed(stats.network.tx)}</strong>
           <Bars values={history.tx} max={peak(history.tx)} className="is-tx" />
         </div>
+      </div>
+    </Panel>
+  )
+}
+
+// ---------- Devices ----------
+
+const DEVICE_POLL_MS = 4000
+
+export function DevicesPanel({ onConnect, onOpen }: { onConnect: (device: Device) => void; onOpen: () => void }) {
+  const [devices, setDevices] = useState<Device[] | null>(null)
+  const [engine, setEngine] = useState<RemoteEngine | null>(null)
+  const [status, setStatus] = useState<Record<string, DeviceStatus>>({})
+  const [waking, setWaking] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let alive = true
+    api.devices().then(
+      r => {
+        if (!alive) return
+        setDevices(r.devices)
+        setEngine(r.engine)
+      },
+      () => alive && setDevices([]),
+    )
+    const check = () => api.deviceStatus().then(s => alive && setStatus(s), () => {})
+    void check()
+    const timer = setInterval(check, DEVICE_POLL_MS)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [])
+  const wake = (d: Device) => {
+    setWaking(w => new Set(w).add(d.id))
+    api.wakeDevice(d.id).catch(() => setWaking(w => {
+      const next = new Set(w)
+      next.delete(d.id)
+      return next
+    }))
+  }
+  const on = devices?.filter(d => status[d.id]?.online).length ?? 0
+  return (
+    <Panel
+      icon={MonitorSmartphone}
+      title={tr('My Devices')}
+      subtitle={devices?.length ? tr('{0} of {1} on', on, devices.length) : undefined}
+      footer={
+        <button className="btn" onClick={onOpen}>
+          <MonitorSmartphone size={13} /> {tr('Open Devices')}
+        </button>
+      }
+    >
+      <div className="sp-devices">
+        {devices === null && <span className="sp-muted">{tr('Loading…')}</span>}
+        {devices?.length === 0 && <span className="sp-muted">{tr('No devices yet. Add your PC or laptop in Devices.')}</span>}
+        {devices?.map(d => {
+          const Icon = KIND_ICON[d.kind]
+          const st = status[d.id]
+          const online = !!st?.online
+          const isWaking = waking.has(d.id) && !online
+          return (
+            <div key={d.id} className="sp-device">
+              <span className={`sp-device-icon is-${d.kind}`}>
+                <Icon size={15} />
+                <i className={`sp-device-dot ${online ? 'is-on' : isWaking ? 'is-waking' : ''}`} />
+              </span>
+              <span className="sp-device-name">
+                <strong>{d.name}</strong>
+                <small>{!st ? tr('Checking…') : online ? (st.latency ? tr('On · {0} ms', st.latency) : tr('Switched on')) : isWaking ? tr('Waking up…') : tr('Off or asleep')}</small>
+              </span>
+              {!online && d.mac && (
+                <button className="pill-btn" onClick={() => wake(d)} disabled={isWaking} title={tr('Wake')}>
+                  {isWaking ? <LoaderCircle size={12} className="spin" /> : <Power size={12} />} {tr('Wake')}
+                </button>
+              )}
+              {online && d.protocol && (
+                <button className="pill-btn is-on" onClick={() => onConnect(d)} disabled={!engine?.running} title={engine?.running ? tr('Connect') : tr('Install the remote desktop engine first')}>
+                  <MonitorPlay size={12} /> {tr('Connect')}
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
     </Panel>
   )

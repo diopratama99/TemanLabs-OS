@@ -8,6 +8,15 @@ import type {
   AppStatus,
   CustomAppSpec,
   FileEntry,
+  BackupApp,
+  BackupDestination,
+  BackupFile,
+  BackupPlan,
+  BackupPlanSettings,
+  BackupVersion,
+  BackupsInfo,
+  ShareLink,
+  TagColor,
   InstalledApp,
   Job,
   SearchMatch,
@@ -130,6 +139,25 @@ function moveTree(from: string, to?: string) {
   }
 }
 
+let mockLinks: ShareLink[] = []
+const mockBackup: { installed: boolean; plans: BackupPlan[]; versions: BackupVersion[] } = {
+  installed: false,
+  plans: [],
+  versions: [
+    { id: 'a1b2c3d4', time: new Date(Date.now() - 86400e3).toISOString(), paths: ['/DATA/AppData'], host: 'teman-server', mine: true },
+    { id: 'e5f6a7b8', time: new Date(Date.now() - 2 * 86400e3).toISOString(), paths: ['/DATA/AppData'], host: 'teman-server', mine: true },
+  ],
+}
+let mockLinkBase = ''
+let mockTrash: { id: string; entry: FileEntry; from: string; deleted: string }[] = []
+const mockTags: Record<string, TagColor[]> = {}
+let mockRecents: string[] = []
+const placedMock = (p: string): FileEntry | null => {
+  const { dir, name } = splitPath(p)
+  const entry = (files[dir] ?? []).find(e => e.name === name)
+  return entry ? { ...entry, path: p } : null
+}
+
 const splitPath = (path: string) => {
   const slash = path.lastIndexOf('/')
   return { dir: path.slice(0, slash), name: path.slice(slash + 1) }
@@ -166,6 +194,21 @@ export const mockApi: Api = {
   },
   async logout() {},
   async changePassword() {},
+  async lock() {},
+  async unlock(password: string) {
+    await delay(300)
+    if (!password) throw new Error('Incorrect password.')
+  },
+  async signedInBrowsers() {
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+    return [
+      { id: 'a1b2c3d4e5f60718', current: true, created: ago(60 * 26), seen: ago(0), addr: '100.105.105.26', agent: navigator.userAgent },
+      { id: 'b2c3d4e5f6071829', current: false, created: ago(60 * 24 * 5), seen: ago(42), addr: '192.168.1.11', agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36' },
+      { id: 'c3d4e5f607182930', current: false, created: ago(60 * 24 * 12), seen: ago(60 * 30), addr: '100.88.12.4', agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1' },
+    ]
+  },
+  async signOutBrowser() {},
+  async signOutOtherBrowsers() {},
 
   async getSystemStats() {
     return nextStats()
@@ -348,6 +391,9 @@ export const mockApi: Api = {
   },
 
   async job(kind: string) {
+    const plan = kind.startsWith('backup-') ? mockBackup.plans.find(p => `backup-${p.id}` === kind) : undefined
+    if (plan) return { kind, running: plan.running, exit: 0, log: plan.running ? ['40% · 220 MB of 560 MB'] : ['Done.'] }
+    if (kind.startsWith('restore-')) return { kind, running: false, exit: 0, log: ['Restoring 1 item(s) to where they came from…', 'Restored.'] }
     return mockJobs[kind] ?? mockSystem.job(kind)
   },
 
@@ -553,6 +599,154 @@ export const mockApi: Api = {
   async deleteEntry(path: string, name: string) {
     files[path] = (files[path] ?? []).filter(e => e.name !== name)
     moveTree(`${path}/${name}`)
+  },
+
+  async backups(): Promise<BackupsInfo> {
+    return { installed: mockBackup.installed, installing: false, plans: mockBackup.plans.map(p => ({ ...p })) }
+  },
+  async installBackups() {
+    mockBackup.installed = true
+    return { job: 'apt' }
+  },
+  async recoveryKey() {
+    return 'q8Jm2Xr4Lw7Tn0Vb5Yc1Hs9Kd3Fg6Pz'
+  },
+  async setRecoveryKey() {},
+  async backupDestinations(): Promise<BackupDestination[]> {
+    return [
+      { label: 'HDD_DATA', dest: '/mnt/HDD_DATA/Backups', free: 434e9 },
+      { label: 'GoogleDrive', dest: 'rclone:GoogleDrive:Backups', cloud: true },
+    ]
+  },
+  async backupApps(): Promise<BackupApp[]> {
+    return [
+      { id: 'jellyfin', name: 'Jellyfin', paths: ['/DATA/AppData/jellyfin'] },
+      { id: 'nextcloud', name: 'Nextcloud', paths: ['/DATA/AppData/nextcloud'] },
+      { id: 'supabase', name: 'Supabase', paths: ['/home/teman/supabase/docker'] },
+    ]
+  },
+  async createBackup(plan: BackupPlanSettings) {
+    const p: BackupPlan = { ...plan, id: Math.random().toString(16).slice(2, 14), created: new Date().toISOString(), lastOk: false, running: false, destFree: 434e9 }
+    mockBackup.plans.push(p)
+    return p
+  },
+  async updateBackup(id: string, plan: BackupPlanSettings) {
+    const i = mockBackup.plans.findIndex(p => p.id === id)
+    mockBackup.plans[i] = { ...mockBackup.plans[i], ...plan }
+    return mockBackup.plans[i]
+  },
+  async deleteBackup(id: string) {
+    mockBackup.plans = mockBackup.plans.filter(p => p.id !== id)
+  },
+  async runBackup(id: string) {
+    const p = mockBackup.plans.find(x => x.id === id)!
+    p.running = true
+    setTimeout(() => {
+      p.running = false
+      p.lastRun = new Date().toISOString()
+      p.lastOk = true
+      p.lastAdded = 18e6
+      p.lastTotal = 560e6
+      p.lastFiles = 12840
+      mockBackup.versions.unshift({ id: Math.random().toString(16).slice(2, 10).padEnd(8, '0'), time: new Date().toISOString(), paths: ['/DATA/AppData'], host: 'teman-server', mine: true })
+    }, 3000)
+    return { job: `backup-${id}` }
+  },
+  async stopBackup(id: string) {
+    const p = mockBackup.plans.find(x => x.id === id)
+    if (p) p.running = false
+  },
+  async backupVersions() {
+    return [...mockBackup.versions]
+  },
+  async backupFiles(_id: string, _version: string, path = ''): Promise<BackupFile[]> {
+    if (!path) return [{ name: '/DATA/AppData', path: '/DATA/AppData', folder: true }]
+    if (path === '/DATA/AppData')
+      return ['jellyfin', 'nextcloud', 'n8n'].map(n => ({ name: n, path: `/DATA/AppData/${n}`, folder: true, modified: new Date().toISOString() }))
+    return [
+      { name: 'config', path: `${path}/config`, folder: true, modified: new Date().toISOString() },
+      { name: 'data.db', path: `${path}/data.db`, folder: false, size: 48e6, modified: new Date().toISOString() },
+    ]
+  },
+  async restoreBackup(id: string) {
+    return { job: `restore-${id}` }
+  },
+  async shareLinks() {
+    return { baseUrl: mockLinkBase, links: [...mockLinks] }
+  },
+  async createShareLink(body: { path: string; upload: boolean; hours: number; password: string }) {
+    const { name } = splitPath(body.path)
+    const link: ShareLink = {
+      id: Math.random().toString(36).slice(2, 14),
+      path: body.path,
+      name,
+      folder: !!files[body.path],
+      upload: body.upload,
+      created: new Date().toISOString(),
+      expires: body.hours ? new Date(Date.now() + body.hours * 3600_000).toISOString() : undefined,
+      expired: false,
+      hasPassword: !!body.password,
+      downloads: 0,
+      uploads: 0,
+    }
+    mockLinks = [link, ...mockLinks]
+    return link
+  },
+  async deleteShareLink(id: string) {
+    mockLinks = mockLinks.filter(l => l.id !== id)
+  },
+  async setShareLinkBase(baseUrl: string) {
+    mockLinkBase = baseUrl
+  },
+  async trash() {
+    return mockTrash.map(t => ({ id: t.id, name: t.entry.name, from: t.from, deleted: t.deleted, kind: t.entry.kind, size: t.entry.size }))
+  },
+  async moveToTrash(paths: string[]) {
+    for (const p of paths) {
+      const { dir, name } = splitPath(p)
+      const entry = (files[dir] ?? []).find(e => e.name === name)
+      if (!entry) continue
+      files[dir] = (files[dir] ?? []).filter(e => e !== entry)
+      mockTrash.unshift({ id: Math.random().toString(16).slice(2, 18), entry, from: dir, deleted: new Date().toISOString() })
+    }
+  },
+  async putBack(ids: string[]) {
+    const back: string[] = []
+    for (const id of ids) {
+      const t = mockTrash.find(x => x.id === id)
+      if (!t) continue
+      mockTrash = mockTrash.filter(x => x !== t)
+      files[t.from] = [...(files[t.from] ?? []), t.entry]
+      back.push(`${t.from}/${t.entry.name}`)
+    }
+    return back
+  },
+  async deleteFromTrash(id: string) {
+    mockTrash = mockTrash.filter(x => x.id !== id)
+  },
+  async emptyTrash() {
+    mockTrash = []
+  },
+  async fileTags() {
+    return { ...mockTags }
+  },
+  async setFileTags(paths: string[], tags: TagColor[]) {
+    for (const p of paths) {
+      if (tags.length) mockTags[p] = tags
+      else delete mockTags[p]
+    }
+  },
+  async taggedFiles(tag: TagColor) {
+    return Object.entries(mockTags)
+      .filter(([, t]) => t.includes(tag))
+      .map(([p]) => placedMock(p))
+      .filter(e => !!e)
+  },
+  async recentFiles() {
+    return mockRecents.map(placedMock).filter(e => !!e)
+  },
+  async addRecentFile(path: string) {
+    mockRecents = [path, ...mockRecents.filter(p => p !== path)].slice(0, 60)
   },
 
   async readFile(path: string) {

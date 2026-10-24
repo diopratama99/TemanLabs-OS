@@ -146,6 +146,9 @@ func (s *server) handleCopy(w http.ResponseWriter, r *http.Request) {
 			writeFSError(w, err)
 			return
 		}
+		if body.Move {
+			s.meta.moved(src, dst)
+		}
 		names = append(names, name)
 	}
 	writeJSON(w, http.StatusOK, map[string][]string{"names": names})

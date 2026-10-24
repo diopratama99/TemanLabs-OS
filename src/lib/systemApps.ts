@@ -45,3 +45,4 @@ export const VIEWER_APPS: SystemApp[] = [
 ]
 
 export const LAUNCHER = { label: tr('Launcher'), icon: 'launchpad', color: ['#ff8ad8', '#7d5cff'] as [string, string] }
+export const TRASH = { label: tr('Trash'), icon: 'trash', color: ['#c7ccd4', '#7d838d'] as [string, string] }

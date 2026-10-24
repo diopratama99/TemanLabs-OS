@@ -29,6 +29,8 @@ type job struct {
 	Exit    int       `json:"exit"`
 	lines   []string
 	dropped int
+	// Stops a Go job early (see cancelJob); nil for commands.
+	cancel context.CancelFunc
 }
 
 type jobSnapshot struct {
@@ -66,7 +68,7 @@ func (j *job) snapshot() jobSnapshot {
 	defer j.mu.Unlock()
 	return jobSnapshot{
 		Kind: j.Kind, Title: j.Title, Running: j.Running, Started: j.Started, Ended: j.Ended, Exit: j.Exit,
-		Log: append([]string(nil), j.lines...), Dropped: j.dropped,
+		Log: append([]string{}, j.lines...), Dropped: j.dropped,
 	}
 }
 
@@ -120,15 +122,21 @@ func startJob(kind, title string, env []string, after func(), name string, args 
 // startFuncJob runs Go code as a job: fn writes its progress with logf, and a returned error
 // ends the job with exit code 1 and the error as its last line.
 func startFuncJob(kind, title string, fn func(ctx context.Context, logf func(format string, args ...any)) error) (*job, error) {
+	return startFuncJobFor(kind, title, 2*time.Hour, fn)
+}
+
+// startFuncJobFor is startFuncJob with its own time limit, for work that can take long (a
+// first backup to a cloud drive).
+func startFuncJobFor(kind, title string, limit time.Duration, fn func(ctx context.Context, logf func(format string, args ...any)) error) (*job, error) {
 	jobs.Lock()
 	defer jobs.Unlock()
 	if j := jobs.byKind[kind]; j != nil && j.snapshot().Running {
 		return nil, errJobRunning
 	}
-	j := &job{Kind: kind, Title: title, Running: true, Started: time.Now()}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	j := &job{Kind: kind, Title: title, Running: true, Started: time.Now(), cancel: cancel}
 	jobs.byKind[kind] = j
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
 		defer cancel()
 		err := fn(ctx, func(format string, args ...any) { j.add(fmt.Sprintf(format, args...)) })
 		j.mu.Lock()
@@ -178,6 +186,26 @@ func chainJob(kind, title string, after func(), dir string, steps ...[]string) (
 		}
 		return nil
 	})
+}
+
+// cancelJob stops a running Go job; it ends with the context's error.
+func cancelJob(kind string) bool {
+	jobs.Lock()
+	j := jobs.byKind[kind]
+	jobs.Unlock()
+	if j == nil || j.cancel == nil || !j.snapshot().Running {
+		return false
+	}
+	j.cancel()
+	return true
+}
+
+// jobRunning tells whether a job of this kind is running now.
+func jobRunning(kind string) bool {
+	jobs.Lock()
+	j := jobs.byKind[kind]
+	jobs.Unlock()
+	return j != nil && j.snapshot().Running
 }
 
 func (s *server) handleJob(w http.ResponseWriter, r *http.Request) {

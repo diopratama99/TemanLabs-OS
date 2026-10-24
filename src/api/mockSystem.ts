@@ -1,6 +1,15 @@
 // Mock data for the system utilities (npm run dev:mock), shaped like the real server's answers.
 import type {
   CommandBook,
+  HardwareInfo,
+  AppHealth,
+  MovePreview,
+  MovedApp,
+  HistoryData,
+  HistoryPoint,
+  HistoryRange,
+  StartupApp,
+  AdblockStatus,
   Device,
   DeviceInput,
   DeviceStatus,
@@ -135,7 +144,75 @@ const mockEngine: RemoteEngine = { docker: true, installed: false, running: fals
 // The PC starts off; waking it brings it up a few seconds later.
 const mockOnline: Record<string, boolean> = { pc: false, mac: true }
 
+let mockStartup: StartupApp[] = [
+  { id: 'jellyfin', name: 'Jellyfin', icon: 'film', color: ['#a35cff', '#5b2bd6'], enabled: true },
+  { id: 'nextcloud', name: 'Nextcloud', icon: 'cloud', color: ['#3aa0ff', '#0a63d6'], enabled: true },
+  { id: 'portainer', name: 'Portainer', icon: 'boxes', color: ['#5ac8fa', '#0a84ff'], enabled: false },
+  { id: 'ssh', name: 'OpenSSH', icon: 'terminal', color: ['#4a4a50', '#1c1c1f'], enabled: true, locked: true },
+]
+const mockAdblock: AdblockStatus = { docker: true, installed: false, running: false, installing: false, protection: false, rules: 0, allowed: [], lists: {} }
+let mockPausedUntil = 0
+
 export const mockSystem = {
+  async adblock(): Promise<AdblockStatus> {
+    const paused = Math.max(0, Math.round((mockPausedUntil - Date.now()) / 1000))
+    // A pause that ran out turns blocking back on, as AdGuard Home does.
+    if (mockAdblock.running && !paused && mockPausedUntil) {
+      mockAdblock.protection = true
+      mockPausedUntil = 0
+    }
+    return {
+      ...mockAdblock,
+      pausedFor: paused || undefined,
+      stats: mockAdblock.running
+        ? {
+            queries: 48213,
+            blocked: 9127,
+            avgMs: 3.4,
+            topBlocked: [
+              { name: 'doubleclick.net', count: 1840 },
+              { name: 'app-measurement.com', count: 1203 },
+              { name: 'googleads.g.doubleclick.net', count: 977 },
+              { name: 'graph.facebook.com', count: 640 },
+              { name: 'ads.tiktok.com', count: 512 },
+            ],
+            topClients: [
+              { name: '192.168.1.11', count: 21880, label: 'Gaming PC' },
+              { name: '192.168.1.3', count: 9120, label: 'Dios-MacBook-Air' },
+              { name: '192.168.1.8', count: 3310 },
+            ],
+          }
+        : undefined,
+    }
+  },
+  async installAdblock() {
+    Object.assign(mockAdblock, { installing: true, step: 'Downloading' })
+    setTimeout(() => Object.assign(mockAdblock, { step: 'Starting' }), 2000)
+    setTimeout(() => Object.assign(mockAdblock, { installing: false, step: undefined, installed: true, running: true, protection: true, rules: 191497, version: 'v0.107.79' }), 3500)
+  },
+  async setAdblock(enabled: boolean, minutes = 0) {
+    mockAdblock.protection = enabled
+    mockPausedUntil = !enabled && minutes ? Date.now() + minutes * 60_000 : 0
+  },
+  async allowDomain(domain: string) {
+    mockAdblock.allowed = [...mockAdblock.allowed.filter(d => d !== domain), domain]
+  },
+  async blockDomainAgain(domain: string) {
+    mockAdblock.allowed = mockAdblock.allowed.filter(d => d !== domain)
+  },
+  async testAdblock() {
+    await delay(500)
+    return { answered: mockAdblock.running, blocked: mockAdblock.running && mockAdblock.protection }
+  },
+  async setAdblockList(id: string, enabled: boolean) {
+    const rules: Record<string, number> = { strong: 160000, strongest: 210000, gambling: 210000, popups: 40000, phones: 900, indonesia: 9000, bypass: 3400 }
+    if (enabled && (id === 'strong' || id === 'strongest')) mockAdblock.lists = Object.fromEntries(Object.entries(mockAdblock.lists).filter(([k]) => k !== 'strong' && k !== 'strongest'))
+    if (enabled) mockAdblock.lists = { ...mockAdblock.lists, [id]: rules[id] ?? 0 }
+    else mockAdblock.lists = Object.fromEntries(Object.entries(mockAdblock.lists).filter(([k]) => k !== id))
+  },
+  async removeAdblock() {
+    Object.assign(mockAdblock, { installed: false, running: false, protection: false })
+  },
   async devices() {
     return { devices: mockDevices, engine: { ...mockEngine } }
   },
@@ -381,6 +458,69 @@ export const mockSystem = {
   },
   async installFFmpeg() {
     return { job: 'apt' }
+  },
+  async startupApps(): Promise<StartupApp[]> {
+    return mockStartup
+  },
+  async setStartupApp(id: string, enabled: boolean) {
+    mockStartup = mockStartup.map(a => (a.id === id ? { ...a, enabled } : a))
+  },
+  async history(range: HistoryRange): Promise<HistoryData> {
+    const span = { '1h': 3600, '24h': 86400, '7d': 7 * 86400, '30d': 30 * 86400 }[range]
+    const step = Math.max(60, Math.floor(span / 360))
+    const end = Math.floor(Date.now() / 1000 / step) * step
+    const points: (HistoryPoint | null)[] = []
+    for (let t = end - span + step; t <= end; t += step) {
+      const hour = new Date(t * 1000).getHours() + new Date(t * 1000).getMinutes() / 60
+      // Busy evenings, a quiet night, and the server off for a while two days ago.
+      if (t > end - 2 * 86400 - 3 * 3600 && t < end - 2 * 86400) {
+        points.push(null)
+        continue
+      }
+      const evening = Math.max(0, Math.sin(((hour - 14) / 12) * Math.PI))
+      const noise = (Math.sin(t / 997) + Math.sin(t / 313)) * 0.5
+      const cpu = Math.max(2, 8 + evening * 28 + noise * 6)
+      points.push({
+        t,
+        cpu,
+        cpuMax: Math.min(100, cpu * 1.8 + 5),
+        mem: 38 + evening * 9 + noise * 2,
+        temp: 41 + evening * 14 + noise * 3,
+        rx: Math.max(0, (0.4 + evening * 3.5 + noise) * 1e6),
+        tx: Math.max(0, (0.1 + evening * 0.9 + noise * 0.3) * 1e6),
+        read: Math.max(0, (0.2 + evening * 2 + noise) * 1e6),
+        write: Math.max(0, (0.5 + evening * 1.2 + noise * 0.4) * 1e6),
+        load: cpu / 15,
+        watts: 9 + evening * 9 + noise,
+      })
+    }
+    return { step, since: end - 30 * 86400, points }
+  },
+  async appHealth(): Promise<AppHealth[]> {
+    const day = 86400e3
+    const at = (ms: number) => new Date(Date.now() - ms).toISOString()
+    return [
+      { id: 'jellyfin', status: 'up', autoRestart: true, uptime24h: 1, uptime7d: 0.9981, uptime30d: 0.9993, watching: at(40 * day), since: at(3 * day), incidents: [{ start: at(3 * day + 19 * 60e3), end: at(3 * day), reason: 'Its web page doesn’t answer', restarted: true }] },
+      { id: 'nextcloud', status: 'down', autoRestart: true, uptime24h: 0.97, uptime7d: 0.995, uptime30d: 0.998, watching: at(40 * day), since: at(42 * 60e3), error: 'Its web page takes too long to answer', incidents: [{ start: at(42 * 60e3), reason: 'Its web page takes too long to answer', restarted: true }] },
+      { id: 'portainer', status: 'stopped', autoRestart: true, uptime24h: 1, uptime7d: 1, uptime30d: 1, watching: at(40 * day), incidents: [] },
+    ]
+  },
+  async setAutoRestart() {},
+  async movePreview(id: string): Promise<MovePreview> {
+    if (id !== 'native-pm2-teman') return { possible: false, reason: 'only Node.js apps run by pm2 can be moved for now' }
+    return { possible: true, name: 'bensinku-web', project: 'bensinku-web', folder: '/home/teman/bensinku-web', node: '22.23.1', compose: 'services:\n  bensinku-web:\n    image: node:22-bookworm-slim\n' }
+  },
+  async moveToDocker(id: string) {
+    return { job: `move-${id}` }
+  },
+  async movedApps(): Promise<MovedApp[]> {
+    return []
+  },
+  async moveBack(project: string) {
+    return { job: `move-${project}` }
+  },
+  async hardware(): Promise<HardwareInfo> {
+    return { vendor: 'Lenovo', model: 'ThinkCentre M710q', modelNumber: '10MQS31W00', kind: 'mini', serial: 'MJ0ABCDE', year: '2017' }
   },
   async releaseStatus() {
     return { current: 'v0.9.0', latest: 'v1.0.0', available: true, notes: '- App Center with the CasaOS app stores\n- Cloud drives and merged storage', arch: 'amd64', checked: new Date().toISOString() }

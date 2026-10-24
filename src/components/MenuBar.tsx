@@ -3,40 +3,37 @@ import {
   Copy,
   Cpu,
   Zap,
-  Droplets,
   EthernetPort,
   Globe,
   Info,
   Link,
-  Moon,
+  MonitorSmartphone,
+  Lock,
   Search,
   Settings,
   ShoppingBag,
   SlidersHorizontal,
-  Sparkles,
-  Sun,
   Waypoints,
   Wifi,
-  type LucideIcon,
   Power,
   RotateCcw,
 } from 'lucide-react'
-import type { NetworkAddresses, SystemStats } from '../api/types'
+import type { Device, NetworkAddresses, SystemStats } from '../api/types'
 import { useClock } from '../hooks/useClock'
 import type { StatsHistory } from '../hooks/useSystemStats'
 import type { SettingsSection } from '../windows/Settings'
-import { ClockPanel, CpuPanel, isWireless, NetworkPanel, PowerPanel } from './StatusPanels'
+import { ClockPanel, CpuPanel, DevicesPanel, isWireless, NetworkPanel, PowerPanel } from './StatusPanels'
 import { useDismiss } from '../hooks/useDismiss'
 import type { AppMenu } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
 import { MOD } from '../lib/platform'
-import { supportsRefraction, useSettings } from '../lib/settings'
+import { DEFAULT_MENU_BAR, useSettings } from '../lib/settings'
 import { ContextMenu, type MenuAnchor, type MenuItem } from './ContextMenu'
-import { Glass } from './Glass'
-import { WallpaperPicker } from './Wallpaper'
+import { QuickSettings } from './QuickSettings'
 import type { WindowId } from './Window'
 import { LogoGlyph } from './Logo'
-import { tr } from '../lib/i18n'
+import { language, tr } from '../lib/i18n'
+import { useAuth } from '../lib/auth'
 
 export const QUICK_SEARCH_SHORTCUT = `${MOD}K`
 
@@ -71,7 +68,7 @@ interface Props {
   /**
    * Called on every render rather than passed as data, because the menus come from components
    * further down the tree whose state changes don't re-render the menu bar's parent.
- */
+   */
   getContent: () => MenuBarContent
   cpu?: number
   /** Watts, when the server measures them (see SystemStats.power). */
@@ -84,13 +81,30 @@ interface Props {
   /** Opens Settings at a section (the clock's panel → Date & Time). */
   onOpenSettings?: (section: SettingsSection) => void
   onQuickSearch: () => void
+  /** Opens a device's screen (My Devices → Connect). */
+  onConnectDevice?: (device: Device) => void
   onPower: (action: 'restart' | 'shutdown') => void
 }
 
-type StatusPanel = 'cpu' | 'power' | 'net' | 'cc' | 'clock'
+type StatusPanel = 'cpu' | 'power' | 'net' | 'devices' | 'cc' | 'clock'
 
-export function MenuBar({ getContent, cpu, power, addresses, stats, history, onOpenWindow, onOpenSettings, onQuickSearch, onPower }: Props) {
+export function MenuBar({
+  getContent,
+  cpu,
+  power,
+  addresses,
+  stats,
+  history,
+  onOpenWindow,
+  onOpenSettings,
+  onQuickSearch,
+  onConnectDevice,
+  onPower,
+}: Props) {
   const now = useClock()
+  const { lock } = useAuth()
+  // Which status items show, and how the clock reads (Settings → Menu Bar).
+  const bar = useSettings().settings.menuBar ?? DEFAULT_MENU_BAR
   const [menu, setMenu] = useState<{ key: MenuKey; anchor: MenuAnchor } | null>(null)
   // The status items' panels (Quick Settings among them); one at a time.
   const [panel, setPanel] = useState<StatusPanel | null>(null)
@@ -105,7 +119,12 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
   // A status item and the panel under it.
   const status = (key: StatusPanel, label: string, className: string, content: ReactNode, body: ReactNode) => (
     <div className="cc-anchor" ref={panel === key ? panelRef : undefined}>
-      <button className={`${className} ${panel === key ? 'is-active' : ''}`} onClick={() => togglePanel(key)} aria-label={label} aria-expanded={panel === key}>
+      <button
+        className={`${className} ${panel === key ? 'is-active' : ''}`}
+        onClick={() => togglePanel(key)}
+        aria-label={label}
+        aria-expanded={panel === key}
+      >
         {content}
       </button>
       {panel === key && body}
@@ -132,14 +151,22 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
   })
 
   const logoMenu: MenuItem[] = [
-    { label: tr('About This Server'), icon: Info, onSelect: () => onOpenWindow('settings') },
+    { label: tr('About This Server'), icon: Info, onSelect: () => onOpenWindow('about') },
     { label: tr('Settings…'), icon: Settings, onSelect: () => onOpenWindow('settings') },
     { label: tr('App Center…'), icon: ShoppingBag, onSelect: () => onOpenWindow('store') },
     'separator',
     { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: onQuickSearch },
     'separator',
+    { label: tr('Lock Screen'), icon: Lock, onSelect: lock },
+    'separator',
     { label: tr('Restart Server…'), icon: RotateCcw, confirm: tr('Click Again to Restart'), onSelect: () => onPower('restart') },
-    { label: tr('Shut Down Server…'), icon: Power, danger: true, confirm: tr('Click Again to Shut Down'), onSelect: () => onPower('shutdown') },
+    {
+      label: tr('Shut Down Server…'),
+      icon: Power,
+      danger: true,
+      confirm: tr('Click Again to Shut Down'),
+      onSelect: () => onPower('shutdown'),
+    },
   ]
 
   // Resolved on each render so an open menu follows the app's latest state; if the frontmost app
@@ -157,8 +184,14 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
             ? addressMenu('Tailscale · Connected', tailscale.ipv4, tailscale.dnsName)
             : menus.find(m => menu && `menu:${m.label}` === menu.key)?.items
 
-  const date = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-  const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const locale = language === 'id' ? 'id-ID' : 'en-GB'
+  const date = now.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })
+  const time = now.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: bar.seconds ? '2-digit' : undefined,
+    hour12: bar.hour12,
+  })
 
   return (
     <header className="menubar">
@@ -176,13 +209,17 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
         ))}
       </div>
       <div className="menubar-right">
-        {lan && (
-          <button {...trigger('ip:lan', 'menubar-ip')} aria-label={tr('Local IP {0}', lan.ipv4)} title={tr('Local network ({0})', lan.interface)}>
+        {lan && bar.lanIp && (
+          <button
+            {...trigger('ip:lan', 'menubar-ip')}
+            aria-label={tr('Local IP {0}', lan.ipv4)}
+            title={tr('Local network ({0})', lan.interface)}
+          >
             <EthernetPort size={14} />
             <span className="menubar-ip-text">{lan.ipv4}</span>
           </button>
         )}
-        {tailscale && (
+        {tailscale && bar.tailscaleIp && (
           <button
             {...trigger('ip:tailscale', 'menubar-ip')}
             aria-label={tr('Tailscale IP {0}', tailscale.ipv4)}
@@ -192,25 +229,27 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
             <span className="menubar-ip-text">{tailscale.ipv4}</span>
           </button>
         )}
-        {status(
-          'cpu',
-          tr('CPU usage'),
-          'menubar-stat',
-          <>
-            <Cpu size={14} /> {cpu === undefined ? '–' : `${Math.round(cpu)}%`}
-          </>,
-          stats && history && (
-            <CpuPanel
-              stats={stats}
-              history={history}
-              onOpen={() => {
-                setPanel(null)
-                onOpenWindow('activity')
-              }}
-            />
-          ),
-        )}
+        {bar.cpu &&
+          status(
+            'cpu',
+            tr('CPU usage'),
+            'menubar-stat',
+            <>
+              <Cpu size={14} /> {cpu === undefined ? '–' : `${Math.round(cpu)}%`}
+            </>,
+            stats && history && (
+              <CpuPanel
+                stats={stats}
+                history={history}
+                onOpen={() => {
+                  setPanel(null)
+                  onOpenWindow('activity')
+                }}
+              />
+            ),
+          )}
         {power &&
+          bar.power &&
           status(
             'power',
             tr('Power draw {0} watts', power.watts.toFixed(1)),
@@ -220,32 +259,54 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
             </>,
             history && <PowerPanel power={power} history={history} />,
           )}
-        {status(
-          'net',
-          lan ? tr('Network: {0}', lan.ipv4) : tr('Network'),
-          'menubar-icon',
-          isWireless(lan?.interface) ? <Wifi size={15} /> : <EthernetPort size={15} />,
-          stats && history && (
-            <NetworkPanel
-              stats={stats}
-              history={history}
+        {bar.network &&
+          status(
+            'net',
+            lan ? tr('Network: {0}', lan.ipv4) : tr('Network'),
+            'menubar-icon',
+            isWireless(lan?.interface) ? <Wifi size={15} /> : <EthernetPort size={15} />,
+            stats && history && (
+              <NetworkPanel
+                stats={stats}
+                history={history}
+                onOpen={() => {
+                  setPanel(null)
+                  onOpenWindow('network')
+                }}
+              />
+            ),
+          )}
+        {bar.devices &&
+          status(
+            'devices',
+            tr('My Devices'),
+            'menubar-icon',
+            <MonitorSmartphone size={15} />,
+            <DevicesPanel
+              onConnect={d => {
+                setPanel(null)
+                onConnectDevice?.(d)
+              }}
               onOpen={() => {
                 setPanel(null)
-                onOpenWindow('network')
+                onOpenWindow('devices')
               }}
-            />
-          ),
-        )}
+            />,
+          )}
         <button className="menubar-icon" onClick={onQuickSearch} aria-label={tr('Quick Search')}>
           <Search size={15} />
         </button>
-        {status('cc', tr('Quick Settings'), 'menubar-icon', <SlidersHorizontal size={15} />,
-          <ControlCenter
-            onWallpapers={() => {
-              setPanel(null)
-              if (onOpenSettings) onOpenSettings('appearance')
-              else onOpenWindow('settings')
-            }}
+        {status(
+          'cc',
+          tr('Quick Settings'),
+          'menubar-icon',
+          <SlidersHorizontal size={15} />,
+          <QuickSettings
+            stats={stats}
+            onOpenSettings={section => (onOpenSettings ? onOpenSettings(section) : onOpenWindow('settings'))}
+            onOpenWindow={onOpenWindow}
+            onQuickSearch={onQuickSearch}
+            onDone={() => setPanel(null)}
           />,
         )}
         {status(
@@ -253,10 +314,12 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
           tr('Date and time'),
           'menubar-clock',
           <>
-            <span className="menubar-date">
-              {date}
-              {tr('  ')}
-            </span>
+            {bar.date && (
+              <span className="menubar-date">
+                {date}
+                {tr('  ')}
+              </span>
+            )}
             {time}
           </>,
           <ClockPanel
@@ -269,76 +332,8 @@ export function MenuBar({ getContent, cpu, power, addresses, stats, history, onO
           />,
         )}
       </div>
-      {menu && openItems && (
-        <ContextMenu key={menu.key} items={openItems} anchor={menu.anchor} onClose={closeMenu} />
-      )}
+      {menu && openItems && <ContextMenu key={menu.key} items={openItems} anchor={menu.anchor} onClose={closeMenu} />}
     </header>
   )
 }
 
-function ControlCenter({ onWallpapers }: { onWallpapers: () => void }) {
-  const { settings, update } = useSettings()
-  const dark = settings.theme === 'dark'
-  const refraction = settings.refraction && supportsRefraction
-  return (
-    <Glass
-      radius={28}
-      bezel={18}
-      depth={18}
-      blur={18}
-      className="control-center tint-panel"
-      role="dialog"
-      aria-label={tr('Quick Settings')}
-    >
-      <CcToggle
-        icon={dark ? Moon : Sun}
-        label={tr('Dark Mode')}
-        sub={dark ? tr('Turned on') : tr('Turned off')}
-        on={dark}
-        onClick={() => update({ theme: dark ? 'light' : 'dark' })}
-      />
-      <CcToggle
-        icon={Sparkles}
-        label={tr('Glass Effect')}
-        sub={supportsRefraction ? (refraction ? tr('Refraction on') : tr('Refraction off')) : tr('Chromium browsers only')}
-        on={refraction}
-        disabled={!supportsRefraction}
-        onClick={() => update({ refraction: !settings.refraction })}
-      />
-      <CcToggle
-        icon={Droplets}
-        label={tr('Reduce Transparency')}
-        sub={settings.reduceTransparency ? tr('Turned on') : tr('Turned off')}
-        on={settings.reduceTransparency}
-        onClick={() => update({ reduceTransparency: !settings.reduceTransparency })}
-      />
-      <div>
-        <span className="cc-label">{tr('Wallpaper')}</span>
-        <WallpaperPicker compact onMore={onWallpapers} />
-      </div>
-    </Glass>
-  )
-}
-
-interface CcToggleProps {
-  icon: LucideIcon
-  label: string
-  sub: string
-  on: boolean
-  disabled?: boolean
-  onClick: () => void
-}
-
-function CcToggle({ icon: Icon, label, sub, on, disabled, onClick }: CcToggleProps) {
-  return (
-    <button className={`cc-toggle ${on ? 'is-on' : ''}`} onClick={onClick} disabled={disabled} aria-pressed={on}>
-      <span className="cc-toggle-icon">
-        <Icon size={16} />
-      </span>
-      <span>
-        <strong>{label}</strong>
-        <small>{sub}</small>
-      </span>
-    </button>
-  )
-}

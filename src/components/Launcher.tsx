@@ -56,8 +56,8 @@ interface Group {
 }
 
 /**
- * The Launcher: a floating panel over the desktop with every app, in sections (built-in apps,
- * folders, the installed apps by category) that tabs along the top narrow down.
+ * The Launcher: a floating panel over the desktop. "All" shows the recently used apps, then every
+ * app from A to Z; the tabs along the top show one section (built-in apps, a folder, a category).
  */
 export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWindow, onAppMenu, onSystemMenu }: Props) {
   const { settings, update } = useSettings()
@@ -120,10 +120,11 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
   ]
   const activeTab = groups.some(g => g.id === tab) ? tab : 'all'
   const recent = (settings.recentApps ?? []).filter(k => byKey.has(k) && !hidden.has(k)).slice(0, RECENT)
+  const everything = (showHidden ? entries.map(e => e.key) : visibleKeys).sort((a, b) => byKey.get(a)!.name.localeCompare(byKey.get(b)!.name))
 
   const q = query.trim().toLowerCase()
   const results = q ? entries.filter(e => (showHidden || !hidden.has(e.key)) && e.name.toLowerCase().includes(q)) : []
-  const iconSize = window.innerWidth < 720 ? 52 : 60
+  const iconSize = window.innerWidth < 720 ? 52 : 54
 
   const launch = (entry: Entry) => {
     entry.open()
@@ -286,7 +287,7 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
 
   return (
     <div className={`launchpad ${closing ? 'is-closing' : ''}`} onClick={e => e.target === e.currentTarget && onClose()} {...backgroundDrop}>
-      <Glass radius={30} bezel={18} depth={16} blur={14} className="lp-panel tint-panel" role="dialog" aria-label={tr('Launcher')}>
+      <Glass radius={30} bezel={18} depth={16} blur={26} className="lp-panel tint-panel" role="dialog" aria-label={tr('Launcher')}>
         <header className="lp-head">
           <LayoutGrid size={22} strokeWidth={1.8} />
           <input
@@ -329,12 +330,14 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
           ) : activeTab === 'all' ? (
             <>
               {recent.length > 0 && (
-                <section className="lp-section lp-recent">
-                  <h3 className="lp-section-title">{tr('Recently Used')}</h3>
-                  <div className="lp-grid">{recent.map(k => tile(byKey.get(k)!))}</div>
-                </section>
+                <>
+                  <div className="lp-grid lp-recent" aria-label={tr('Recently Used')}>
+                    {recent.map(k => tile(byKey.get(k)!))}
+                  </div>
+                  <hr className="lp-divider" />
+                </>
               )}
-              {groups.map(g => section(g, true))}
+              <div className="lp-grid">{everything.map(k => tile(byKey.get(k)!))}</div>
             </>
           ) : (
             groups.filter(g => g.id === activeTab).map(g => section(g, !!g.folder))

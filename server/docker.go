@@ -38,10 +38,12 @@ type containerPort struct {
 }
 
 type container struct {
-	ID     string            `json:"Id"`
-	Names  []string          `json:"Names"`
-	Image  string            `json:"Image"`
-	State  string            `json:"State"`
+	ID    string   `json:"Id"`
+	Names []string `json:"Names"`
+	Image string   `json:"Image"`
+	State string   `json:"State"`
+	// "Up 2 hours (unhealthy)", "Exited (1) 3 minutes ago".
+	Status string            `json:"Status"`
 	Labels map[string]string `json:"Labels"`
 	Ports  []containerPort   `json:"Ports"`
 }

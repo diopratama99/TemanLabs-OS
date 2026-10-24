@@ -13,12 +13,12 @@ import {
 } from 'react'
 import type { InstalledApp } from '../api/types'
 import { prefersReducedMotion } from '../lib/motion'
-import { LAUNCHER, SYSTEM_APPS, VIEWER_APPS } from '../lib/systemApps'
+import { LAUNCHER, TRASH, SYSTEM_APPS, VIEWER_APPS } from '../lib/systemApps'
 import { DRAG_GROUP_TYPE, DRAG_TYPE } from '../lib/dockDrag'
 import { AppIcon } from './AppIcon'
 import type { MenuAnchor } from './ContextMenu'
 import { displacementSlices } from '../lib/displacement'
-import { supportsRefraction, useSettings } from '../lib/settings'
+import { DOCK_SCALE, supportsRefraction, useSettings } from '../lib/settings'
 import type { SystemWindowId, WindowId } from './Window'
 import { tr } from '../lib/i18n'
 
@@ -43,6 +43,11 @@ interface Props {
   onOpenApp: (app: InstalledApp) => void
   onAppMenu: (app: InstalledApp, anchor: MenuAnchor) => void
   onSystemMenu: (id: SystemWindowId | 'launchpad', anchor: MenuAnchor) => void
+  /** Counts shown on icons, by Dock id ("store", "settings", "app:<id>"…). */
+  badges?: Record<string, number>
+  /** The Trash at the end of the Dock: opens it in Files; its menu empties it. */
+  onTrash: () => void
+  onTrashMenu: (anchor: MenuAnchor) => void
 }
 
 // A hovered icon is magnified and rises this far above the Dock; menus must clear it, since
@@ -58,8 +63,7 @@ const anchorAbove = (e: MouseEvent<HTMLElement>): MenuAnchor => {
 }
 
 // Magnification: icons near the pointer grow and push their neighbours
-// apart, and the Dock widens to fit them.
-const MAX_SCALE = 1.55
+// apart, and the Dock widens to fit them. How much is a setting (DOCK_SCALE).
 /** Distance from the pointer (px) at which an icon is back to normal size. */
 const RANGE = 140
 const LIFT = 6
@@ -171,7 +175,12 @@ interface Magnifier {
   resume: () => void
 }
 
-function useMagnification(ref: RefObject<HTMLDivElement | null>, skinRef: RefObject<HTMLDivElement | null>, control: RefObject<Magnifier | null>) {
+function useMagnification(
+  ref: RefObject<HTMLDivElement | null>,
+  skinRef: RefObject<HTMLDivElement | null>,
+  control: RefObject<Magnifier | null>,
+  maxScale: RefObject<number>,
+) {
   useEffect(() => {
     const dock = ref.current
     const skin = skinRef.current
@@ -218,7 +227,8 @@ function useMagnification(ref: RefObject<HTMLDivElement | null>, skinRef: RefObj
         reset()
         return
       }
-      const scales = items.map(it => (it.grows ? 1 + (MAX_SCALE - 1) * amount * falloff(Math.abs(it.center - x)) : 1))
+      const max = maxScale.current
+      const scales = items.map(it => (it.grows ? 1 + (max - 1) * amount * falloff(Math.abs(it.center - x)) : 1))
       const extras = scales.map((s, i) => (s - 1) * items[i].width)
       const total = extras.reduce((a, b) => a + b, 0)
       // The Dock grows about its centre: the glass gets wider, the icons spread out from the middle.
@@ -228,7 +238,7 @@ function useMagnification(ref: RefObject<HTMLDivElement | null>, skinRef: RefObj
         const center = it.center + before + extras[i] / 2 - total / 2
         before += extras[i]
         const s = scales[i]
-        const lift = (LIFT * (s - 1)) / (MAX_SCALE - 1)
+        const lift = max > 1 ? (LIFT * (s - 1)) / (max - 1) : 0
         it.el.style.transform = `translate(${center - it.center}px, ${-lift}px) scale(${s})`
         it.el.style.setProperty('--sx', String(s))
         it.el.style.setProperty('--sy', String(s))
@@ -297,6 +307,7 @@ interface Entry {
   open: boolean
   stopped?: boolean
   pinned: boolean
+  badge?: number
   onClick: () => void
   onContextMenu: (e: MouseEvent<HTMLButtonElement>) => void
 }
@@ -341,11 +352,14 @@ function useArrivals(entries: Entry[], quiet: RefObject<Set<string>>) {
   return shown
 }
 
-export function Dock({ apps, pinnedApps, systemIds, openIds, onDropApp, onReorder, onRemove, onLauncher, onOpenWindow, onOpenApp, onAppMenu, onSystemMenu }: Props) {
+export function Dock({ apps, pinnedApps, systemIds, openIds, onDropApp, onReorder, onRemove, onLauncher, onOpenWindow, onOpenApp, onAppMenu, onSystemMenu, badges = {}, onTrash, onTrashMenu }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const skin = useRef<HTMLDivElement>(null)
   const magnifier = useRef<Magnifier | null>(null)
-  useMagnification(ref, skin, magnifier)
+  const { settings } = useSettings()
+  const maxScale = useRef(DOCK_SCALE.medium)
+  maxScale.current = DOCK_SCALE[settings.dockMagnification] ?? DOCK_SCALE.medium
+  useMagnification(ref, skin, magnifier, maxScale)
 
   const pinnedSystem = systemIds.map(id => ALL_SYSTEM.find(a => a.id === id)).filter(a => !!a)
   const system = [...pinnedSystem, ...ALL_SYSTEM.filter(a => !systemIds.includes(a.id) && openIds.includes(a.id))]
@@ -359,6 +373,7 @@ export function Dock({ apps, pinnedApps, systemIds, openIds, onDropApp, onReorde
       color: app.color,
       open: openIds.includes(app.id),
       pinned: systemIds.includes(app.id),
+      badge: badges[app.id],
       onClick: () => onOpenWindow(app.id),
       onContextMenu: (e: MouseEvent<HTMLButtonElement>) => onSystemMenu(app.id, anchorAbove(e)),
     })),
@@ -373,6 +388,7 @@ export function Dock({ apps, pinnedApps, systemIds, openIds, onDropApp, onReorde
       open: openIds.includes(`app:${app.id}`),
       stopped: app.status !== 'running',
       pinned: pinnedApps.includes(app.id),
+      badge: badges[`app:${app.id}`],
       onClick: () => onOpenApp(app),
       onContextMenu: (e: MouseEvent<HTMLButtonElement>) => onAppMenu(app, anchorAbove(e)),
     })),
@@ -589,6 +605,11 @@ export function Dock({ apps, pinnedApps, systemIds, openIds, onDropApp, onReorde
           {renderGroup('system')}
           {hasApps && <span className="dock-sep dock-app" />}
           {renderGroup('apps')}
+          <span className="dock-sep" />
+          <button data-dock-id="trash" className="dock-item" aria-label={TRASH.label} onClick={onTrash} onContextMenu={e => onTrashMenu(anchorAbove(e))}>
+            <span className="dock-tooltip">{TRASH.label}</span>
+            <AppIcon icon={TRASH.icon} color={TRASH.color} size={52} />
+          </button>
         </div>
       </div>
     </nav>
@@ -630,6 +651,7 @@ function DockItem({ entry, dragging, removing, onPointerDown, onClick }: ItemPro
     >
       <span className="dock-tooltip">{entry.label}</span>
       <AppIcon icon={entry.icon} iconUrl={entry.iconUrl} color={entry.color} size={52} />
+      {!!entry.badge && <span className="dock-badge">{entry.badge > 99 ? '99+' : entry.badge}</span>}
       {entry.open && <span className="dock-dot" />}
       {removing && <span className="dock-remove">{tr('Remove')}</span>}
     </button>

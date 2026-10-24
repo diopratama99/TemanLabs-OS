@@ -4,6 +4,37 @@ import { browserLanguage, tr, type Language } from './i18n'
 
 export type Theme = 'light' | 'dark'
 
+/** The colour of buttons, selections and switches. */
+export type AccentColor = 'blue' | 'purple' | 'pink' | 'red' | 'orange' | 'yellow' | 'green' | 'graphite'
+export const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
+  { id: 'blue', label: tr('Blue'), swatch: '#007aff' },
+  { id: 'purple', label: tr('Purple'), swatch: '#a550a7' },
+  { id: 'pink', label: tr('Pink'), swatch: '#f74f9e' },
+  { id: 'red', label: tr('Red'), swatch: '#ff3b30' },
+  { id: 'orange', label: tr('Orange'), swatch: '#ff9500' },
+  { id: 'yellow', label: tr('Yellow'), swatch: '#ffcc00' },
+  { id: 'green', label: tr('Green'), swatch: '#34c759' },
+  { id: 'graphite', label: tr('Graphite'), swatch: '#8e8e93' },
+]
+
+/** How far Dock icons grow under the pointer. */
+export type DockMagnification = 'off' | 'small' | 'medium' | 'large'
+export const DOCK_SCALE: Record<DockMagnification, number> = { off: 1, small: 1.3, medium: 1.55, large: 1.85 }
+
+/** What the menu bar shows on the right. */
+export interface MenuBarPrefs {
+  lanIp: boolean
+  tailscaleIp: boolean
+  cpu: boolean
+  power: boolean
+  network: boolean
+  /** My Devices: wake or connect to the other computers. */
+  devices: boolean
+  date: boolean
+  seconds: boolean
+  hour12: boolean
+}
+
 /** A Launcher folder. Items are Launcher keys: a system app ID or `app:<id>`. */
 export interface LauncherFolder {
   id: string
@@ -22,6 +53,17 @@ export interface Settings {
   language: Language
   reduceTransparency: boolean
   refraction: boolean
+  accent: AccentColor
+  /** Animations cut to a minimum (windows, the Dock, panels). */
+  reduceMotion: boolean
+  dockMagnification: DockMagnification
+  /** The Dock slides away and comes back when the pointer reaches the bottom edge. */
+  dockAutohide: boolean
+  /** The data drive's icon on the desktop. */
+  showDesktopDrive: boolean
+  menuBar: MenuBarPrefs
+  /** Minutes without using the desktop before it locks; 0 never locks. */
+  lockAfter: number
   wallpaper: number
   /** URL of the user's own photo (see /api/wallpapers); shown instead of the built-in wallpaper. */
   customWallpaper: string | null
@@ -61,12 +103,21 @@ export const supportsRefraction = !!(navigator as UADataNavigator).userAgentData
 
 const STORAGE_KEY = 'temanlabs.settings'
 
+export const DEFAULT_MENU_BAR: MenuBarPrefs = { lanIp: true, tailscaleIp: true, cpu: true, power: true, network: true, devices: true, date: true, seconds: false, hour12: false }
+
 function loadSettings(): Settings {
   const defaults: Settings = {
     theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
     language: browserLanguage(),
     reduceTransparency: false,
     refraction: supportsRefraction,
+    accent: 'blue',
+    reduceMotion: false,
+    dockMagnification: 'medium',
+    dockAutohide: false,
+    showDesktopDrive: true,
+    menuBar: { ...DEFAULT_MENU_BAR },
+    lockAfter: 0,
     wallpaper: 0,
     customWallpaper: null,
     customWallpaperPreview: null,
@@ -92,6 +143,8 @@ function loadSettings(): Settings {
       ...defaults,
       ...parsed,
       widgets: 'widgets' in parsed ? normalizeWidgets(parsed.widgets) : defaults.widgets,
+      // Items added since the settings were saved keep their defaults.
+      menuBar: { ...DEFAULT_MENU_BAR, ...(parsed.menuBar ?? {}) },
       launchpadFolders: withAutoFolders(
         list<LauncherFolder>(parsed.launchpadFolders, defaults.launchpadFolders).filter(
           f => f && typeof f.id === 'string' && Array.isArray(f.items),
@@ -129,6 +182,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = settings.theme
     root.dataset.reduceTransparency = settings.reduceTransparency ? 'on' : 'off'
     root.dataset.refraction = settings.refraction && supportsRefraction ? 'on' : 'off'
+    root.dataset.accent = settings.accent
+    root.dataset.reduceMotion = settings.reduceMotion ? 'on' : 'off'
+    root.dataset.dockAutohide = settings.dockAutohide ? 'on' : 'off'
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     } catch {

@@ -1,6 +1,10 @@
 import { ArrowDownToLine, Boxes, Clapperboard, Code, FileText, HardDrive, Images, type LucideIcon } from 'lucide-react'
 import { tr } from './i18n'
 
+/** Files' lists that aren't folders: files opened lately, and the Trash. */
+export const RECENTS_PLACE = 'recents:'
+export const TRASH_PLACE = 'trash:'
+
 /** Where CasaOS keeps user data; Files and Code start here. */
 export const DATA_ROOT = '/DATA'
 

@@ -1,31 +1,147 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Clock, Info, KeyRound, LoaderCircle, Palette, Server, Users, type LucideIcon } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  Accessibility,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  CircleFadingArrowUp,
+  Contrast,
+  Globe,
+  HardDrive,
+  Image,
+  Info,
+  Keyboard,
+  KeyRound,
+  Languages,
+  Lock,
+  LoaderCircle,
+  PanelBottom,
+  PanelTop,
+  Search,
+  ShieldCheck,
+  Waypoints,
+  Settings as SettingsIcon,
+  DatabaseBackup,
+  LayoutGrid,
+  Rocket,
+  Share2,
+  Users,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
 import { api, MOCK_MODE } from '../api'
-import type { Job, ReleaseStatus, SystemStats } from '../api/types'
-import { Switch } from '../components/Switch'
+import type { Job, ReleaseStatus, SystemStats, InstalledApp } from '../api/types'
 import { WallpaperPicker } from '../components/Wallpaper'
+import type { WindowId } from '../components/Window'
 import { useAppMenus } from '../lib/appMenus'
 import { useAuth } from '../lib/auth'
-import { formatBytes, formatUptime } from '../lib/format'
-import { supportsRefraction, useSettings, type Theme } from '../lib/settings'
 import { LogoTile } from '../components/Logo'
+import { BackupSection } from '../components/settings/BackupSection'
+import { AppsSection, type AppActions } from '../components/settings/AppsSection'
 import { DateTimeSection } from '../components/settings/DateTimeSection'
 import { UsersSection } from '../components/settings/UsersSection'
+import {
+  AccessibilitySection,
+  AppearanceSection,
+  ClockGroup,
+  DockSection,
+  KeyboardSection,
+  LanguageSection,
+  MenuBarSection,
+} from '../components/settings/DesktopSections'
+import {
+  AdblockSection,
+  LockScreenSection,
+  NetworkSection,
+  PowerSection,
+  RemoteAccessSection,
+  AboutSection,
+  StartupSection,
+  SharingSection,
+  SignedInBrowsers,
+  StorageSection,
+} from '../components/settings/ServerSections'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
-import { language, LANGUAGES, tr } from '../lib/i18n'
-import { PopUpButton } from '../components/PopUpButton'
+import { language, tr } from '../lib/i18n'
 
-export type SettingsSection = 'general' | 'appearance' | 'users' | 'datetime' | 'account' | 'about'
+export type SettingsSection =
+  | 'general'
+  | 'about'
+  | 'updates'
+  | 'storage'
+  | 'datetime'
+  | 'language'
+  | 'sharing'
+  | 'startup'
+  | 'apps'
+  | 'network'
+  | 'adblock'
+  | 'remote'
+  | 'power'
+  | 'backup'
+  | 'accessibility'
+  | 'appearance'
+  | 'dock'
+  | 'menubar'
+  | 'wallpaper'
+  | 'lockscreen'
+  | 'users'
+  | 'account'
+  | 'keyboard'
 type Section = SettingsSection
 
-const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: 'general', label: tr('General'), icon: Server },
-  { id: 'appearance', label: tr('Appearance'), icon: Palette },
-  { id: 'users', label: tr('Users & Groups'), icon: Users },
-  { id: 'datetime', label: tr('Date & Time'), icon: Clock },
-  { id: 'account', label: tr('Account'), icon: KeyRound },
-  { id: 'about', label: tr('About'), icon: Info },
+interface SectionInfo {
+  id: Section
+  label: string
+  icon: LucideIcon
+  /** The icon tile's colours. */
+  color: [string, string]
+  /** Extra words the sidebar search finds it by. */
+  keywords: string
+  /** A page under General (shown in the General list, not the sidebar). */
+  inGeneral?: true
+}
+
+const SECTIONS: SectionInfo[] = [
+  { id: 'apps', label: tr('Applications'), icon: LayoutGrid, color: ['#5ac8fa', '#2d55ff'], keywords: 'installed apps containers docker start stop update uninstall' },
+  { id: 'network', label: tr('Network'), icon: Globe, color: ['#4fa8ff', '#1a6dff'], keywords: 'ip address tailscale wifi ethernet interface lan' },
+  { id: 'adblock', label: tr('Ad Blocking'), icon: ShieldCheck, color: ['#ff7a6b', '#e0352b'], keywords: 'ads adblock dns pihole adguard tracker privacy' },
+  { id: 'remote', label: tr('Remote Access'), icon: Waypoints, color: ['#6e8bff', '#3b4fd6'], keywords: 'tailscale vpn anywhere outside phone' },
+  { id: 'backup', label: tr('Backup'), icon: DatabaseBackup, color: ['#7ad3a0', '#1f8f5a'], keywords: 'backup restore restic snapshot version recovery copy drive cloud' },
+  { id: 'power', label: tr('Power'), icon: Zap, color: ['#5ee07b', '#1fa83c'], keywords: 'watt energy battery restart shut down uptime' },
+  { id: 'general', label: tr('General'), icon: SettingsIcon, color: ['#a1a1a8', '#5d5d63'], keywords: 'server' },
+  { id: 'accessibility', label: tr('Accessibility'), icon: Accessibility, color: ['#4fa8ff', '#1a6dff'], keywords: 'motion animation transparency' },
+  { id: 'appearance', label: tr('Appearance'), icon: Contrast, color: ['#4a4a50', '#1c1c1f'], keywords: 'dark light theme accent colour color glass' },
+  { id: 'dock', label: tr('Desktop & Dock'), icon: PanelBottom, color: ['#3a3a40', '#121214'], keywords: 'dock magnification hide widgets launcher desktop icons' },
+  { id: 'menubar', label: tr('Menu Bar'), icon: PanelTop, color: ['#8e8e93', '#55555b'], keywords: 'clock seconds date status bar cpu ip' },
+  { id: 'wallpaper', label: tr('Wallpaper'), icon: Image, color: ['#5ee0f0', '#1a8fd6'], keywords: 'background photo picture' },
+  { id: 'lockscreen', label: tr('Lock Screen'), icon: Lock, color: ['#3a3a40', '#121214'], keywords: 'lock idle inactive password away' },
+  { id: 'users', label: tr('Users & Groups'), icon: Users, color: ['#4fa8ff', '#1a6dff'], keywords: 'linux account group sudo' },
+  { id: 'account', label: tr('Login & Password'), icon: KeyRound, color: ['#a1a1a8', '#5d5d63'], keywords: 'password sign out session security' },
+  { id: 'keyboard', label: tr('Keyboard'), icon: Keyboard, color: ['#a1a1a8', '#5d5d63'], keywords: 'shortcuts keys' },
+  // Pages inside General.
+  { id: 'about', label: tr('About'), icon: Info, color: ['#a1a1a8', '#5d5d63'], keywords: 'version hostname kernel processor memory', inGeneral: true },
+  { id: 'updates', label: tr('Software Update'), icon: CircleFadingArrowUp, color: ['#a1a1a8', '#5d5d63'], keywords: 'update release version upgrade', inGeneral: true },
+  { id: 'storage', label: tr('Storage'), icon: HardDrive, color: ['#a1a1a8', '#5d5d63'], keywords: 'disk space usb drive', inGeneral: true },
+  { id: 'datetime', label: tr('Date & Time'), icon: CalendarClock, color: ['#4fa8ff', '#1a6dff'], keywords: 'time zone clock ntp hostname', inGeneral: true },
+  { id: 'language', label: tr('Language & Region'), icon: Languages, color: ['#4fa8ff', '#1a6dff'], keywords: 'language indonesian english bahasa format', inGeneral: true },
+  { id: 'startup', label: tr('Startup Apps'), icon: Rocket, color: ['#a1a1a8', '#5d5d63'], keywords: 'boot start autostart restart policy services', inGeneral: true },
+  { id: 'sharing', label: tr('Sharing'), icon: Share2, color: ['#a1a1a8', '#5d5d63'], keywords: 'smb samba share remote desktop', inGeneral: true },
 ]
+const byId = Object.fromEntries(SECTIONS.map(s => [s.id, s])) as Record<Section, SectionInfo>
+// The sidebar in groups (separated by a gap), as on a desktop's own settings.
+const SIDEBAR: Section[][] = [['network', 'adblock', 'remote', 'backup', 'power', 'apps'], ['general', 'accessibility', 'appearance', 'dock', 'menubar', 'wallpaper'], ['lockscreen', 'users', 'account'], ['keyboard']]
+const GENERAL_LIST: Section[][] = [['about', 'updates', 'storage'], ['datetime', 'language', 'startup', 'sharing']]
+
+function SectionIcon({ info, size = 20 }: { info: SectionInfo; size?: number }) {
+  const Icon = info.icon
+  return (
+    <span className="set-icon" style={{ width: size, height: size, background: `linear-gradient(160deg, ${info.color[0]}, ${info.color[1]})` }}>
+      <Icon size={Math.round(size * 0.62)} />
+    </span>
+  )
+}
 
 const MIN_PASSWORD = 8
 
@@ -106,180 +222,240 @@ function AccountSection() {
   )
 }
 
-const THEMES: { id: Theme; label: string }[] = [
-  { id: 'light', label: tr('Light') },
-  { id: 'dark', label: tr('Dark') },
-]
-
 interface Props {
   stats: SystemStats | null
   section: Section
   onSectionChange: (section: Section) => void
+  onOpenWindow: (id: WindowId) => void
+  onPower: (action: 'restart' | 'shutdown') => void
+  onEditWidgets: () => void
+  /** App image updates waiting (from the App Center). */
+  appUpdates: number
+  onOpenAppUpdates: () => void
+  /** Installed apps, for Settings → Apps, and what can be done with them. */
+  apps: InstalledApp[]
+  appActions: AppActions
 }
 
-export function Settings({ stats, section, onSectionChange: setSection }: Props) {
-  const { settings, update } = useSettings()
-  const current = SECTIONS.find(s => s.id === section)!
+export function Settings({ stats, section, onSectionChange, onOpenWindow, onPower, onEditWidgets, appUpdates, onOpenAppUpdates, apps, appActions }: Props) {
+  const { hostname, home } = useAuth()
+  const [query, setQuery] = useState('')
+  const [release, setRelease] = useState<ReleaseStatus | null>(null)
+  const current = byId[section] ?? byId.general
+
+  useEffect(() => {
+    api.releaseStatus().then(setRelease, () => {})
+  }, [section])
+
+  // Back and forward through the pages visited, as in a browser.
+  // A page inside a section (an app in Applications, a backup plan), part of the history too.
+  const [sub, setSub] = useState<string | null>(null)
+  const history = useRef<{ list: { section: Section; sub: string | null }[]; at: number }>({ list: [{ section, sub: null }], at: 0 })
+  const walking = useRef(false)
+  const [, rerender] = useState(0)
+  useEffect(() => {
+    const h = history.current
+    if (walking.current) {
+      walking.current = false
+    } else if (h.list[h.at].section !== section) {
+      h.list = [...h.list.slice(0, h.at + 1), { section, sub: null }]
+      h.at = h.list.length - 1
+      setSub(null)
+    }
+    rerender(n => n + 1)
+  }, [section])
+  const openSub = (next: string | null) => {
+    const h = history.current
+    if (h.list[h.at].sub === next) return
+    h.list = [...h.list.slice(0, h.at + 1), { section, sub: next }]
+    h.at = h.list.length - 1
+    setSub(next)
+    rerender(n => n + 1)
+  }
+  const walk = (step: number) => {
+    const h = history.current
+    const at = h.at + step
+    if (at < 0 || at >= h.list.length) return
+    h.at = at
+    const entry = h.list[at]
+    setSub(entry.sub)
+    if (entry.section !== section) {
+      walking.current = true
+      onSectionChange(entry.section)
+    } else rerender(n => n + 1)
+  }
+  // The section already open, from the sidebar: back to its first page.
+  const go = (id: Section) => (id === section ? openSub(null) : onSectionChange(id))
+  const canBack = history.current.at > 0
+  const canForward = history.current.at < history.current.list.length - 1
 
   useAppMenus(() => [
     {
       label: tr('View'),
-      items: SECTIONS.map(({ id, label, icon }) => ({
-        label,
-        icon,
-        checked: id === section,
-        onSelect: () => setSection(id),
-      })),
+      items: [
+        { label: tr('Back'), icon: ChevronLeft, disabled: !canBack, onSelect: () => walk(-1) },
+        { label: tr('Forward'), icon: ChevronRight, disabled: !canForward, onSelect: () => walk(1) },
+        'separator',
+        ...SIDEBAR.flat().map(id => ({ label: byId[id].label, icon: byId[id].icon, checked: id === section, onSelect: () => onSectionChange(id) })),
+      ],
     },
   ])
 
+  const q = query.trim().toLowerCase()
+  const matches = useMemo(() => (q ? SECTIONS.filter(s => `${s.label} ${s.keywords}`.toLowerCase().includes(q)) : []), [q])
+  const selected = current.inGeneral ? 'general' : current.id
+  const user = home?.split('/').filter(Boolean).pop()
+
+  const item = (id: Section) => {
+    const info = byId[id]
+    return (
+      <button key={id} className={`sidebar-item set-item ${selected === id ? 'is-active' : ''}`} onClick={() => go(id)}>
+        <SectionIcon info={info} /> {info.label}
+      </button>
+    )
+  }
+
   return (
     <div className="split">
-      <aside className="sidebar">
-        {SECTIONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={`sidebar-item ${id === section ? 'is-active' : ''}`}
-            onClick={() => setSection(id)}
-          >
-            <Icon size={15} /> {label}
-          </button>
-        ))}
+      <aside className="sidebar set-sidebar">
+        <label className="sidebar-search">
+          <Search size={14} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Search')} aria-label={tr('Search settings')} />
+          {query && (
+            <button className="set-search-clear" onClick={() => setQuery('')} aria-label={tr('Clear')}>
+              <X size={12} />
+            </button>
+          )}
+        </label>
+        {q ? (
+          <div className="set-group">
+            {matches.map(s => (
+              <button
+                key={s.id}
+                className={`sidebar-item set-item ${section === s.id ? 'is-active' : ''}`}
+                onClick={() => {
+                  onSectionChange(s.id)
+                  setQuery('')
+                }}
+              >
+                <SectionIcon info={s} /> {s.label}
+              </button>
+            ))}
+            {matches.length === 0 && <p className="set-empty">{tr('No results for “{0}”', query.trim())}</p>}
+          </div>
+        ) : (
+          <>
+            <button className={`set-account ${section === 'account' ? 'is-active' : ''}`} onClick={() => onSectionChange('account')}>
+              <span className="set-avatar">{(user ?? hostname ?? '?').slice(0, 1).toUpperCase()}</span>
+              <span>
+                <strong>{user ?? hostname}</strong>
+                <small>{tr('TemanLabsOS on {0}', hostname || tr('this server'))}</small>
+              </span>
+            </button>
+            {release?.available && (
+              <button className={`set-update ${section === 'updates' ? 'is-active' : ''}`} onClick={() => onSectionChange('updates')}>
+                <span>{tr('Software Update Available')}</span>
+                <span className="set-badge">1</span>
+              </button>
+            )}
+            {SIDEBAR.map((group, i) => (
+              <div key={i} className="set-group">
+                {group.map(item)}
+              </div>
+            ))}
+          </>
+        )}
       </aside>
 
-      <div className="pane">
+      <div className="pane set-pane">
         <WindowToolbar>
+          <div className="tb-group set-nav">
+            <button className="tb-btn" onClick={() => walk(-1)} disabled={!canBack} aria-label={tr('Back')} title={tr('Back')}>
+              <ChevronLeft size={16} />
+            </button>
+            <button className="tb-btn" onClick={() => walk(1)} disabled={!canForward} aria-label={tr('Forward')} title={tr('Forward')}>
+              <ChevronRight size={16} />
+            </button>
+          </div>
           <ToolbarTitle title={current.label} />
         </WindowToolbar>
-        <h3 className="pane-title">{current.label}</h3>
 
-        {section === 'general' && (
-          <div className="group">
-            <Row label={tr('Hostname')} value={stats?.hostname} />
-            <Row label={tr('Operating system')} value={stats?.os} />
-            <Row label={tr('Kernel')} value={stats?.kernel} />
-            <Row
-              label={tr('Local IP')}
-              value={stats?.addresses.lan && `${stats.addresses.lan.ipv4} (${stats.addresses.lan.interface})`}
-            />
-            <Row
-              label={tr('Tailscale')}
-              value={stats && (stats.addresses.tailscale ? stats.addresses.tailscale.ipv4 : 'Not connected')}
-            />
-            <Row label={tr('Processor')} value={stats && `${stats.cpu.model} · ${stats.cpu.cores} cores`} />
-            <Row label={tr('Memory')} value={stats && formatBytes(stats.memory.total, 0)} />
-            <Row label={tr('Uptime')} value={stats && formatUptime(stats.uptime)} />
-          </div>
+        {section === 'general' ? (
+          <>
+            <header className="set-hero">
+              <SectionIcon info={byId.general} size={56} />
+              <h2>{tr('General')}</h2>
+              <p>{tr('The server’s overall setup: software updates, storage, date and time, language, sharing and more.')}</p>
+            </header>
+            {GENERAL_LIST.map((group, i) => (
+              <div key={i} className="group set-links">
+                {group.map(id => (
+                  <button key={id} className="row set-link" onClick={() => go(id)}>
+                    <span className="set-link-label">
+                      <SectionIcon info={byId[id]} /> {byId[id].label}
+                    </span>
+                    {id === 'updates' && release?.available ? <span className="set-badge">1</span> : null}
+                    <ChevronRight size={15} className="set-chevron" />
+                  </button>
+                ))}
+              </div>
+            ))}
+          </>
+        ) : (
+          <h3 className="pane-title">{current.label}</h3>
         )}
 
-        {section === 'appearance' && (
+        {section === 'about' && <AboutSection stats={stats} version={release?.current} onUpdates={() => onSectionChange('updates')} />}
+        {section === 'updates' && (
           <>
-            <div className="group">
-              <div className="row">
-                <span>{tr('Appearance')}</span>
-                <div className="theme-picker">
-                  {THEMES.map(t => (
-                    <button
-                      key={t.id}
-                      className={`theme-option ${settings.theme === t.id ? 'is-active' : ''}`}
-                      onClick={() => update({ theme: t.id })}
-                    >
-                      <span className={`theme-preview theme-preview-${t.id}`} />
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="row">
-                <span>
-                  {tr('Language')}
-                  <small className="row-hint">{tr('The interface language. Changing it reloads the page.')}</small>
-                </span>
-                <PopUpButton
-                  className="lang-picker"
-                  value={language}
-                  aria-label={tr('Language')}
-                  options={LANGUAGES.map(l => ({ value: l.id, label: l.label }))}
-                  onChange={next => {
-                    if (next === language) return
-                    update({ language: next })
-                    // Labels are translated when modules load, so a new language needs a fresh page.
-                    window.setTimeout(() => location.reload(), 150)
-                  }}
-                />
-              </div>
+            <div className="group set-update-box">
+              <LogoTile size={48} />
+              <AboutUpdate />
             </div>
-            <WallpaperPicker />
             <div className="group">
               <div className="row">
                 <span>
-                  {tr('Desktop widgets')}
-                  <small>{tr('Clock, CPU, memory, storage, network and apps on the desktop.')}</small>
+                  {tr('App updates')}
+                  <small>{appUpdates ? tr('{0} apps have newer images.', appUpdates) : tr('Your apps are up to date.')}</small>
                 </span>
-                <Switch
-                  label={tr('Desktop widgets')}
-                  checked={settings.showWidgets}
-                  onChange={v => update({ showWidgets: v })}
-                />
-              </div>
-              <div className="row">
-                <span>
-                  {tr('Reduce transparency')}
-                  <small>{tr('Replaces glass with solid surfaces. Helps on slower devices.')}</small>
-                </span>
-                <Switch
-                  label={tr('Reduce transparency')}
-                  checked={settings.reduceTransparency}
-                  onChange={v => update({ reduceTransparency: v })}
-                />
-              </div>
-              <div className="row">
-                <span>
-                  {tr('Lens refraction')}
-                  <small>
-                    {supportsRefraction
-                      ? tr('Bends the wallpaper behind glass surfaces.')
-                      : tr('Needs a Chromium-based browser (Chrome, Edge, Brave).')}
-                  </small>
-                </span>
-                <Switch
-                  label={tr('Lens refraction')}
-                  checked={settings.refraction && supportsRefraction}
-                  disabled={!supportsRefraction}
-                  onChange={v => update({ refraction: v })}
-                />
+                <button className="btn" onClick={onOpenAppUpdates}>
+                  {tr('Show in App Center…')}
+                </button>
               </div>
             </div>
           </>
         )}
-
-        {section === 'users' && <UsersSection />}
-        {section === 'datetime' && <DateTimeSection />}
-        {section === 'account' && <AccountSection />}
-
-        {section === 'about' && (
-          <div className="about">
-            <LogoTile size={72} />
-            <h2>{tr('TemanLabsOS')}</h2>
-            <p>{tr('Web desktop for your home server')}</p>
-            <AboutUpdate />
-            <p className="about-dim">
-              {MOCK_MODE
-                ? tr('Running on mock data (npm run dev:mock).')
-                : (stats?.os ?? '')}
-            </p>
-          </div>
+        {section === 'storage' && <StorageSection stats={stats} onOpenWindow={onOpenWindow} />}
+        {section === 'datetime' && (
+          <>
+            <DateTimeSection />
+            <ClockGroup />
+          </>
         )}
+        {section === 'language' && <LanguageSection />}
+        {section === 'sharing' && <SharingSection onOpenWindow={onOpenWindow} />}
+        {section === 'startup' && <StartupSection />}
+        {section === 'network' && <NetworkSection stats={stats} onOpenWindow={onOpenWindow} />}
+        {section === 'adblock' && <AdblockSection stats={stats} />}
+        {section === 'remote' && <RemoteAccessSection stats={stats} />}
+        {section === 'apps' && <AppsSection apps={apps} actions={appActions} sub={sub} onSub={openSub} />}
+        {section === 'backup' && <BackupSection sub={sub} onSub={openSub} />}
+        {section === 'power' && <PowerSection stats={stats} onPower={onPower} />}
+        {section === 'accessibility' && <AccessibilitySection />}
+        {section === 'appearance' && <AppearanceSection />}
+        {section === 'dock' && <DockSection onEditWidgets={onEditWidgets} />}
+        {section === 'menubar' && <MenuBarSection />}
+        {section === 'wallpaper' && <WallpaperPicker />}
+        {section === 'users' && <UsersSection />}
+        {section === 'lockscreen' && <LockScreenSection />}
+        {section === 'account' && (
+          <>
+            <AccountSection />
+            <SignedInBrowsers />
+          </>
+        )}
+        {section === 'keyboard' && <KeyboardSection />}
       </div>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="row">
-      <span>{label}</span>
-      <span className="value">{value ?? '–'}</span>
     </div>
   )
 }
@@ -357,12 +533,20 @@ function AboutUpdate() {
           </button>
         </div>
       ) : (
-        <p className="about-dim">
-          {status?.error ? tr('Updates: {0}.', status.error) : status?.latest ? tr('TemanLabsOS is up to date.') : ''}{' '}
+        // The result, when it was checked, then the button on its own line.
+        <div className="about-check">
+          {(status?.error || status?.latest) && (
+            <p className="about-dim">{status.error ? tr('Updates: {0}.', status.error) : tr('TemanLabsOS is up to date.')}</p>
+          )}
+          {status?.checked && !checking && (
+            <small className="about-checked">
+              {tr('Last checked {0}', new Date(status.checked).toLocaleString(language === 'id' ? 'id-ID' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }))}
+            </small>
+          )}
           <button className="pill-btn" onClick={() => void check(true)} disabled={checking}>
-            {checking ? <LoaderCircle size={12} className="spin" /> : null} {tr('Check for Updates')}
+            {checking ? <LoaderCircle size={12} className="spin" /> : null} {checking ? tr('Checking…') : tr('Check for Updates')}
           </button>
-        </p>
+        </div>
       )}
       {error && <p className="form-error">{error}</p>}
     </div>

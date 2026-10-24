@@ -310,7 +310,13 @@ func (s *server) handleApps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apps)
 }
 
+// findAppHook stands in for the app list in tests.
+var findAppHook func(id string) *app
+
 func (s *server) findApp(ctx context.Context, id string) (*app, error) {
+	if findAppHook != nil {
+		return findAppHook(id), nil
+	}
 	apps, err := s.store.listApps(ctx)
 	if err != nil {
 		return nil, err
@@ -344,6 +350,9 @@ func (s *server) setRunning(w http.ResponseWriter, r *http.Request, running bool
 	if a == nil || len(a.containers) == 0 {
 		writeError(w, http.StatusNotFound, "app not found")
 		return
+	}
+	if !running && s.health != nil {
+		s.health.stoppedByUser(a.ID)
 	}
 	if a.containers[0].Labels[labelProject] != "" {
 		verb := "stop"

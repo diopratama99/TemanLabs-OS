@@ -9,6 +9,24 @@ import type {
   ConvertTask,
   MediaProbe,
   ReleaseStatus,
+  HardwareInfo,
+  AppHealth,
+  MovePreview,
+  MovedApp,
+  HistoryData,
+  HistoryRange,
+  StartupApp,
+  ShareLink,
+  ShareLinks,
+  BackupApp,
+  BackupDestination,
+  BackupFile,
+  BackupPlan,
+  BackupPlanSettings,
+  BackupVersion,
+  BackupsInfo,
+  TagColor,
+  TrashItem,
   CloudInfo,
   FormatFS,
   StorageInfo,
@@ -51,7 +69,9 @@ import type {
   StoreApp,
   SystemStats,
   WallpaperImage,
+  AdblockStatus,
   Device,
+  SignedInBrowser,
   DeviceInput,
   DeviceStatus,
   FoundDevice,
@@ -60,6 +80,8 @@ import type {
 
 /** Fired when any request comes back 401, so the app can show the login screen. */
 export const UNAUTHORIZED_EVENT = 'temanlabs:unauthorized'
+/** Fired when a request comes back 423: the session is locked (another tab locked it, say). */
+export const LOCKED_EVENT = 'temanlabs:locked'
 
 export class ApiError extends Error {
   readonly status: number
@@ -87,6 +109,7 @@ async function request<T>(method: string, path: string, options: RequestOptions 
   }
   const res = await fetch(path, { method, headers, body, credentials: 'same-origin' })
   if (res.status === 401 && path !== '/api/login') window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+  if (res.status === 423) window.dispatchEvent(new Event(LOCKED_EVENT))
   if (!res.ok) {
     let message = res.statusText || `Request failed (${res.status})`
     try {
@@ -97,7 +120,12 @@ async function request<T>(method: string, path: string, options: RequestOptions 
     }
     throw new ApiError(message, res.status)
   }
-  if (res.status === 204 || res.status === 202) return undefined as T
+  if (res.status === 204) return undefined as T
+  // 202 Accepted: a job started; some answers name it ({ job }), others say nothing.
+  if (res.status === 202) {
+    const body = await res.text()
+    return (body ? JSON.parse(body) : undefined) as T
+  }
   return (options.text ? res.text() : res.json()) as Promise<T>
 }
 
@@ -115,6 +143,12 @@ export const httpApi = {
   login: (password: string) => request<Session>('POST', '/api/login', { json: { password } }),
   logout: () => request<void>('POST', '/api/logout'),
   changePassword: (current: string, next: string) => request<void>('POST', '/api/password', { json: { current, next } }),
+  /** Locks this browser's session; only unlock works until the password is entered. */
+  lock: () => request<void>('POST', '/api/lock'),
+  unlock: (password: string) => request<void>('POST', '/api/unlock', { json: { password } }),
+  signedInBrowsers: () => request<SignedInBrowser[]>('GET', '/api/sessions'),
+  signOutBrowser: (id: string) => request<void>('DELETE', `/api/sessions/${encodeURIComponent(id)}`),
+  signOutOtherBrowsers: () => request<void>('POST', '/api/sessions/end-others'),
 
   getSystemStats: () => request<SystemStats>('GET', '/api/system'),
 
@@ -178,7 +212,11 @@ export const httpApi = {
   k8sText: (view: 'logs' | 'describe' | 'yaml', kind: string, name: string, namespace: string) =>
     request<{ text: string; command: string }>('GET', `/api/k8s/text/${view}${query({ kind, name, namespace })}`),
 
-  job: (kind: string) => request<Job>('GET', `/api/jobs/${encodeURIComponent(kind)}`),
+  // A job that hasn't written anything yet still has a log to read.
+  job: async (kind: string) => {
+    const j = await request<Job>('GET', `/api/jobs/${encodeURIComponent(kind)}`)
+    return { ...j, log: j.log ?? [] }
+  },
   updates: () => request<UpdatesInfo>('GET', '/api/updates'),
   checkUpdates: () => request<void>('POST', '/api/updates/check'),
   /** Upgrades everything, or just the named packages. */
@@ -225,6 +263,18 @@ export const httpApi = {
   /** Remembers where a video is; position 0 forgets it. */
   saveMediaPosition: (path: string, position: number, duration: number) =>
     request<void>('PUT', '/api/media/position', { json: { path, position, duration } }),
+  /** Ad blocking for the whole home: AdGuard Home, set up and run by the server. */
+  adblock: () => request<AdblockStatus>('GET', '/api/adblock'),
+  installAdblock: () => request<void>('POST', '/api/adblock/install'),
+  /** Blocking on, off, or off for some minutes. */
+  setAdblock: (enabled: boolean, minutes = 0) => request<void>('POST', '/api/adblock/protection', { json: { enabled, minutes } }),
+  allowDomain: (domain: string) => request<void>('POST', '/api/adblock/allow', { json: { domain } }),
+  blockDomainAgain: (domain: string) => request<void>('DELETE', `/api/adblock/allow${query({ domain })}`),
+  /** Asks the server's DNS for an ad domain: is it blocked? */
+  testAdblock: () => request<{ answered: boolean; blocked: boolean; error?: string }>('POST', '/api/adblock/test'),
+  removeAdblock: () => request<void>('DELETE', '/api/adblock'),
+  /** Switches an extra block list on or off. */
+  setAdblockList: (id: string, enabled: boolean) => request<void>('POST', '/api/adblock/list', { json: { id, enabled } }),
   /** Devices: the other computers, and the remote desktop engine that shows their screens. */
   devices: () => request<{ devices: Device[]; engine: RemoteEngine }>('GET', '/api/devices'),
   createDevice: (body: DeviceInput) => request<Device>('POST', '/api/devices', { json: body }),
@@ -244,6 +294,16 @@ export const httpApi = {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
     return `${scheme}://${location.host}/ws/remote/${encodeURIComponent(id)}`
   },
+  hardware: () => request<HardwareInfo>('GET', '/api/system/hardware'),
+  history: (range: HistoryRange) => request<HistoryData>('GET', `/api/system/history${query({ range })}`),
+  appHealth: () => request<AppHealth[]>('GET', '/api/health'),
+  movePreview: (id: string) => request<MovePreview>('GET', `/api/apps/${encodeURIComponent(id)}/move`),
+  moveToDocker: (id: string) => request<{ job: string }>('POST', `/api/apps/${encodeURIComponent(id)}/move`),
+  movedApps: () => request<MovedApp[]>('GET', '/api/moved'),
+  moveBack: (project: string) => request<{ job: string }>('POST', `/api/moved/${encodeURIComponent(project)}/back`),
+  setAutoRestart: (id: string, autoRestart: boolean) => request<void>('PUT', `/api/health/${encodeURIComponent(id)}`, { json: { autoRestart } }),
+  startupApps: () => request<StartupApp[]>('GET', '/api/startup'),
+  setStartupApp: (id: string, enabled: boolean) => request<void>('PUT', `/api/startup/${encodeURIComponent(id)}`, { json: { enabled } }),
   releaseStatus: (refresh = false) => request<ReleaseStatus>('GET', `/api/system/release${refresh ? '?refresh=1' : ''}`),
   /** Downloads the newest release, checks it and restarts the server into it (job "self-update"). */
   installRelease: () => request<{ job: string }>('POST', '/api/system/release/install'),
@@ -314,6 +374,37 @@ export const httpApi = {
   copyEntries: async (paths: string[], to: string, move = false) =>
     (await request<{ names: string[] }>('POST', '/api/files/copy', { json: { paths, to, move } })).names,
   deleteEntry: (path: string, name: string) => request<void>('DELETE', `/api/files${query({ path, name })}`),
+  backups: () => request<BackupsInfo>('GET', '/api/backups'),
+  installBackups: () => request<{ job: string }>('POST', '/api/backups/install'),
+  recoveryKey: async () => (await request<{ key: string }>('GET', '/api/backups/key')).key,
+  setRecoveryKey: (key: string) => request<void>('PUT', '/api/backups/key', { json: { key } }),
+  backupDestinations: () => request<BackupDestination[]>('GET', '/api/backups/destinations'),
+  backupApps: () => request<BackupApp[]>('GET', '/api/backups/apps'),
+  createBackup: (plan: BackupPlanSettings) => request<BackupPlan>('POST', '/api/backups', { json: plan }),
+  updateBackup: (id: string, plan: BackupPlanSettings) => request<BackupPlan>('PUT', `/api/backups/${id}`, { json: plan }),
+  deleteBackup: (id: string) => request<void>('DELETE', `/api/backups/${id}`),
+  runBackup: (id: string) => request<{ job: string }>('POST', `/api/backups/${id}/run`),
+  stopBackup: (id: string) => request<void>('POST', `/api/backups/${id}/stop`),
+  backupVersions: (id: string) => request<BackupVersion[]>('GET', `/api/backups/${id}/versions`),
+  backupFiles: (id: string, version: string, path = '') =>
+    request<BackupFile[]>('GET', `/api/backups/${id}/versions/${version}/files${query({ path })}`),
+  /** Restores paths from a version; to = '' puts them back where they came from. */
+  restoreBackup: (id: string, body: { version: string; paths: string[]; to: string }) => request<{ job: string }>('POST', `/api/backups/${id}/restore`, { json: body }),
+  shareLinks: () => request<ShareLinks>('GET', '/api/links'),
+  createShareLink: (body: { path: string; upload: boolean; hours: number; password: string }) => request<ShareLink>('POST', '/api/links', { json: body }),
+  deleteShareLink: (id: string) => request<void>('DELETE', `/api/links/${encodeURIComponent(id)}`),
+  setShareLinkBase: (baseUrl: string) => request<void>('PUT', '/api/links/settings', { json: { baseUrl } }),
+  trash: () => request<TrashItem[]>('GET', '/api/trash'),
+  moveToTrash: (paths: string[]) => request<void>('POST', '/api/trash', { json: { paths } }),
+  /** Puts items back where they came from; resolves to their paths there. */
+  putBack: (ids: string[]) => request<string[]>('POST', '/api/trash/restore', { json: { ids } }),
+  deleteFromTrash: (id: string) => request<void>('DELETE', `/api/trash/${encodeURIComponent(id)}`),
+  emptyTrash: () => request<void>('DELETE', '/api/trash'),
+  fileTags: () => request<Record<string, TagColor[]>>('GET', '/api/files/tags'),
+  setFileTags: (paths: string[], tags: TagColor[]) => request<void>('PUT', '/api/files/tags', { json: { paths, tags } }),
+  taggedFiles: (tag: TagColor) => request<FileEntry[]>('GET', `/api/files/tagged${query({ tag })}`),
+  recentFiles: () => request<FileEntry[]>('GET', '/api/files/recents'),
+  addRecentFile: (path: string) => request<void>('POST', '/api/files/recents', { json: { path } }),
   readFile: (path: string) => request<string>('GET', `/api/files/content${query({ path })}`, { text: true }),
   writeFile: (path: string, text: string) =>
     request<void>('PUT', `/api/files/content${query({ path })}`, {

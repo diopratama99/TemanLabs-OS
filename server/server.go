@@ -35,6 +35,12 @@ type server struct {
 	devices  *deviceStore
 	remote   *remoteEngine
 	logins   *appLogins
+	adblock  *adblockEngine
+	meta     *fileMeta
+	links    *shareLinks
+	backups  *backupStore
+	history  *history
+	health   *healthStore
 	owner    *owner
 }
 
@@ -102,8 +108,18 @@ func newServer(cfg *Config) (*server, error) {
 	s.devices = newDeviceStore(cfg.StateDir)
 	s.remote = newRemoteEngine(docker)
 	s.logins = newAppLogins(cfg.StateDir)
+	s.adblock = newAdblock(docker, cfg.StateDir)
+	s.meta = newFileMeta(cfg.StateDir)
+	s.links = newShareLinks(cfg.StateDir)
+	s.backups = newBackupStore(cfg.StateDir)
+	s.history = newHistory(cfg.StateDir)
+	s.health = newHealthStore(cfg.StateDir)
 	s.frames = newFrameProxies(s)
 	go s.stats.run()
+	go s.pruneTrash()
+	go s.runSchedule()
+	go s.runHistory()
+	go s.runHealth()
 	return s, nil
 }
 
@@ -113,12 +129,24 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/me", s.handleMe)
+	// Unlocking works with a locked session (it has its own check).
+	mux.HandleFunc("POST /api/unlock", s.handleUnlock)
 	// The lock screen shows the wallpaper before anyone signs in. Names are random (64 bits) and
 	// listing, uploading and deleting them still need a session.
 	mux.HandleFunc("GET /api/wallpapers/{name}", s.handleGetWallpaper)
+	// Share links: pages for whoever has the link, no session needed.
+	mux.HandleFunc("GET /s/{id}", s.handleLinkPage)
+	mux.HandleFunc("POST /s/{id}", s.handleLinkPassword)
+	mux.HandleFunc("GET /s/{id}/file", s.handleLinkFile)
+	mux.HandleFunc("GET /s/{id}/zip", s.handleLinkZip)
+	mux.HandleFunc("POST /s/{id}/upload", s.handleLinkUpload)
 
 	api := http.NewServeMux()
 	api.HandleFunc("POST /api/password", s.handleChangePassword)
+	api.HandleFunc("POST /api/lock", s.handleLock)
+	api.HandleFunc("GET /api/sessions", s.handleSessions)
+	api.HandleFunc("DELETE /api/sessions/{id}", s.handleEndSession)
+	api.HandleFunc("POST /api/sessions/end-others", s.handleEndOtherSessions)
 	api.HandleFunc("GET /api/system", s.handleSystem)
 	api.HandleFunc("GET /api/store", s.handleStore)
 	api.HandleFunc("GET /api/apps", s.handleApps)
@@ -168,6 +196,16 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("POST /api/storage/mergerfs", s.handleInstallMergerfs)
 	api.HandleFunc("PUT /api/storage/usb", s.handleUSBSetting)
 	api.HandleFunc("GET /api/cloud", s.handleCloud)
+	api.HandleFunc("GET /api/system/hardware", s.handleHardware)
+	api.HandleFunc("GET /api/system/history", s.handleHistory)
+	api.HandleFunc("GET /api/health", s.handleHealth)
+	api.HandleFunc("GET /api/apps/{id}/move", s.handleMovePreview)
+	api.HandleFunc("POST /api/apps/{id}/move", s.handleMoveToDocker)
+	api.HandleFunc("GET /api/moved", s.handleMovedApps)
+	api.HandleFunc("POST /api/moved/{project}/back", s.handleMoveBack)
+	api.HandleFunc("PUT /api/health/{id}", s.handleSetHealth)
+	api.HandleFunc("GET /api/startup", s.handleStartupApps)
+	api.HandleFunc("PUT /api/startup/{id}", s.handleSetStartupApp)
 	api.HandleFunc("GET /api/system/release", s.handleReleaseStatus)
 	api.HandleFunc("POST /api/system/release/install", s.handleSelfUpdate)
 	api.HandleFunc("POST /api/cloud", s.handleAddCloud)
@@ -185,6 +223,14 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("PUT /api/media/position", s.handleSetPosition)
 	api.HandleFunc("PUT /api/apps/{id}/signin", s.handleAppSignIn)
 	api.HandleFunc("DELETE /api/apps/{id}/signin", s.handleAppSignOut)
+	api.HandleFunc("GET /api/adblock", s.handleAdblock)
+	api.HandleFunc("POST /api/adblock/install", s.handleAdblockInstall)
+	api.HandleFunc("POST /api/adblock/protection", s.handleAdblockProtection)
+	api.HandleFunc("POST /api/adblock/allow", s.handleAdblockAllow)
+	api.HandleFunc("DELETE /api/adblock/allow", s.handleAdblockAllow)
+	api.HandleFunc("POST /api/adblock/test", s.handleAdblockTest)
+	api.HandleFunc("POST /api/adblock/list", s.handleAdblockList)
+	api.HandleFunc("DELETE /api/adblock", s.handleAdblockRemove)
 	api.HandleFunc("GET /api/devices", s.handleListDevices)
 	api.HandleFunc("POST /api/devices", s.handleCreateDevice)
 	api.HandleFunc("GET /api/devices/status", s.handleDeviceStatus)
@@ -241,6 +287,34 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/files/search", s.handleSearch)
 	api.HandleFunc("GET /api/files/tree", s.handleTree)
 	api.HandleFunc("POST /api/files/upload", s.handleUpload)
+	api.HandleFunc("GET /api/files/tags", s.handleTags)
+	api.HandleFunc("PUT /api/files/tags", s.handleSetTags)
+	api.HandleFunc("GET /api/files/tagged", s.handleTagged)
+	api.HandleFunc("GET /api/files/recents", s.handleRecents)
+	api.HandleFunc("POST /api/files/recents", s.handleAddRecent)
+	api.HandleFunc("GET /api/backups", s.handleBackups)
+	api.HandleFunc("POST /api/backups", s.handleCreateBackup)
+	api.HandleFunc("POST /api/backups/install", s.handleInstallRestic)
+	api.HandleFunc("GET /api/backups/key", s.handleRecoveryKey)
+	api.HandleFunc("PUT /api/backups/key", s.handleSetRecoveryKey)
+	api.HandleFunc("GET /api/backups/destinations", s.handleBackupDestinations)
+	api.HandleFunc("GET /api/backups/apps", s.handleBackupApps)
+	api.HandleFunc("PUT /api/backups/{id}", s.handleUpdateBackup)
+	api.HandleFunc("DELETE /api/backups/{id}", s.handleDeleteBackup)
+	api.HandleFunc("POST /api/backups/{id}/run", s.handleRunBackup)
+	api.HandleFunc("POST /api/backups/{id}/stop", s.handleStopBackup)
+	api.HandleFunc("GET /api/backups/{id}/versions", s.handleBackupVersions)
+	api.HandleFunc("GET /api/backups/{id}/versions/{version}/files", s.handleVersionFiles)
+	api.HandleFunc("POST /api/backups/{id}/restore", s.handleRestore)
+	api.HandleFunc("GET /api/links", s.handleListLinks)
+	api.HandleFunc("POST /api/links", s.handleCreateLink)
+	api.HandleFunc("PUT /api/links/settings", s.handleLinkSettings)
+	api.HandleFunc("DELETE /api/links/{id}", s.handleDeleteLink)
+	api.HandleFunc("GET /api/trash", s.handleTrashList)
+	api.HandleFunc("POST /api/trash", s.handleMoveToTrash)
+	api.HandleFunc("POST /api/trash/restore", s.handleTrashRestore)
+	api.HandleFunc("DELETE /api/trash/{id}", s.handleTrashDelete)
+	api.HandleFunc("DELETE /api/trash", s.handleEmptyTrash)
 	api.HandleFunc("GET /ws/terminal", s.handleTerminal)
 	api.HandleFunc("GET /ws/apps/{id}/terminal", s.handleAppTerminal)
 	api.HandleFunc("GET /ws/remote/{id}", s.handleRemoteTunnel)

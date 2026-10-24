@@ -7,6 +7,8 @@ export type MenuItem =
   | {
       label: string
       icon?: LucideIcon
+      /** A colored dot in place of the icon (Tags). */
+      color?: string
       shortcut?: string
       /** Shows a check mark, for on/off items. */
       checked?: boolean
@@ -169,7 +171,7 @@ function Panel({ panelRef, items, className, style, flipTo, onCrowded, armed, op
     if (flipTo !== undefined && rect.right > window.innerWidth - EDGE && flipTo - rect.width < EDGE) onCrowded?.()
   }, [])
 
-  const hasIcons = items.some(item => item !== 'separator' && item.icon)
+  const hasIcons = items.some(item => item !== 'separator' && (item.icon || item.color))
   const moved: CSSProperties = {
     ...style,
     ...(typeof style.left === 'number' ? { left: style.left + shift.x } : {}),
@@ -205,7 +207,7 @@ function Panel({ panelRef, items, className, style, flipTo, onCrowded, armed, op
             onPointerEnter={e => !item.disabled && onHover(item, e.currentTarget)}
             onClick={e => (item.submenu ? onOpenSub(item, e.currentTarget) : onPick(item))}
           >
-            {hasIcons && <span className="menu-icon">{Icon && <Icon size={14} />}</span>}
+            {hasIcons && <span className="menu-icon">{item.color ? <i className="menu-dot" style={{ background: item.color }} /> : Icon && <Icon size={14} />}</span>}
             <span className="menu-label">{isArmed ? item.confirm : item.label}</span>
             {item.checked && <Check size={14} />}
             {item.shortcut && <kbd>{item.shortcut}</kbd>}

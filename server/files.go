@@ -31,7 +31,7 @@ const (
 )
 
 // Directories skipped by search and Go to File: huge and rarely what anyone is looking for.
-var skipDirs = map[string]bool{".git": true, "node_modules": true, ".cache": true, "__pycache__": true, ".venv": true}
+var skipDirs = map[string]bool{".git": true, "node_modules": true, ".cache": true, "__pycache__": true, ".venv": true, trashDirName: true}
 
 // Kernel and runtime filesystems: walking them from "/" never ends and finds nothing useful.
 var skipAbsolute = map[string]bool{"/proc": true, "/sys": true, "/dev": true, "/run": true, "/snap": true, "/var/lib/docker": true}
@@ -200,6 +200,10 @@ func (s *server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := make([]fileEntry, 0, len(items))
 	for _, d := range items {
+		// Each disk's Trash is shown in the Trash, not where it lives.
+		if d.Name() == trashDirName {
+			continue
+		}
 		entries = append(entries, entryFor(dir, d))
 	}
 	sort.Slice(entries, func(i, j int) bool {
@@ -299,6 +303,7 @@ func (s *server) handleRename(w http.ResponseWriter, r *http.Request) {
 		writeFSError(w, err)
 		return
 	}
+	s.meta.moved(filepath.Join(dir, body.From), to)
 	w.WriteHeader(http.StatusNoContent)
 }
 

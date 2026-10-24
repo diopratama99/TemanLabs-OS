@@ -7,11 +7,21 @@ import {
   ExternalLink,
   Folder,
   FolderOpen,
+  Trash2,
   Globe,
   Image,
   Info,
   LayoutDashboard,
+  ClipboardPaste,
+  FolderPlus,
+  Redo2,
+  Scissors,
+  TextSelect,
+  Undo2,
+  HardDrive,
+  Keyboard,
   LayoutGrid,
+  PanelBottom,
   LayoutTemplate,
   Link,
   Maximize2,
@@ -31,7 +41,9 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react'
-import { api } from './api'
+import { api, ApiError } from './api'
+import { usePlaces } from './hooks/usePlaces'
+import { DATA_ROOT, TRASH_PLACE } from './lib/places'
 import type { Device, InstalledApp } from './api/types'
 import { AppIcon } from './components/AppIcon'
 import type { MenuAnchor, MenuItem } from './components/ContextMenu'
@@ -62,6 +74,7 @@ import { Sharing, type ShareRequest } from './windows/Sharing'
 import { PowerOverlay } from './components/PowerOverlay'
 import { AppSettings, type SettingsRequest } from './components/AppSettings'
 import { useAppUpdates } from './hooks/useAppUpdates'
+import { useSystemBadges } from './hooks/useSystemBadges'
 import { LogViewer } from './windows/LogViewer'
 import { DiskManager } from './windows/DiskManager'
 import { NetworkTools } from './windows/NetworkTools'
@@ -80,6 +93,8 @@ import { AppView } from './windows/AppView'
 import { CodeEditor, type OpenRequest } from './windows/CodeEditor'
 import { Files } from './windows/Files'
 import { Settings, type SettingsSection } from './windows/Settings'
+import { AboutServer } from './windows/AboutServer'
+import { WindowErrorBoundary } from './components/WindowErrorBoundary'
 import { Terminal } from './windows/Terminal'
 
 interface WindowState {
@@ -102,7 +117,7 @@ const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: number; hei
   store: { title: tr('App Center'), width: 940, height: 600 },
   files: { title: tr('Files'), width: 820, height: 520 },
   code: { title: tr('Code'), width: 1120, height: 700 },
-  settings: { title: tr('Settings'), width: 720, height: 500 },
+  settings: { title: tr('Settings'), width: 860, height: 690 },
   terminal: { title: tr('Terminal'), width: 680, height: 420 },
   activity: { title: tr('System Monitor'), width: 980, height: 600 },
   sharing: { title: tr('File Sharing'), width: 900, height: 600 },
@@ -118,6 +133,7 @@ const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: number; hei
   remux: { title: tr('Remux'), width: 980, height: 640 },
   commands: { title: tr('Commands'), width: 1040, height: 680 },
   devices: { title: tr('Devices'), width: 900, height: 600 },
+  about: { title: tr('About This Server'), width: 300, height: 430 },
 }
 
 // Windows with a source-list sidebar run it full height; Terminal gets a slim title bar.
@@ -130,8 +146,14 @@ const WINDOW_VARIANT: Partial<Record<SystemWindowId, 'sidebar' | 'compact'>> = {
   disks: 'sidebar',
   scheduler: 'sidebar',
   kubernetes: 'sidebar',
+  // A slim title bar for windows with nothing in it but their title.
   terminal: 'compact',
   video: 'compact',
+  code: 'compact',
+  music: 'compact',
+  remux: 'compact',
+  devices: 'compact',
+  about: 'compact',
   commands: 'sidebar',
 }
 
@@ -170,10 +192,13 @@ export default function App() {
   const { stats, history } = useSystemStats()
   const { apps, busy, install, installCustom, uninstall, toggle, refresh: refreshApps } = useApps()
   const appUpdates = useAppUpdates()
+  const systemBadges = useSystemBadges()
   const [settingsRequest, setSettingsRequest] = useState<SettingsRequest | null>(null)
   const openAppSettings = (app: InstalledApp, options: { tab?: 'terminal'; update?: boolean } = {}) =>
     setSettingsRequest({ app, ...options, nonce: Date.now() })
   const { settings, update } = useSettings()
+  // Folders for the desktop's Go menu.
+  const places = usePlaces()
   const { show } = useContextMenu()
   const [windows, setWindows] = useState<WindowState[]>([])
   // The devices whose screens are open (their windows are "remote:<id>").
@@ -224,6 +249,11 @@ export default function App() {
   useEffect(() => {
     let timer = 0
     const onRejection = (e: PromiseRejectionEvent) => {
+      // Requests turned away by the lock screen aren't errors to report.
+      if (e.reason instanceof ApiError && e.reason.status === 423) {
+        e.preventDefault()
+        return
+      }
       const message = e.reason instanceof Error ? e.reason.message : String(e.reason)
       e.preventDefault()
       clearTimeout(timer)
@@ -236,6 +266,42 @@ export default function App() {
       window.removeEventListener('unhandledrejection', onRejection)
     }
   }, [])
+
+  // App health: a note when an app stops answering, and when it's back.
+  const healthSeen = useRef<Record<string, string>>({})
+  useEffect(() => {
+    let timer = 0
+    const check = () =>
+      api.appHealth().then(list => {
+        const before = healthSeen.current
+        for (const h of list) {
+          const name = apps.find(a => a.id === h.id)?.name
+          const was = before[h.id]
+          if (name && was && was !== h.status) {
+            const message =
+              h.status === 'down'
+                ? h.autoRestart
+                  ? tr('{0} isn’t responding. TemanLabsOS is restarting it.', name)
+                  : tr('{0} isn’t responding.', name)
+                : was === 'down' && h.status === 'up'
+                  ? tr('{0} is responding again.', name)
+                  : null
+            if (message) {
+              clearTimeout(timer)
+              setToast({ id: Date.now(), message })
+              timer = window.setTimeout(() => setToast(null), TOAST_MS)
+            }
+          }
+        }
+        healthSeen.current = Object.fromEntries(list.map(h => [h.id, h.status]))
+      }, () => {})
+    void check()
+    const poll = setInterval(check, 60_000)
+    return () => {
+      clearInterval(poll)
+      clearTimeout(timer)
+    }
+  }, [apps])
 
   // Keyboard shortcuts belong to menu items: any shortcut shown in the frontmost app's
   // menu bar works while that app is in front. See the effect below `menuBarContent`.
@@ -273,6 +339,20 @@ export default function App() {
     )
   }
   const openAppWindow = (app: InstalledApp) => openWindow(`app:${app.id}`)
+  const [filesOpen, setFilesOpen] = useState<{ path: string; nonce: number } | null>(null)
+  // The text field the desktop's Edit menu works on: the last one with the keyboard.
+  const lastField = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const onFocus = (e: FocusEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) lastField.current = e.target
+    }
+    document.addEventListener('focusin', onFocus)
+    return () => document.removeEventListener('focusin', onFocus)
+  }, [])
+  const openFilesAt = (path: string) => {
+    setFilesOpen({ path, nonce: Date.now() })
+    openWindow('files')
+  }
   const openRemote = (device: Device) => {
     setRemoteDevices(m => ({ ...m, [device.id]: device }))
     openWindow(`remote:${device.id}`)
@@ -430,18 +510,22 @@ export default function App() {
       { label: tr('Open Terminal'), icon: SquareTerminal, onSelect: () => openWindow('terminal') },
       { label: tr('Open Code'), icon: Braces, onSelect: () => openWindow('code') },
       'separator',
-      { label: tr('Change Wallpaper…'), icon: Image, onSelect: () => openSettings('appearance') },
-      { label: tr('Dark Mode'), icon: Moon, checked: dark, onSelect: () => update({ theme: dark ? 'light' : 'dark' }) },
+      { label: tr('Get Info'), icon: Info, onSelect: () => openWindow(`info:${DATA_ROOT}`) },
+      { label: tr('Change Wallpaper…'), icon: Image, onSelect: () => openSettings('wallpaper') },
+      { label: tr('Edit Widgets…'), icon: LayoutTemplate, onSelect: startEditingWidgets },
+      'separator',
       {
         label: tr('Show Widgets'),
         icon: LayoutDashboard,
         checked: settings.showWidgets,
         onSelect: () => update({ showWidgets: !settings.showWidgets }),
       },
-      { label: tr('Edit Widgets…'), icon: LayoutTemplate, onSelect: startEditingWidgets },
+      { label: tr('Show Data Drive'), icon: HardDrive, checked: settings.showDesktopDrive, onSelect: () => update({ showDesktopDrive: !settings.showDesktopDrive }) },
+      { label: tr('Dark Mode'), icon: Moon, checked: dark, onSelect: () => update({ theme: dark ? 'light' : 'dark' }) },
+      { label: tr('Desktop & Dock Settings…'), icon: PanelBottom, onSelect: () => openSettings('dock') },
       'separator',
       { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: () => setQuickSearch(true) },
-      { label: tr('About This Server'), icon: Info, onSelect: () => openSettings('general') },
+      { label: tr('About This Server'), icon: Info, onSelect: () => openWindow('about') },
     ])
   }
 
@@ -480,12 +564,16 @@ export default function App() {
     if (reveal) document.documentElement.dataset.reveal = reveal
     else delete document.documentElement.dataset.reveal
   }, [reveal])
+  const dockHides = fullscreenFront || settings.dockAutohide
   useEffect(() => {
-    if (!fullscreenFront) return
+    if (!dockHides) setReveal(null)
+  }, [dockHides])
+  useEffect(() => {
+    if (!dockHides) return
     const move = (e: PointerEvent) => {
       const h = window.innerHeight
       setReveal(r => {
-        if (e.clientY <= 2) return 'top'
+        if (fullscreenFront && e.clientY <= 2) return 'top'
         if (e.clientY >= h - 2) return 'bottom'
         // Stay out while the pointer is on what came out (or a menu opened from it).
         if (r === 'top' && (e.clientY < 48 || document.querySelector('.menu'))) return r
@@ -503,12 +591,52 @@ export default function App() {
       window.removeEventListener('pointermove', move)
       document.removeEventListener('fullscreenchange', left)
     }
-  }, [fullscreenFront, front?.id])
+  }, [dockHides, fullscreenFront, front?.id])
 
   // ----- Menu bar: changes with the frontmost app -----
 
   const menuBarContent = (): MenuBarContent => {
     const dark = settings.theme === 'dark'
+    const fileItems: MenuItem[] = [
+      { label: tr('New Files Window'), icon: Folder, onSelect: () => openWindow('files') },
+      { label: tr('New Terminal'), icon: SquareTerminal, onSelect: () => openWindow('terminal') },
+      { label: tr('New Code Window'), icon: Braces, onSelect: () => openWindow('code') },
+      'separator',
+      { label: tr('New Folder in {0}', DATA_ROOT), icon: FolderPlus, onSelect: () => openFilesAt(DATA_ROOT) },
+      { label: tr('Get Info'), icon: Info, onSelect: () => openWindow(`info:${DATA_ROOT}`) },
+      'separator',
+      { label: tr('Close Window'), icon: X, disabled: !front, onSelect: () => front && closeWindow(front.id) },
+    ]
+    const field = lastField.current?.isConnected && !lastField.current.disabled ? lastField.current : null
+    const selected = !!field && field.selectionStart !== field.selectionEnd
+    // execCommand is the only way to undo, cut or copy in a field the way typing does.
+    const inField = (command: string) => () => {
+      field?.focus()
+      document.execCommand(command)
+    }
+    const editItems: MenuItem[] = [
+      { label: tr('Undo'), icon: Undo2, disabled: !field, onSelect: inField('undo') },
+      { label: tr('Redo'), icon: Redo2, disabled: !field, onSelect: inField('redo') },
+      'separator',
+      { label: tr('Cut'), icon: Scissors, disabled: !selected, onSelect: inField('cut') },
+      { label: tr('Copy'), icon: Copy, disabled: !selected, onSelect: inField('copy') },
+      {
+        label: tr('Paste'),
+        icon: ClipboardPaste,
+        // Reading the clipboard needs a secure page (https or localhost).
+        disabled: !field || !window.isSecureContext || !navigator.clipboard?.readText,
+        onSelect: () => {
+          if (!field) return
+          void navigator.clipboard.readText().then(text => {
+            field.focus()
+            document.execCommand('insertText', false, text)
+          })
+        },
+      },
+      { label: tr('Select All'), icon: TextSelect, disabled: !field, onSelect: () => field && (field.focus(), field.select()) },
+      'separator',
+      { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: () => setQuickSearch(true) },
+    ]
     const viewItems: MenuItem[] = [
       { label: tr('Dark Mode'), icon: Moon, checked: dark, onSelect: () => update({ theme: dark ? 'light' : 'dark' }) },
       {
@@ -518,13 +646,25 @@ export default function App() {
         onSelect: () => update({ showWidgets: !settings.showWidgets }),
       },
       { label: tr('Edit Widgets…'), icon: LayoutTemplate, onSelect: startEditingWidgets },
+      { label: tr('Show Data Drive'), icon: HardDrive, checked: settings.showDesktopDrive, onSelect: () => update({ showDesktopDrive: !settings.showDesktopDrive }) },
       'separator',
-      { label: tr('Change Wallpaper…'), icon: Image, onSelect: () => openSettings('appearance') },
+      { label: tr('Hide the Dock Automatically'), icon: PanelBottom, checked: settings.dockAutohide, onSelect: () => update({ dockAutohide: !settings.dockAutohide }) },
+      { label: tr('Change Wallpaper…'), icon: Image, onSelect: () => openSettings('wallpaper') },
+      { label: tr('Desktop & Dock Settings…'), icon: SettingsIcon, onSelect: () => openSettings('dock') },
     ]
     const goItems: MenuItem[] = [
-      { label: tr('Launcher'), icon: LayoutGrid, onSelect: () => setLauncher(true) },
+      ...places.favorites.map(p => ({ label: p.label, icon: p.icon, onSelect: () => openFilesAt(p.path) })),
+      ...(places.locations.length ? (['separator'] as MenuItem[]) : []),
+      ...places.locations.map(p => ({ label: p.label, icon: p.icon, onSelect: () => openFilesAt(p.path) })),
       'separator',
-      ...SYSTEM_APPS.map(app => ({ label: app.label, onSelect: () => openWindow(app.id) })),
+      { label: tr('Launcher'), icon: LayoutGrid, onSelect: () => setLauncher(true) },
+      {
+        label: tr('Apps'),
+        icon: LayoutGrid,
+        submenu: SYSTEM_APPS.map(app => ({ label: app.label, onSelect: () => openWindow(app.id) })),
+      },
+      { label: tr('Devices'), icon: Monitor, onSelect: () => openWindow('devices') },
+      { label: tr('Network Tools'), icon: Link, onSelect: () => openWindow('network') },
     ]
 
     const windowMenu: AppMenu = {
@@ -552,6 +692,9 @@ export default function App() {
       label: tr('Help'),
       items: [
         { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: () => setQuickSearch(true) },
+        { label: tr('Keyboard Shortcuts'), icon: Keyboard, onSelect: () => openSettings('keyboard') },
+        { label: tr('Commands'), icon: SquareTerminal, onSelect: () => openWindow('commands') },
+        'separator',
         { label: tr('About TemanLabsOS'), icon: Info, onSelect: () => openSettings('about') },
       ],
     }
@@ -560,12 +703,12 @@ export default function App() {
       return {
         appName: activeTitle,
         appMenu: [
-          { label: tr('About This Server'), icon: Info, onSelect: () => openSettings('general') },
-          { label: tr('Settings…'), icon: SettingsIcon, onSelect: () => openSettings('appearance') },
+          { label: tr('About This Server'), icon: Info, onSelect: () => openWindow('about') },
+          { label: tr('Settings…'), icon: SettingsIcon, onSelect: () => openSettings('general') },
           'separator',
           { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: () => setQuickSearch(true) },
         ],
-        menus: [{ label: tr('View'), items: viewItems }, { label: tr('Go'), items: goItems }, windowMenu, helpMenu],
+        menus: [{ label: tr('File'), items: fileItems }, { label: tr('Edit'), items: editItems }, { label: tr('View'), items: viewItems }, { label: tr('Go'), items: goItems }, windowMenu, helpMenu],
       }
     }
 
@@ -613,7 +756,7 @@ export default function App() {
         { label: tr('About {0}', title), icon: Info, onSelect: () => openSettings('about') },
         ...(front.id === 'settings'
           ? []
-          : [{ label: tr('Settings…'), icon: SettingsIcon, onSelect: () => openSettings('appearance') }]),
+          : [{ label: tr('Settings…'), icon: SettingsIcon, onSelect: () => openSettings('general') }]),
         'separator',
         ...hideQuit,
       ],
@@ -663,12 +806,39 @@ export default function App() {
               openWindow('remux')
             }}
             onGetInfo={path => openWindow(`info:${path}`)}
+            open={filesOpen}
           />
         )
       case 'code':
         return <CodeEditor stats={stats} request={editorRequest} />
       case 'settings':
-        return <Settings stats={stats} section={settingsSection} onSectionChange={setSettingsSection} />
+        return (
+          <Settings
+            stats={stats}
+            section={settingsSection}
+            onSectionChange={setSettingsSection}
+            onOpenWindow={openWindow}
+            onPower={action => void api.power(action).then(() => setPowering(action))}
+            onEditWidgets={() => {
+              // The desktop has to be visible to arrange widgets.
+              minimizeWindow('settings')
+              startEditingWidgets()
+            }}
+            appUpdates={appUpdates.count}
+            onOpenAppUpdates={() => openStore('Updates')}
+            apps={apps}
+            appActions={{
+              busy,
+              onOpen: openAppWindow,
+              onToggle: toggle,
+              onUninstall: uninstall,
+              onSettings: openAppSettings,
+              updateAvailable: appUpdates.available,
+              onOpenStore: () => openStore('All'),
+              onRefresh: () => void refreshApps(),
+            }}
+          />
+        )
       case 'terminal':
         return <Terminal onTitle={t => setWindowTitle('terminal', t)} input={terminalInput} onFindCommand={() => openWindow('commands')} />
       case 'preview':
@@ -686,6 +856,8 @@ export default function App() {
         )
       case 'devices':
         return <Devices onConnect={openRemote} />
+      case 'about':
+        return <AboutServer stats={stats} onMoreInfo={() => openSettings('about')} />
       case 'commands':
         return (
           <Commands
@@ -773,7 +945,7 @@ export default function App() {
             onManageApps={() => openStore('Installed')}
           />
         )}
-        <div className="desktop-icons">
+        <div className="desktop-icons" hidden={!settings.showDesktopDrive}>
           <button
             className={`desk-icon ${driveSelected ? 'is-selected' : ''}`}
             onClick={() => setDriveSelected(true)}
@@ -803,7 +975,7 @@ export default function App() {
             onToggleFullscreen={() => toggleFullscreen(w.id)}
             closing={w.closing}
             active={w.id === front?.id}
-            variant={infoPathOf(w.id) || remoteIdOf(w.id) ? 'compact' : (WINDOW_VARIANT[w.id as SystemWindowId] ?? 'default')}
+            variant={appIdOf(w.id) || infoPathOf(w.id) || remoteIdOf(w.id) ? 'compact' : (WINDOW_VARIANT[w.id as SystemWindowId] ?? 'default')}
             {...appChrome(w)}
             onFocus={() => focusWindow(w.id)}
             onClose={() => closeWindow(w.id)}
@@ -811,7 +983,7 @@ export default function App() {
             onMinimize={() => minimizeWindow(w.id)}
             onToggleZoom={() => toggleZoom(w.id)}
           >
-            {renderWindow(w)}
+            <WindowErrorBoundary key={w.nonce}>{renderWindow(w)}</WindowErrorBoundary>
           </Window>
         ))}
       </div>
@@ -846,6 +1018,14 @@ export default function App() {
         onOpenApp={openAppWindow}
         onAppMenu={showAppMenu}
         onSystemMenu={showSystemMenu}
+        onTrash={() => openFilesAt(TRASH_PLACE)}
+        onTrashMenu={anchor =>
+          show(anchor, [
+            { label: tr('Open'), icon: FolderOpen, onSelect: () => openFilesAt(TRASH_PLACE) },
+            { label: tr('Empty Trash'), confirm: tr('Click Again to Empty'), icon: Trash2, danger: true, onSelect: () => void api.emptyTrash() },
+          ])
+        }
+        badges={{ store: appUpdates.count, settings: systemBadges.release ? 1 : 0, updates: systemBadges.packages }}
       />
 
       <MenuBar
@@ -858,6 +1038,7 @@ export default function App() {
         onOpenWindow={openWindow}
         onOpenSettings={openSettings}
         onQuickSearch={() => setQuickSearch(true)}
+        onConnectDevice={openRemote}
         onPower={action => void api.power(action).then(() => setPowering(action))}
       />
 

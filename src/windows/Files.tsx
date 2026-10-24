@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   AppWindow,
   ArrowRightLeft,
   ClipboardPaste,
@@ -25,8 +26,10 @@ import {
   FolderPlus,
   GalleryHorizontal,
   Image,
+  Inbox,
   Info,
   LayoutGrid,
+  Link2,
   List,
   Music,
   Pencil,
@@ -35,14 +38,17 @@ import {
   Scissors,
   Share2,
   SquareCheck,
+  Tag,
   Trash2,
+  Undo2,
   Upload,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '../api'
-import type { FileEntry, FileKind } from '../api/types'
+import type { FileEntry, FileKind, TagColor, TrashItem } from '../api/types'
 import type { MenuItem } from '../components/ContextMenu'
 import { RenameField } from '../components/RenameField'
+import { ShareLinkSheet } from '../components/ShareLinkSheet'
 import { UploadsPanel } from '../components/UploadsPanel'
 import { usePlaces } from '../hooks/usePlaces'
 import { entriesFromDrop, itemsFromEntries, itemsFromInput, useUploads } from '../hooks/useUploads'
@@ -55,7 +61,7 @@ import { isTextFile } from '../lib/fileTypes'
 import { formatBytes, formatFileDate } from '../lib/format'
 import type { MediaKind } from '../lib/media'
 import { ancestors, displayName, joinPath, parentOf } from '../lib/paths'
-import { DATA_ROOT, type Place } from '../lib/places'
+import { DATA_ROOT, RECENTS_PLACE, TRASH_PLACE, type Place } from '../lib/places'
 import { MOD } from '../lib/platform'
 import { useSettings, type FilesSortKey, type FilesView } from '../lib/settings'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
@@ -97,6 +103,23 @@ const SORTS: { key: FilesSortKey; label: string }[] = [
 
 const ICON_SIZES = { min: 40, max: 144 }
 
+export const TAGS: { id: TagColor; label: string; color: string }[] = [
+  { id: 'red', label: tr('Red'), color: '#ff453a' },
+  { id: 'orange', label: tr('Orange'), color: '#ff9f0a' },
+  { id: 'yellow', label: tr('Yellow'), color: '#ffd60a' },
+  { id: 'green', label: tr('Green'), color: '#30d158' },
+  { id: 'blue', label: tr('Blue'), color: '#0a84ff' },
+  { id: 'purple', label: tr('Purple'), color: '#bf5af2' },
+  { id: 'gray', label: tr('Gray'), color: '#98989d' },
+]
+const TAG_COLOR = Object.fromEntries(TAGS.map(t => [t.id, t.color])) as Record<TagColor, string>
+const TAG_PREFIX = 'tag:'
+
+/** Which list a path is: a folder (null), Recents, the Trash, or everything with one tag. */
+const virtualOf = (p: string) => (p === RECENTS_PLACE ? 'recents' : p === TRASH_PLACE ? 'trash' : p.startsWith(TAG_PREFIX) ? 'tag' : null)
+const placeTitle = (p: string) =>
+  p === RECENTS_PLACE ? tr('Recents') : p === TRASH_PLACE ? tr('Trash') : p.startsWith(TAG_PREFIX) ? (TAGS.find(t => p === TAG_PREFIX + t.id)?.label ?? '') : displayName(p)
+
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 
 /** Folders first, then the chosen order. */
@@ -126,6 +149,8 @@ interface Props {
   onConvert: (path: string) => void
   /** Get Info: a window about one file or folder. */
   onGetInfo: (path: string) => void
+  /** Go here (from the desktop's Go menu); a new nonce goes again. */
+  open?: { path: string; nonce: number } | null
 }
 
 const isMedia = (entry: FileEntry): entry is FileEntry & { kind: MediaKind } =>
@@ -139,7 +164,7 @@ const OPEN_LABEL: Partial<Record<FileKind, string>> = {
 }
 const openLabel = (entry: FileEntry) => OPEN_LABEL[entry.kind] ?? (isTextFile(entry.name) ? 'Open in Code' : 'Open')
 
-export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, onConvert, onGetInfo }: Props) {
+export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, onConvert, onGetInfo, open }: Props) {
   const { root } = useAuth()
   const { favorites, locations } = usePlaces()
   const insideRoot = (p: string) => root === '/' || p === root || p.startsWith(`${root}/`)
@@ -153,6 +178,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   const [anchor, setAnchor] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
+  const [confirmEmpty, setConfirmEmpty] = useState(false)
+  // Share Link… / Request Files… is open for this item.
+  const [shareFor, setShareFor] = useState<{ path: string; name: string; upload: boolean } | null>(null)
   const { show } = useContextMenu()
   const { settings, update } = useSettings()
   const clip = useFileClipboard()
@@ -165,10 +193,22 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   // The folder the entries belong to: until the new one arrives the old list isn't shown,
   // so a slow folder (a cloud drive, a sleeping disk) never appears under another's name.
   const [listed, setListed] = useState<string | null>(null)
+  const virtual = virtualOf(path)
+  const [trashItems, setTrashItems] = useState<TrashItem[]>([])
   useEffect(() => {
     let alive = true
-    api
-      .listFiles(path)
+    const load =
+      path === RECENTS_PLACE
+        ? api.recentFiles()
+        : path === TRASH_PLACE
+          ? api.trash().then(items => {
+              if (alive) setTrashItems(items)
+              return items.map((t): FileEntry => ({ name: t.name, kind: t.kind, size: t.size, modified: t.deleted, path: TRASH_PLACE + t.id }))
+            })
+          : path.startsWith(TAG_PREFIX)
+            ? api.taggedFiles(path.slice(TAG_PREFIX.length) as TagColor)
+            : api.listFiles(path)
+    load
       .then(list => {
         if (!alive) return
         setEntries(list)
@@ -186,11 +226,22 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     }
   }, [path, version])
 
+  // Tags of every file, for the dots beside names.
+  const [tags, setTags] = useState<Record<string, TagColor[]>>({})
+  const loadTags = () => api.fileTags().then(setTags, () => {})
+  useEffect(() => {
+    void loadTags()
+  }, [version])
+
   const refresh = () => setVersion(v => v + 1)
   const loading = listed !== path
-  const sorted = loading ? [] : sortEntries(entries, sort.key, sort.desc)
-  const fullPath = (name: string) => joinPath(path, name)
-  const selectedEntries = sorted.filter(e => selected.has(e.name))
+  // Recents keep the order they were opened in.
+  const sorted = loading ? [] : virtual === 'recents' ? entries : sortEntries(entries, sort.key, sort.desc)
+  // Files listed away from their folder (Recents, a tag, the Trash) carry their own path, and
+  // names can repeat there, so selection goes by path for them.
+  const keyOf = (e: FileEntry) => e.path ?? e.name
+  const pathOf = (e: FileEntry): string => e.path ?? joinPath(path, e.name)
+  const selectedEntries = sorted.filter(e => selected.has(keyOf(e)))
   const single = selectedEntries.length === 1 ? selectedEntries[0] : null
 
   const select = (names: string[], anchorName: string | null = names[0] ?? null) => {
@@ -235,22 +286,38 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     select([])
     setRenaming(null)
   }
+  // Each request moves the window once (effects can run twice in development).
+  const handledOpen = useRef(0)
+  useEffect(() => {
+    if (!open || handledOpen.current === open.nonce) return
+    handledOpen.current = open.nonce
+    navigate(open.path)
+  }, [open?.nonce])
   const step = (delta: number) => {
     setIndex(i => i + delta)
     select([])
     setRenaming(null)
   }
-  const canOpen = (entry: FileEntry) => entry.kind === 'folder' || isMedia(entry) || isTextFile(entry.name)
+  const canOpen = (entry: FileEntry) => virtual !== 'trash' && (entry.kind === 'folder' || isMedia(entry) || isTextFile(entry.name))
+  const opened = (p: string) => void api.addRecentFile(p).catch(() => {})
   const openEntry = (entry: FileEntry) => {
-    if (entry.kind === 'folder') navigate(fullPath(entry.name))
-    else if (isMedia(entry)) onOpenMedia(fullPath(entry.name), entry.kind)
-    else if (isTextFile(entry.name)) onOpenFile(fullPath(entry.name))
+    if (!canOpen(entry)) return
+    const p = pathOf(entry)
+    if (entry.kind === 'folder') return navigate(p)
+    opened(p)
+    if (isMedia(entry)) onOpenMedia(p, entry.kind)
+    else onOpenFile(p)
+  }
+  /** Shows a file from Recents or a tag in its folder, selected. */
+  const showInFolder = (entry: FileEntry) => {
+    navigate(parentOf(pathOf(entry)))
+    select([entry.name])
   }
   // Open With ▸: every app that can show the file, the one double-click uses first. Code takes
   // anything that isn't media, and SVG pictures (the server turns away binary and very large
   // files). A .ts video is media here, though .ts is also TypeScript's extension.
   const openWith = (entry: FileEntry): MenuItem[] => {
-    const p = fullPath(entry.name)
+    const p = pathOf(entry)
     const apps: { label: string; icon: LucideIcon; open: () => void; isDefault: boolean }[] = []
     if (entry.kind === 'image') apps.push({ label: tr('Image Viewer'), icon: Image, open: () => onOpenMedia(p, 'image'), isDefault: true })
     if (entry.kind === 'video' || entry.kind === 'audio') {
@@ -265,7 +332,10 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     const item = (a: (typeof apps)[number]): MenuItem => ({
       label: a.isDefault ? tr('{0} (default)', a.label) : a.label,
       icon: a.icon,
-      onSelect: a.open,
+      onSelect: () => {
+        opened(p)
+        a.open()
+      },
     })
     return [...first.map(item), ...(first.length && rest.length ? (['separator'] as MenuItem[]) : []), ...rest.map(item)]
   }
@@ -285,17 +355,48 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     select([to])
     refresh()
   }
-  const remove = async (names: string[]) => {
+  const remove = async (items: FileEntry[], forever = false) => {
     try {
-      for (const name of names) await api.deleteEntry(path, name)
+      if (virtual === 'trash') for (const e of items) await api.deleteFromTrash(e.path!.slice(TRASH_PLACE.length))
+      else if (forever) for (const e of items) await api.deleteEntry(parentOf(pathOf(e)), e.name)
+      else await api.moveToTrash(items.map(pathOf))
     } finally {
       select([])
       refresh()
     }
   }
+  const putBack = async (items: FileEntry[]) => {
+    try {
+      await api.putBack(items.map(e => e.path!.slice(TRASH_PLACE.length)))
+    } finally {
+      select([])
+      refresh()
+    }
+  }
+  const emptyTrash = async () => {
+    try {
+      await api.emptyTrash()
+    } finally {
+      select([])
+      refresh()
+    }
+  }
+  const toggleTag = async (items: FileEntry[], tag: TagColor) => {
+    const all = items.every(i => tags[pathOf(i)]?.includes(tag))
+    for (const i of items) {
+      const now = tags[pathOf(i)] ?? []
+      await api.setFileTags([pathOf(i)], all ? now.filter(t => t !== tag) : [...now.filter(t => t !== tag), tag])
+    }
+    await loadTags()
+    if (virtual === 'tag') refresh()
+  }
+  const tagItems = (items: FileEntry[]): MenuItem[] =>
+    TAGS.map(t => ({ label: t.label, color: t.color, checked: items.every(i => tags[pathOf(i)]?.includes(t.id)), onSelect: () => void toggleTag(items, t.id) }))
+  const trashLabel = (n: number) => (n > 1 ? tr('Move {0} Items to Trash', n) : tr('Move to Trash'))
+  const deleteNowLabel = (n: number) => (n > 1 ? tr('Delete {0} Items Immediately…', n) : tr('Delete Immediately…'))
 
   const copyItems = (cut: boolean) =>
-    selectedEntries.length && setFileClipboard({ paths: selectedEntries.map(e => fullPath(e.name)), cut })
+    selectedEntries.length && setFileClipboard({ paths: selectedEntries.map(e => pathOf(e)), cut })
   const paste = async (into = path) => {
     if (!clip) return
     setWorking(`${clip.cut ? 'Moving' : 'Copying'} ${clip.paths.length} item${clip.paths.length > 1 ? 's' : ''}…`)
@@ -312,7 +413,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     if (!selectedEntries.length) return
     setWorking('Duplicating…')
     try {
-      select(await api.copyEntries(selectedEntries.map(e => fullPath(e.name)), path))
+      select(await api.copyEntries(selectedEntries.map(e => pathOf(e)), path))
     } finally {
       setWorking(null)
       refresh()
@@ -320,7 +421,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   }
   const clipCount = clip?.paths.length ?? 0
   const pasteLabel = clipCount ? `Paste ${clipCount === 1 ? 'Item' : `${clipCount} Items`}` : 'Paste'
-  const isCut = (entry: FileEntry) => !!clip?.cut && clip.paths.includes(fullPath(entry.name))
+  const isCut = (entry: FileEntry) => !!clip?.cut && clip.paths.includes(pathOf(entry))
 
   // ----- Menus -----
   const editItems = (): MenuItem[] => [
@@ -332,10 +433,19 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
 
   const entryMenu = (e: MouseEvent, entry: FileEntry) => {
     // Right-clicking outside the selection selects just that item.
-    const items = selected.has(entry.name) ? selectedEntries : [entry]
-    if (!selected.has(entry.name)) select([entry.name])
+    const items = selected.has(keyOf(entry)) ? selectedEntries : [entry]
+    if (!selected.has(keyOf(entry))) select([keyOf(entry)])
     const many = items.length > 1
     const isFolder = entry.kind === 'folder' && !many
+    if (virtual === 'trash') {
+      const from = trashItems.find(t => TRASH_PLACE + t.id === entry.path)?.from
+      return show(e, [
+        { label: many ? tr('Put Back {0} Items', items.length) : tr('Put Back'), icon: Undo2, onSelect: () => void putBack(items) },
+        ...(!many && from ? [{ label: tr('Copy Original Location'), icon: Copy, onSelect: () => void copyText(from) }] : []),
+        'separator',
+        { label: deleteNowLabel(items.length), confirm: tr('Click Again to Delete'), icon: Trash2, danger: true, onSelect: () => void remove(items) },
+      ])
+    }
     show(e, [
       ...(many
         ? []
@@ -347,11 +457,14 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
               onSelect: () => openEntry(entry),
             },
             ...(entry.kind !== 'folder' ? [{ label: tr('Open With'), icon: AppWindow, submenu: openWith(entry) }] : []),
-            { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(fullPath(entry.name)) },
+            { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(pathOf(entry)) },
+            ...(virtual ? [{ label: tr('Show in Enclosing Folder'), icon: FolderOpen, onSelect: () => showInFolder(entry) }] : []),
+            { label: tr('Share Link…'), icon: Link2, onSelect: () => setShareFor({ path: pathOf(entry), name: entry.name, upload: false }) },
             ...(isFolder
               ? [
-                  { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(fullPath(entry.name)) },
-                  { label: tr('Share Folder…'), icon: Share2, onSelect: () => onShareFolder(fullPath(entry.name)) },
+                  { label: tr('Request Files…'), icon: Inbox, onSelect: () => setShareFor({ path: pathOf(entry), name: entry.name, upload: true }) },
+                  { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(pathOf(entry)) },
+                  { label: tr('Share Folder…'), icon: Share2, onSelect: () => onShareFolder(pathOf(entry)) },
                 ]
               : []),
             ...(entry.kind === 'image'
@@ -359,7 +472,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
                   {
                     label: tr('Set as Wallpaper'),
                     icon: Image,
-                    onSelect: async () => update({ customWallpaper: (await api.wallpaperFromFile(fullPath(entry.name))).url }),
+                    onSelect: async () => update({ customWallpaper: (await api.wallpaperFromFile(pathOf(entry))).url }),
                   },
                 ]
               : []),
@@ -368,27 +481,29 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
       {
         label: many ? tr('Cut {0} Items', items.length) : tr('Cut'),
         icon: Scissors,
-        onSelect: () => setFileClipboard({ paths: items.map(i => fullPath(i.name)), cut: true }),
+        onSelect: () => setFileClipboard({ paths: items.map(i => pathOf(i)), cut: true }),
       },
       {
         label: many ? tr('Copy {0} Items', items.length) : tr('Copy'),
         icon: Copy,
-        onSelect: () => setFileClipboard({ paths: items.map(i => fullPath(i.name)), cut: false }),
+        onSelect: () => setFileClipboard({ paths: items.map(i => pathOf(i)), cut: false }),
       },
       ...(isFolder && clip
-        ? [{ label: tr('{0} Into Folder', pasteLabel), icon: ClipboardPaste, onSelect: () => void paste(fullPath(entry.name)) }]
+        ? [{ label: tr('{0} Into Folder', pasteLabel), icon: ClipboardPaste, onSelect: () => void paste(pathOf(entry)) }]
         : []),
-      { label: tr('Duplicate'), icon: CopyPlus, onSelect: () => void duplicate() },
+      ...(virtual ? [] : [{ label: tr('Duplicate'), icon: CopyPlus, onSelect: () => void duplicate() }]),
       'separator',
-      ...(many ? [] : [{ label: tr('Rename'), icon: Pencil, onSelect: () => setRenaming(entry.name) }]),
-      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(items.map(i => fullPath(i.name)).join('\n')) },
+      ...(many || virtual ? [] : [{ label: tr('Rename'), icon: Pencil, onSelect: () => setRenaming(entry.name) }]),
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(items.map(i => pathOf(i)).join('\n')) },
+      { label: tr('Tags'), icon: Tag, submenu: tagItems(items) },
       'separator',
+      { label: trashLabel(items.length), icon: Trash2, onSelect: () => void remove(items) },
       {
-        label: many ? tr('Delete {0} Items…', items.length) : tr('Delete…'),
+        label: deleteNowLabel(items.length),
         confirm: tr('Click Again to Delete'),
         icon: Trash2,
         danger: true,
-        onSelect: () => void remove(items.map(i => i.name)),
+        onSelect: () => void remove(items, true),
       },
     ])
   }
@@ -396,6 +511,19 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   const backgroundMenu = (e: MouseEvent) => {
     if (e.defaultPrevented) return
     select([])
+    if (virtual) {
+      return show(e, [
+        ...(virtual === 'trash'
+          ? ([
+              { label: tr('Empty Trash'), confirm: tr('Click Again to Empty'), icon: Trash2, danger: true, disabled: !entries.length, onSelect: () => void emptyTrash() },
+              'separator',
+            ] as MenuItem[])
+          : []),
+        ...viewItems(),
+        'separator',
+        { label: tr('Refresh'), icon: RotateCw, onSelect: refresh },
+      ])
+    }
     show(e, [
       { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void newFolder() },
       ...uploadItems,
@@ -403,6 +531,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
       { label: pasteLabel, icon: ClipboardPaste, disabled: !clip, onSelect: () => void paste() },
       'separator',
       ...viewItems(),
+      'separator',
+      { label: tr('Share Link…'), icon: Link2, onSelect: () => setShareFor({ path, name: displayName(path), upload: false }) },
+      { label: tr('Request Files…'), icon: Inbox, onSelect: () => setShareFor({ path, name: displayName(path), upload: true }) },
       'separator',
       { label: tr('Open Folder in Code'), icon: Braces, onSelect: () => onOpenFolder(path) },
       { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(path) },
@@ -427,8 +558,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     {
       label: tr('File'),
       items: [
-        { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void newFolder() },
-        ...uploadItems,
+        { label: tr('New Folder'), icon: FolderPlus, disabled: !!virtual, onSelect: () => void newFolder() },
+        ...uploadItems.map(i => (i === 'separator' ? i : { ...i, disabled: !!virtual })),
         'separator',
         {
           label: single ? openLabel(single) : tr('Open'),
@@ -436,21 +567,30 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
           disabled: !single || !canOpen(single),
           onSelect: () => single && openEntry(single),
         },
-        { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(single ? fullPath(single.name) : path) },
-        { label: tr('Rename'), icon: Pencil, disabled: !single, onSelect: () => single && setRenaming(single.name) },
+        { label: tr('Get Info'), icon: Info, disabled: !!virtual && !single, onSelect: () => onGetInfo(single ? pathOf(single) : path) },
+        { label: tr('Rename'), icon: Pencil, disabled: !single || !!virtual, onSelect: () => single && setRenaming(single.name) },
+        ...(virtual === 'trash'
+          ? ([
+              { label: tr('Put Back'), icon: Undo2, disabled: !selectedEntries.length, onSelect: () => void putBack(selectedEntries) },
+              { label: tr('Empty Trash'), confirm: tr('Click Again to Empty'), icon: Trash2, danger: true, disabled: !entries.length, onSelect: () => void emptyTrash() },
+            ] as MenuItem[])
+          : ([
+              { label: trashLabel(selectedEntries.length), icon: Trash2, disabled: !selectedEntries.length, onSelect: () => void remove(selectedEntries) },
+              { label: tr('Tags'), icon: Tag, disabled: !selectedEntries.length, submenu: tagItems(selectedEntries) },
+            ] as MenuItem[])),
         {
-          label: selectedEntries.length > 1 ? tr('Delete {0} Items…', selectedEntries.length) : tr('Delete…'),
+          label: deleteNowLabel(selectedEntries.length),
           confirm: tr('Click Again to Delete'),
           icon: Trash2,
           danger: true,
           disabled: !selectedEntries.length,
-          onSelect: () => void remove(selectedEntries.map(e => e.name)),
+          onSelect: () => void remove(selectedEntries, true),
         },
         'separator',
         {
           label: tr('Copy Path'),
           icon: Copy,
-          onSelect: () => void copyText(selectedEntries.length ? selectedEntries.map(e => fullPath(e.name)).join('\n') : path),
+          onSelect: () => void copyText(selectedEntries.length ? selectedEntries.map(e => pathOf(e)).join('\n') : path),
         },
       ],
     },
@@ -459,7 +599,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
       items: [
         ...editItems(),
         'separator',
-        { label: tr('Select All'), icon: SquareCheck, shortcut: `${MOD}A`, onSelect: () => select(sorted.map(e => e.name)) },
+        { label: tr('Select All'), icon: SquareCheck, shortcut: `${MOD}A`, onSelect: () => select(sorted.map(keyOf)) },
       ],
     },
     {
@@ -487,12 +627,14 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
           onSelect: () => navigate(parentOf(path)),
         },
         'separator',
+        { label: tr('Recents'), icon: Clock, checked: path === RECENTS_PLACE, onSelect: () => navigate(RECENTS_PLACE) },
         ...[...locations, ...favorites].map(place => ({
           label: place.label,
           icon: place.icon,
           checked: place.path === path,
           onSelect: () => navigate(place.path),
         })),
+        { label: tr('Trash'), icon: Trash2, checked: path === TRASH_PLACE, onSelect: () => navigate(TRASH_PLACE) },
       ],
     },
   ])
@@ -500,17 +642,17 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   // ----- Selection with mouse and keyboard -----
   const clickEntry = (e: MouseEvent, entry: FileEntry) => {
     if (e.shiftKey && anchor) {
-      const names = sorted.map(x => x.name)
-      const [a, b] = [names.indexOf(anchor), names.indexOf(entry.name)].sort((x, y) => x - y)
+      const names = sorted.map(keyOf)
+      const [a, b] = [names.indexOf(anchor), names.indexOf(keyOf(entry))].sort((x, y) => x - y)
       setSelected(new Set(names.slice(a, b + 1)))
     } else if (e.ctrlKey || e.metaKey) {
       const next = new Set(selected)
-      if (next.has(entry.name)) next.delete(entry.name)
-      else next.add(entry.name)
+      if (next.has(keyOf(entry))) next.delete(keyOf(entry))
+      else next.add(keyOf(entry))
       setSelected(next)
-      setAnchor(entry.name)
+      setAnchor(keyOf(entry))
     } else {
-      select([entry.name])
+      select([keyOf(entry)])
     }
   }
 
@@ -522,7 +664,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
 
   const onKey = (e: KeyboardEvent) => {
     if (renaming || (e.target as HTMLElement).closest('input, textarea')) return
-    const names = sorted.map(x => x.name)
+    const names = sorted.map(keyOf)
     const current = anchor ? names.indexOf(anchor) : -1
     const move = (delta: number) => {
       e.preventDefault()
@@ -555,7 +697,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
         if (single) setRenaming(single.name)
         break
       case 'Delete':
-        if (selectedEntries.length) void remove(selectedEntries.map(x => x.name))
+      case 'Backspace':
+        if (selectedEntries.length && (e.key === 'Delete' || e.metaKey || e.ctrlKey)) void remove(selectedEntries)
         break
       case 'Escape':
         select([])
@@ -565,9 +708,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
 
   // Everything a tile, row or filmstrip cell does, in any view.
   const entryProps = (entry: FileEntry) => ({
-    'data-name': entry.name,
+    'data-name': keyOf(entry),
     role: 'option',
-    'aria-selected': selected.has(entry.name),
+    'aria-selected': selected.has(keyOf(entry)),
     title: entry.name,
     onClick: (e: MouseEvent) => {
       e.stopPropagation()
@@ -576,7 +719,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     onDoubleClick: () => openEntry(entry),
     onContextMenu: (e: MouseEvent) => entryMenu(e, entry),
     // Dropping onto a folder copies into that folder instead.
-    ...(entry.kind === 'folder'
+    ...(entry.kind === 'folder' && !virtual
       ? {
           onDragOver: (e: DragEvent) => {
             if (!isFileDrag(e)) return
@@ -585,18 +728,18 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
             setDropTarget(entry.name)
           },
           onDragLeave: () => setDropTarget(''),
-          onDrop: (e: DragEvent) => isFileDrag(e) && dropInto(e, fullPath(entry.name)),
+          onDrop: (e: DragEvent) => isFileDrag(e) && dropInto(e, pathOf(entry)),
         }
       : {}),
   })
   const stateClass = (entry: FileEntry) =>
-    `${selected.has(entry.name) ? 'is-selected' : ''} ${dropTarget === entry.name ? 'is-drop' : ''} ${isCut(entry) ? 'is-cut' : ''}`
+    `${selected.has(keyOf(entry)) ? 'is-selected' : ''} ${dropTarget === entry.name ? 'is-drop' : ''} ${isCut(entry) ? 'is-cut' : ''}`
 
   const icon = (entry: FileEntry, box: number) => {
     const Icon = KIND_ICON[entry.kind]
     const color = KIND_COLOR[entry.kind]
     return (
-      <FileThumb key={fullPath(entry.name)} entry={entry} path={fullPath(entry.name)} box={box}>
+      <FileThumb key={pathOf(entry)} entry={entry} path={pathOf(entry)} box={box}>
         <Icon size={Math.round(box * 0.72)} strokeWidth={box > 40 ? 1.2 : 1.6} color={color} fill={color} fillOpacity={0.16} />
       </FileThumb>
     )
@@ -605,7 +748,16 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     renaming === entry.name ? (
       <RenameField name={entry.name} onDone={value => void finishRename(entry.name, value)} />
     ) : (
-      <span className="file-name">{entry.name}</span>
+      <span className="file-name">
+        {entry.name}
+        {!!tags[pathOf(entry)]?.length && (
+          <span className="file-tags" aria-label={tags[pathOf(entry)].join(', ')}>
+            {tags[pathOf(entry)].map(t => (
+              <i key={t} style={{ background: TAG_COLOR[t] }} />
+            ))}
+          </span>
+        )}
+      </span>
     )
 
   const placeButton = ({ path: p, label: text, icon: Icon }: Place) => (
@@ -615,11 +767,21 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
       onClick={() => navigate(p)}
       title={p}
       onContextMenu={e =>
-        show(e, [
-          { label: tr('Open'), icon: FolderOpen, onSelect: () => navigate(p) },
-          { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(p) },
-          { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(p) },
-        ])
+        show(
+          e,
+          p === TRASH_PLACE
+            ? [
+                { label: tr('Open'), icon: FolderOpen, onSelect: () => navigate(p) },
+                { label: tr('Empty Trash'), confirm: tr('Click Again to Empty'), icon: Trash2, danger: true, onSelect: () => void emptyTrash() },
+              ]
+            : virtualOf(p)
+              ? [{ label: tr('Open'), icon: FolderOpen, onSelect: () => navigate(p) }]
+              : [
+                  { label: tr('Open'), icon: FolderOpen, onSelect: () => navigate(p) },
+                  { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(p) },
+                  { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(p) },
+                ],
+        )
       }
     >
       <Icon size={15} /> {text}
@@ -636,7 +798,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   const galleryItem = single ?? selectedEntries[0] ?? null
   // The gallery always shows something: the first item until one is chosen.
   useEffect(() => {
-    if (view === 'gallery' && selected.size === 0 && sorted.length > 0) select([sorted[0].name])
+    if (view === 'gallery' && selected.size === 0 && sorted.length > 0) select([keyOf(sorted[0])])
   }, [view, sorted.length, selected.size])
 
   const content = () => {
@@ -645,12 +807,12 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
         <div className="file-list" role="listbox" aria-multiselectable>
           <div className="file-list-head">
             {listHeader('name', 'Name')}
-            {listHeader('modified', 'Date Modified')}
+            {listHeader('modified', virtual === 'trash' ? tr('Date Deleted') : virtual === 'recents' ? tr('Date Opened') : tr('Date Modified'))}
             {listHeader('size', 'Size', 'is-num')}
             {listHeader('kind', 'Kind')}
           </div>
           {sorted.map(entry => (
-            <div key={entry.name} className={`file-row ${stateClass(entry)}`} {...entryProps(entry)}>
+            <div key={keyOf(entry)} className={`file-row ${stateClass(entry)}`} {...entryProps(entry)}>
               <span className="file-row-name">
                 {icon(entry, 18)}
                 {label(entry)}
@@ -666,10 +828,10 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     if (view === 'gallery') {
       return (
         <div className="file-gallery">
-          <GalleryPreview entry={galleryItem} path={galleryItem ? fullPath(galleryItem.name) : ''} kind={galleryItem ? kindLabel(galleryItem) : ''} />
+          <GalleryPreview entry={galleryItem} path={galleryItem ? pathOf(galleryItem) : ''} kind={galleryItem ? kindLabel(galleryItem) : ''} />
           <div className="file-strip" role="listbox">
             {sorted.map(entry => (
-              <div key={entry.name} className={`file-strip-item ${stateClass(entry)}`} {...entryProps(entry)}>
+              <div key={keyOf(entry)} className={`file-strip-item ${stateClass(entry)}`} {...entryProps(entry)}>
                 {icon(entry, 56)}
               </div>
             ))}
@@ -685,7 +847,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
         style={{ '--icon': `${iconSize}px` } as CSSProperties}
       >
         {sorted.map(entry => (
-          <div key={entry.name} className={`file ${stateClass(entry)}`} {...entryProps(entry)}>
+          <div key={keyOf(entry)} className={`file ${stateClass(entry)}`} {...entryProps(entry)}>
             {icon(entry, iconSize)}
             {label(entry)}
           </div>
@@ -699,16 +861,24 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
   return (
     <div className="split">
       <aside className="sidebar">
-        {favorites.length > 0 && <div className="sidebar-group">{tr('Favorites')}</div>}
+        <div className="sidebar-group">{tr('Favorites')}</div>
+        {placeButton({ path: RECENTS_PLACE, label: tr('Recents'), icon: Clock })}
         {favorites.map(placeButton)}
-        {locations.length > 0 && <div className="sidebar-group">{tr('Locations')}</div>}
+        <div className="sidebar-group">{tr('Locations')}</div>
         {locations.map(placeButton)}
+        {placeButton({ path: TRASH_PLACE, label: tr('Trash'), icon: Trash2 })}
+        <div className="sidebar-group">{tr('Tags')}</div>
+        {TAGS.map(t => (
+          <button key={t.id} className={`sidebar-item ${path === TAG_PREFIX + t.id ? 'is-active' : ''}`} onClick={() => navigate(TAG_PREFIX + t.id)}>
+            <i className="sidebar-tag" style={{ background: t.color }} /> {t.label}
+          </button>
+        ))}
       </aside>
 
       <div
         className="files-main"
         onDragOver={e => {
-          if (!isFileDrag(e)) return
+          if (!isFileDrag(e) || virtual) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'copy'
           if (dropTarget === null) setDropTarget('')
@@ -716,7 +886,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
         onDragLeave={e => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null)
         }}
-        onDrop={e => isFileDrag(e) && dropInto(e, path)}
+        onDrop={e => isFileDrag(e) && !virtual && dropInto(e, path)}
       >
         <input
           ref={fileInput}
@@ -761,7 +931,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
               <ChevronRight size={18} />
             </button>
           </div>
-          <ToolbarTitle title={displayName(path)} />
+          <ToolbarTitle title={placeTitle(path)} />
           <span className="tb-spacer" />
           <div className="tb-segmented tb-icons" role="radiogroup" aria-label={tr('View')}>
             {VIEWS.map(v => (
@@ -776,6 +946,20 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
               </button>
             ))}
           </div>
+          {virtual === 'trash' && (
+            <button
+              className={`tb-btn tb-text ${confirmEmpty ? 'is-danger' : ''}`}
+              disabled={!entries.length}
+              onClick={() => {
+                if (!confirmEmpty) return setConfirmEmpty(true)
+                setConfirmEmpty(false)
+                void emptyTrash()
+              }}
+              onBlur={() => setConfirmEmpty(false)}
+            >
+              {confirmEmpty ? tr('Empty Trash?') : tr('Empty')}
+            </button>
+          )}
           <div className="tb-group">
             <button
               className="tb-btn"
@@ -788,20 +972,24 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
             >
               <ArrowUpDown size={15} />
             </button>
-            <button
-              className="tb-btn"
-              onClick={e => {
-                const r = e.currentTarget.getBoundingClientRect()
-                show({ x: r.left, y: r.bottom + 6 }, uploadItems)
-              }}
-              aria-label={tr('Upload')}
-              title={tr('Upload files or a folder')}
-            >
-              <Upload size={16} />
-            </button>
-            <button className="tb-btn" onClick={() => void newFolder()} aria-label={tr('New folder')} title={tr('New Folder')}>
-              <FolderPlus size={17} />
-            </button>
+            {!virtual && (
+              <>
+                <button
+                  className="tb-btn"
+                  onClick={e => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    show({ x: r.left, y: r.bottom + 6 }, uploadItems)
+                  }}
+                  aria-label={tr('Upload')}
+                  title={tr('Upload files or a folder')}
+                >
+                  <Upload size={16} />
+                </button>
+                <button className="tb-btn" onClick={() => void newFolder()} aria-label={tr('New folder')} title={tr('New Folder')}>
+                  <FolderPlus size={17} />
+                </button>
+              </>
+            )}
           </div>
         </WindowToolbar>
 
@@ -819,13 +1007,23 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
           ) : loadError ? (
             <p className="empty files-empty files-error">{tr('Can’t open this folder:')} {loadError}</p>
           ) : (
-            entries.length === 0 && <p className="empty files-empty">{tr('This folder is empty.')}</p>
+            entries.length === 0 && (
+              <p className="empty files-empty">
+                {virtual === 'trash'
+                  ? tr('The Trash is empty.')
+                  : virtual === 'recents'
+                    ? tr('Files you open show up here.')
+                    : virtual === 'tag'
+                      ? tr('Nothing has this tag yet. Right-click a file → Tags.')
+                      : tr('This folder is empty.')}
+              </p>
+            )
           )}
         </div>
 
         {/* Path bar (View → Show Path Bar). */}
         <div className="files-crumbs">
-          {ancestors(path)
+          {(virtual ? [] : ancestors(path))
             .filter(crumb => insideRoot(crumb.path))
             .map((crumb, i, all) => (
               <span key={crumb.path}>
@@ -836,10 +1034,15 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
               </span>
             ))}
         </div>
+        {shareFor && <ShareLinkSheet {...shareFor} onClose={() => setShareFor(null)} />}
         <div className="statusbar">
           <span>
             {working ??
-              (selectedEntries.length > 1
+              (virtual === 'trash' && selectedEntries.length <= 1
+                ? single
+                  ? tr('From {0}', trashItems.find(t => TRASH_PLACE + t.id === single.path)?.from ?? '')
+                  : tr('Items in the Trash are deleted after 30 days.')
+                : selectedEntries.length > 1
                 ? tr('{0} of {1} selected{2}', selectedEntries.length, entries.length, totalSize ? ` · ${formatBytes(totalSize)}` : '')
                 : tr('{0} items', entries.length))}
           </span>
@@ -903,7 +1106,7 @@ function GalleryPreview({ entry, path, kind }: { entry: FileEntry | null; path: 
  */
 function FileThumb({ entry, path, box, children }: { entry: FileEntry; path: string; box: number; children: ReactNode }) {
   const [state, setState] = useState<'loading' | 'ready' | 'broken'>('loading')
-  const media = entry.kind === 'image' || entry.kind === 'video'
+  const media = (entry.kind === 'image' || entry.kind === 'video') && !path.startsWith(TRASH_PLACE)
   const url = media ? api.thumbUrl(path, `${entry.size ?? 0}-${entry.modified}`) : null
   const style = { '--thumb': `${box}px` } as CSSProperties
   if (!url || state === 'broken') {

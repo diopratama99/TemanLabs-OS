@@ -24,6 +24,7 @@ import { useContextMenu } from '../lib/contextMenu'
 import { formatBytes, formatSpeed } from '../lib/format'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { PortsView } from './PortsView'
+import { HistoryView } from './HistoryView'
 import { ProcessesView } from './ProcessesView'
 import { ServicesView } from './ServicesView'
 import { tr } from '../lib/i18n'
@@ -85,13 +86,14 @@ interface Props {
   onOpenApp: (app: InstalledApp) => void
 }
 
-type Tab = 'containers' | 'services' | 'processes' | 'ports'
+type Tab = 'containers' | 'services' | 'processes' | 'ports' | 'history'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'containers', label: tr('Containers') },
   { id: 'services', label: tr('Services') },
   { id: 'processes', label: tr('Processes') },
   { id: 'ports', label: tr('Ports') },
+  { id: 'history', label: tr('History') },
 ]
 
 /** System Monitor: Docker containers (live resource use, logs, controls) and listening ports. */
@@ -113,6 +115,8 @@ export function SystemMonitor(props: Props) {
       return <ProcessesView tabs={tabs} />
     case 'ports':
       return <PortsView apps={props.apps} onOpenApp={props.onOpenApp} tabs={tabs} />
+    case 'history':
+      return <HistoryView tabs={tabs} />
     default:
       return <ContainersView {...props} tabs={tabs} />
   }

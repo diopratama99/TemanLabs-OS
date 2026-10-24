@@ -11,10 +11,12 @@ import { tr } from '../lib/i18n'
 interface Props {
   hostname: string
   onSignedIn: (session: Session) => void
+  /** Unlocking a locked session instead of signing in: the desktop waits underneath. */
+  unlock?: { onUnlocked: () => void; onSignOut: () => void }
 }
 
 /** Lock screen: clock above, glass password field below. */
-export function Login({ hostname, onSignedIn }: Props) {
+export function Login({ hostname, onSignedIn, unlock }: Props) {
   const now = useClock()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +28,10 @@ export function Login({ hostname, onSignedIn }: Props) {
     setPending(true)
     setError(null)
     try {
-      onSignedIn(await api.login(password))
+      if (unlock) {
+        await api.unlock(password)
+        unlock.onUnlocked()
+      } else onSignedIn(await api.login(password))
     } catch (err) {
       setError(err instanceof Error ? err.message : tr('Could not sign in.'))
       setPassword('')
@@ -36,7 +41,7 @@ export function Login({ hostname, onSignedIn }: Props) {
   }
 
   return (
-    <div className="login">
+    <div className={`login ${unlock ? 'is-lock' : ''}`}>
       <Wallpaper />
       <div className="login-clock">
         <span>{now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
@@ -61,8 +66,13 @@ export function Login({ hostname, onSignedIn }: Props) {
           </button>
         </Glass>
         <span className="login-message" role="alert">
-          {error ?? tr('TemanLabsOS')}
+          {error ?? (unlock ? tr('Locked') : tr('TemanLabsOS'))}
         </span>
+        {unlock && (
+          <button type="button" className="login-switch" onClick={unlock.onSignOut}>
+            {tr('Sign Out Instead')}
+          </button>
+        )}
       </form>
     </div>
   )

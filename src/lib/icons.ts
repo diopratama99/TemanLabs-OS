@@ -1,4 +1,5 @@
 import {
+  Trash2,
   Activity,
   ArrowDownToLine,
   ArrowRightLeft,
@@ -51,6 +52,7 @@ export const appIcons: Record<string, LucideIcon> = {
   scroll: ScrollText,
   wrench: Wrench,
   launchpad: LayoutGrid,
+  trash: Trash2,
   braces: Braces,
   drive: HardDrive,
   folder: Folder,
