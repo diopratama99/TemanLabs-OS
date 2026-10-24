@@ -165,7 +165,7 @@ Bandingkan dengan Latihan 2 dan 3, di mana Kubernetes sendiri yang menjaga jumla
 
 | Aspek | Docker saja | Kubernetes |
 |---|---|---|
-| Menjalankan container | ✔ | ✔ (lewat containerd) |
+| Menjalankan container | Ya | Ya (lewat containerd) |
 | Banyak replika + load balancing | Manual | Otomatis (Deployment + Service) |
 | Container/pod mati | Harus dinyalakan sendiri, atau `--restart` | Dibuat ulang otomatis (self-healing) |
 | Update versi | Stop lalu start, ada downtime | Rolling update dan rollback |

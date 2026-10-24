@@ -1,141 +1,212 @@
+<div align="center">
+
+<img src="docs/assets/logo.svg" alt="TemanLabsOS" width="128" />
+
 # TemanLabsOS
 
-**Web desktop untuk home server Ubuntu.** Kelola container Docker, cluster Kubernetes, file, layanan sistem, dan jaringan dari browser, lewat tampilan desktop dengan jendela, Dock, dan efek kaca, tanpa harus membuka terminal.
+**Web desktop untuk home server Ubuntu**
 
-TemanLabsOS jalan berdampingan dengan [CasaOS](https://casaos.zimaspace.com/) (port 80) di port **7700**, dan dikirim sebagai **satu file binary** (backend Go dengan frontend React yang sudah di-embed).
+Kelola Docker, Kubernetes, file, layanan, dan jaringan server langsung dari browser, lewat tampilan desktop yang rapi, tanpa harus membuka terminal.
 
-![Desktop TemanLabsOS](docs/screenshots/desktop.png)
+<p>
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+</p>
+<p>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Kubernetes-k3s-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes" />
+  <img src="https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
+</p>
+<p>
+  <a href="https://github.com/diopratama99/TemanLabs-OS/commits"><img src="https://img.shields.io/github/last-commit/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Last commit" /></a>
+  <img src="https://img.shields.io/badge/platform-linux-0479ff?style=flat-square&logo=linux&logoColor=white" alt="Platform" />
+  <a href="https://github.com/diopratama99/TemanLabs-OS/stargazers"><img src="https://img.shields.io/github/stars/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Stars" /></a>
+</p>
 
-**Mulai:** [Panduan instalasi →](docs/installation.md)
+[**Instalasi**](docs/installation.md) &nbsp;•&nbsp; [**Fitur**](#fitur) &nbsp;•&nbsp; [**Lab Kubernetes**](docs/kubernetes-lab.md) &nbsp;•&nbsp; [**Arsitektur**](docs/architecture.md) &nbsp;•&nbsp; [**API**](docs/architecture.md#daftar-endpoint-api)
 
----
+<br />
 
-## Daftar isi
+<img src="docs/screenshots/desktop.png" alt="Desktop TemanLabsOS" width="100%" />
 
-- [Fitur](#fitur)
-- [Arsitektur](#arsitektur)
-- [Struktur proyek](#struktur-proyek)
-- [Lab Kubernetes](#lab-kubernetes)
-- [Keamanan](#keamanan)
-- [Dokumentasi](#dokumentasi)
-- [Kredit](#kredit)
+</div>
 
----
+<br />
+
+## Sorotan
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>Satu file binary</h3>
+      Backend Go dengan frontend React yang sudah di-embed. Cukup salin satu file, lalu jalankan installer.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Akur dengan CasaOS</h3>
+      Jalan di port <code>7700</code> di samping CasaOS (port 80), dan membaca app-nya tanpa mengubah apa pun.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Belajar Kubernetes</h3>
+      Install k3s sekali klik, lalu deploy web, database, dan monitoring. Setiap klik menampilkan perintah <code>kubectl</code>-nya.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>Docker tanpa terminal</h3>
+      App Center untuk app self-hosted, Custom Install untuk image apa pun, dan statistik per container.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Semua utilitas server</h3>
+      Update apt, log systemd, disk & SMART, jaringan & firewall, cron, user Linux, dan share SMB.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Aman secara default</h3>
+      Password PBKDF2, session HttpOnly, pembatasan percobaan login, dan perlindungan CSRF.
+    </td>
+  </tr>
+</table>
+
+## Mulai cepat
+
+```bash
+# 1. Build (butuh Node.js 20.19+ dan Go 1.27+)
+npm install
+npm run build:server
+
+# 2. Salin ke server lalu install
+scp server/bin/temanlabsos-linux-amd64 deploy/install.sh user@server:temanlabsos-deploy/
+ssh user@server 'cd temanlabsos-deploy && sudo ./install.sh ./temanlabsos-linux-amd64 <linux-user>'
+
+# 3. Buka http://<ip-server>:7700 dan login dengan INITIAL_PASSWORD yang dicetak installer
+```
+
+Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting) ada di **[docs/installation.md](docs/installation.md)**.
 
 ## Fitur
 
 ### Desktop
-- **Dock**, **Launcher** (semua app, bisa dikelompokkan ke folder), **Quick Search** (`Ctrl/⌘ + K`), dan menu bar yang isinya mengikuti app yang sedang aktif.
-- **Widget desktop**: jam, CPU, memori, storage, jaringan, dan app yang berjalan. Ukuran dan urutannya bisa diatur.
-- Jendela bisa digeser, di-resize, diperkecil, dan di-zoom, lengkap dengan animasi. Ada tema terang/gelap, wallpaper dari foto sendiri, dan opsi *Reduce transparency* untuk perangkat yang lambat.
-
-![Launcher](docs/screenshots/launcher.png)
+- **Dock**, **Launcher** dengan folder, **Quick Search** (`Ctrl/⌘ + K`), dan menu bar yang mengikuti app aktif.
+- **Widget desktop**: jam, CPU, memori, storage, jaringan, dan app yang berjalan.
+- Jendela bisa digeser, di-resize, diperkecil, dan di-zoom dengan animasi halus. Ada tema terang/gelap, wallpaper dari foto sendiri, dan efek kaca yang bisa dimatikan.
 
 ### Container & orkestrasi
 | App | Fungsi |
 |---|---|
-| **App Center** | Katalog app self-hosted (Jellyfin, Nextcloud, Vaultwarden, Home Assistant, dll.) yang dipasang lewat `docker compose`, plus **Custom Install** untuk image Docker apa pun (port, volume, env, restart policy). |
-| **System Monitor** | Container (CPU, memori, network, disk per container), layanan systemd, proses, dan port yang sedang listening. |
-| **Kubernetes** | Install k3s sekali klik, lalu kelola Deployment, StatefulSet, DaemonSet, Pod, Service, PVC, dan Event. Ada fitur scale, rolling update/rollback, logs, describe, YAML, template **Lab Stack** (web + database + monitoring), dan panel yang menampilkan perintah `kubectl` di balik setiap klik. |
-
-![Kubernetes](docs/screenshots/kubernetes.png)
+| **App Center** | Katalog app self-hosted (Jellyfin, Nextcloud, Vaultwarden, Home Assistant, …) lewat `docker compose`, plus **Custom Install** untuk image Docker apa pun. |
+| **System Monitor** | CPU, memori, network, dan disk per container, plus layanan systemd, proses, dan port yang listening. |
+| **Kubernetes** | Install k3s, lalu kelola Deployment, StatefulSet, DaemonSet, Pod, Service, PVC, dan Event. Mendukung scale, rolling update/rollback, logs, describe, YAML, dan template **Lab Stack**. |
 
 ### File & media
-- **Files**: tampilan ikon, list, dan detail; thumbnail foto/video; drag & drop dan upload file/folder dari komputer; copy/cut/paste; rename; hapus.
-- **Code**: editor berbasis Monaco (mesin editor VS Code), dengan explorer, search, tab, dan terminal terintegrasi.
-- **Image Viewer**, **Video Player**, dan **Music Player** (navigasi pakai tombol panah).
-- **File Sharing**: share folder via SMB (Samba) dan kelola user Samba dari web.
-
-![Files](docs/screenshots/files.png)
+| App | Fungsi |
+|---|---|
+| **Files** | Tampilan ikon / list / galeri, thumbnail foto & video, drag & drop, upload file dan folder, copy/cut/paste. |
+| **Code** | Editor berbasis Monaco (mesin editor VS Code) dengan explorer, search, tab, dan terminal. |
+| **Image Viewer · Video Player · Music Player** | Buka media langsung dari Files, navigasi pakai tombol panah. |
+| **File Sharing** | Share folder via SMB (Samba) dan kelola user-nya dari web. |
 
 ### Utilitas server
 | App | Fungsi |
 |---|---|
 | **Terminal** | Shell penuh di browser (xterm.js + PTY). |
-| **System Updates** | Update paket `apt`, dengan log langsung dan notifikasi kalau perlu restart. |
-| **Log Viewer** | Journal systemd, difilter per kategori atau per service. |
-| **Disk Manager** | Drive dan partisi, kesehatan SMART, mount, dan analisis pemakaian ruang. |
-| **Network Tools** | Interface, ping, traceroute, DNS lookup, koneksi aktif, dan firewall (ufw). |
+| **System Updates** | Update paket `apt` dengan log langsung dan pemberitahuan kalau perlu restart. |
+| **Log Viewer** | Journal systemd per kategori atau per service. |
+| **Disk Manager** | Drive, partisi, kesehatan SMART, mount, dan analisis ruang. |
+| **Network Tools** | Interface, ping, traceroute, DNS, koneksi aktif, dan firewall (ufw). |
 | **Scheduled Tasks** | Cron job per user dan timer systemd. |
 | **Settings** | Tampilan, akun, user & grup Linux, tanggal & zona waktu. |
 
-![System Monitor](docs/screenshots/monitor.png)
+## Tampilan
 
----
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/kubernetes.png" alt="Kubernetes" /><p align="center"><b>Kubernetes</b>: workload, replika, dan panel kubectl</p></td>
+    <td width="50%"><img src="docs/screenshots/monitor.png" alt="System Monitor" /><p align="center"><b>System Monitor</b>: statistik per container</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/files.png" alt="Files" /><p align="center"><b>Files</b>: file manager dengan sidebar</p></td>
+    <td width="50%"><img src="docs/screenshots/launcher.png" alt="Launcher" /><p align="center"><b>Launcher</b>: semua app dan folder</p></td>
+  </tr>
+</table>
+
+## Lab Kubernetes
+
+TemanLabsOS bisa dipakai untuk belajar **container orchestration**:
+
+1. Install k3s dari app **Kubernetes**.
+2. Deploy **Lab Stack**: web nginx 3 replika, PostgreSQL dengan persistent volume, Prometheus + Grafana.
+3. Coba load balancing, scaling, self-healing, rolling update, persistensi data, dan monitoring.
+
+| Layanan | Port | Isi |
+|---|---|---|
+| Web | `30080` | Deployment nginx ×3 + Service NodePort |
+| Adminer | `30081` | UI untuk PostgreSQL (StatefulSet + PVC) |
+| Prometheus | `30090` | Metrik dari node-exporter (DaemonSet) |
+| Grafana | `30300` | Dashboard CPU, memori, jaringan, disk |
+
+Panduan dan latihannya ada di **[docs/kubernetes-lab.md](docs/kubernetes-lab.md)**, dan manifest-nya di [docs/k8s/lab.yaml](docs/k8s/lab.yaml).
 
 ## Arsitektur
 
 ```
-Browser ──HTTP/WebSocket──▶ temanlabsos (Go, :7700, systemd, root)
+Browser ──HTTP/WebSocket──▶ temanlabsos (Go, :7700, systemd)
                               ├─ frontend React (embedded)
                               ├─ REST API /api/*  ·  terminal /ws/terminal
-                              ├─ Docker Engine ──▶ container (app CasaOS & App Center)
+                              ├─ Docker Engine ──▶ container (CasaOS & App Center)
                               ├─ k3s / kubectl ──▶ cluster Kubernetes (opsional)
                               └─ tool sistem: systemctl, journalctl, apt, ufw, smbd, lsblk, …
 ```
 
-- **Frontend**: React 19 + TypeScript + Vite, ikon dari [Lucide](https://lucide.dev/), font Inter.
-- **Backend**: Go (standard library `net/http`), WebSocket untuk terminal, tanpa database. Konfigurasi disimpan di satu file JSON.
-- App web yang berjalan di server dibuka di dalam jendela lewat *frame proxy* (port 7710–7799), sehingga app yang menolak dibuka di iframe tetap bisa tampil.
-
-Detail lebih lengkap, termasuk daftar endpoint API, ada di [docs/architecture.md](docs/architecture.md).
-
----
-
-## Struktur proyek
+<details>
+<summary><b>Struktur proyek</b></summary>
 
 ```
 ├─ src/                     Frontend (React + TypeScript)
 │  ├─ App.tsx               Desktop: jendela, Dock, Launcher, menu bar
-│  ├─ api/                  httpApi.ts (server sungguhan), mockApi.ts + mockSystem.ts (data contoh), types.ts
-│  ├─ components/           Shell: Window, Dock, Launcher, QuickSearch, MenuBar, Glass, widget, dialog
+│  ├─ api/                  httpApi.ts (server), mockApi.ts + mockSystem.ts (data contoh), types.ts
+│  ├─ components/           Window, Dock, Launcher, QuickSearch, MenuBar, Glass, widget, dialog
 │  ├─ windows/              Isi tiap app: Files, Kubernetes, SystemMonitor, AppCenter, Terminal, …
 │  ├─ hooks/  lib/          State, helper, template Kubernetes, pengaturan
 │  └─ styles/               base.css (token tema), glass.css (efek kaca), app.css (layout)
 ├─ server/                  Backend Go: satu file per area (docker.go, k8s.go, files.go, smb.go, …)
 ├─ deploy/install.sh        Installer systemd
 ├─ scripts/build-server.mjs Build frontend → embed → cross-compile binary Linux
-└─ docs/                    Dokumentasi dan screenshot
+└─ docs/                    Dokumentasi, manifest Kubernetes, screenshot
 ```
 
----
+</details>
 
-## Lab Kubernetes
-
-TemanLabsOS bisa dipakai untuk belajar **container orchestration**: install k3s dari app Kubernetes, deploy **Lab Stack** (web nginx 3 replika, PostgreSQL dengan persistent volume, Prometheus + Grafana), lalu coba scaling, self-healing, rolling update, dan monitoring.
-
-Panduan langkah demi langkah ada di **[docs/kubernetes-lab.md](docs/kubernetes-lab.md)**, termasuk perintah `kubectl` yang setara untuk laporan.
-
----
+Detail cara kerja dan daftar endpoint API ada di **[docs/architecture.md](docs/architecture.md)**.
 
 ## Keamanan
 
-TemanLabsOS memberi akses penuh ke server, jadi perlakukan seperti akses root.
+> [!WARNING]
+> TemanLabsOS memberi **akses penuh ke server** (service berjalan sebagai root, seperti CasaOS). Jangan buka port `7700` langsung ke internet. Akses lewat LAN, VPN (mis. Tailscale), atau reverse proxy dengan HTTPS.
 
-- Service berjalan sebagai **root** (seperti CasaOS), karena memang mengelola Docker, paket, user, disk, dan firewall. Terminal tetap login sebagai user Linux biasa.
 - **Login**:
   - Password di-hash dengan PBKDF2-SHA256.
-  - Session cookie `HttpOnly` dan `SameSite=Lax`, berlaku 30 hari.
+  - Session cookie `HttpOnly` + `SameSite=Lax`, berlaku 30 hari.
   - IP dikunci sementara setelah 8 kali gagal login dalam 10 menit.
-- Request dengan `Origin` dari situs lain ditolak (perlindungan CSRF).
-- Folder sistem (`/etc`, `/usr`, `/boot`, …) tidak bisa dihapus atau di-rename dari UI. User dan service penting juga dilindungi dari penghapusan.
-- Server **tidak memakai HTTPS sendiri**. Jangan buka port 7700 langsung ke internet. Akses lewat LAN, VPN (mis. Tailscale), atau reverse proxy dengan TLS.
-- Password contoh di template Lab Kubernetes (`admin/admin`, `lab-password`) hanya untuk belajar. Ganti dulu kalau cluster-nya bisa diakses orang lain.
-
----
+- Request lintas situs ditolak, dan input divalidasi sebelum dijalankan sebagai perintah sistem.
+- Folder sistem, user penting, dan service penting dilindungi dari penghapusan lewat UI.
+- Password contoh di Lab Kubernetes (`admin/admin`, `lab-password`) hanya untuk belajar.
 
 ## Dokumentasi
 
 | Dokumen | Isi |
 |---|---|
-| [docs/installation.md](docs/installation.md) | Persyaratan, instalasi dan update, konfigurasi, development, troubleshooting |
-| [docs/kubernetes-lab.md](docs/kubernetes-lab.md) | Lab container orchestration: web, database, monitoring di Kubernetes |
-| [docs/architecture.md](docs/architecture.md) | Cara kerja frontend dan backend, menambah app, daftar endpoint API |
-
----
+| [Instalasi](docs/installation.md) | Persyaratan, instalasi & update, konfigurasi, development, troubleshooting |
+| [Lab Kubernetes](docs/kubernetes-lab.md) | Web, database, dan monitoring di Kubernetes, lengkap dengan latihan |
+| [Arsitektur](docs/architecture.md) | Cara kerja frontend & backend, menambah app, daftar endpoint API |
 
 ## Kredit
 
-TemanLabsOS adalah proyek independen dan tidak berafiliasi dengan vendor sistem operasi mana pun. Nama dan logo app pihak ketiga di App Center (Jellyfin, Nextcloud, dll.) adalah milik pemiliknya masing-masing. Ikon app diambil dari [selfh.st/icons](https://selfh.st/icons/).
+Dibangun dengan [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty), dan [k3s](https://k3s.io/). Ikon app dari [selfh.st/icons](https://selfh.st/icons/).
 
-Dibangun dengan: [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty), dan [k3s](https://k3s.io/).
+TemanLabsOS adalah proyek independen dan tidak berafiliasi dengan vendor sistem operasi mana pun. Nama dan logo app pihak ketiga di App Center adalah milik pemiliknya masing-masing.
+
+<div align="center">
+<br />
+<sub>Dibuat oleh <a href="https://github.com/diopratama99">Dio Pratama</a></sub>
+</div>
