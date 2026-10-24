@@ -1,0 +1,270 @@
+/* ---------- Design tokens ---------- */
+:root {
+  /* Motion: shared with lib/motion.ts */
+  --ease-out: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --ease-spring: cubic-bezier(0.25, 1.15, 0.4, 1);
+  --ease-in: cubic-bezier(0.55, 0, 0.75, 0.25);
+  color-scheme: light;
+  --font: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+
+  /* Text inside windows and panels */
+  --text: #1d1d1f;
+  --text-2: rgba(29, 29, 31, 0.62);
+  --text-3: rgba(29, 29, 31, 0.42);
+
+  /* Text drawn straight on the desktop (widgets, dock, menu bar): always light on the wallpaper */
+  --chrome-text: #fff;
+  --chrome-text-2: rgba(255, 255, 255, 0.74);
+  --chrome-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.14);
+  --accent-text: #0062cc;
+  --green: #34c759;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --purple: #af52de;
+  --cyan: #32ade6;
+
+  /* frosted glass */
+  --glass-tint: rgba(255, 255, 255, 0.1);
+  --panel-tint: rgba(250, 250, 253, 0.5);
+  --window-tint: rgba(246, 246, 250, 0.84);
+  --rim-a: rgba(255, 255, 255, 0.95);
+  --rim-b: rgba(255, 255, 255, 0.55);
+  --sheen: rgba(255, 255, 255, 0.24);
+  --glass-inset:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6), inset 0 -1px 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 0 26px rgba(255, 255, 255, 0.1);
+  --glass-drop: 0 14px 40px rgba(10, 15, 40, 0.24), 0 2px 8px rgba(10, 15, 40, 0.1);
+  --solid-chrome: #4a5274;
+  --solid: #ececf0;
+
+  /* Surfaces inside windows */
+  --glass-edge: rgba(255, 255, 255, 0.45);
+  --sidebar-bg: rgba(255, 255, 255, 0.5);
+  --group-bg: rgba(255, 255, 255, 0.55);
+  --menu-bg: rgba(250, 250, 252, 0.96);
+  --tb-bg: rgba(255, 255, 255, 0.55);
+  --tb-edge: rgba(0, 0, 0, 0.12);
+  --tb-highlight: rgba(255, 255, 255, 0.8);
+  --tl-inactive: #d6d6db;
+  --scroll-thumb: rgba(0, 0, 0, 0.28);
+  --scroll-thumb-hover: rgba(0, 0, 0, 0.45);
+  --tile-bg: rgba(255, 255, 255, 0.45);
+  --tile-bg-strong: rgba(255, 255, 255, 0.75);
+  --field-bg: rgba(0, 0, 0, 0.06);
+  --hover-soft: rgba(0, 0, 0, 0.06);
+  --separator: rgba(0, 0, 0, 0.08);
+  --track: rgba(0, 0, 0, 0.08);
+  --track-strong: rgba(0, 0, 0, 0.18);
+  --term-bg: rgba(252, 252, 254, 0.82);
+
+  /* Code editor */
+  --ce-bg: rgba(255, 255, 255, 0.42);
+  --ce-chrome: rgba(255, 255, 255, 0.28);
+  --ce-tab-active: rgba(255, 255, 255, 0.6);
+  --ce-row-active: rgba(0, 122, 255, 0.1);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --text: #f5f5f7;
+  --text-2: rgba(245, 245, 247, 0.66);
+  --text-3: rgba(245, 245, 247, 0.42);
+
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.26);
+  --accent-text: #6cb8ff;
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --purple: #bf5af2;
+  --cyan: #64d2ff;
+
+  --glass-tint: rgba(16, 16, 30, 0.16);
+  --panel-tint: rgba(32, 32, 40, 0.55);
+  --window-tint: rgba(30, 30, 36, 0.86);
+  --rim-a: rgba(255, 255, 255, 0.6);
+  --rim-b: rgba(255, 255, 255, 0.3);
+  --sheen: rgba(255, 255, 255, 0.1);
+  --glass-inset:
+    inset 0 1px 1px rgba(255, 255, 255, 0.34), inset 0 -1px 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 0 26px rgba(255, 255, 255, 0.05);
+  --glass-drop: 0 14px 40px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.22);
+  --solid-chrome: #23243a;
+  --solid: #1e1e22;
+
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --sidebar-bg: rgba(255, 255, 255, 0.07);
+  --group-bg: rgba(255, 255, 255, 0.07);
+  --menu-bg: rgba(44, 44, 50, 0.96);
+  --tb-bg: rgba(255, 255, 255, 0.1);
+  --tb-edge: rgba(255, 255, 255, 0.14);
+  --tb-highlight: rgba(255, 255, 255, 0.12);
+  --tl-inactive: #55555b;
+  --scroll-thumb: rgba(255, 255, 255, 0.28);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.45);
+  --tile-bg: rgba(255, 255, 255, 0.1);
+  --tile-bg-strong: rgba(255, 255, 255, 0.18);
+  --field-bg: rgba(255, 255, 255, 0.1);
+  --hover-soft: rgba(255, 255, 255, 0.08);
+  --separator: rgba(255, 255, 255, 0.08);
+  --track: rgba(255, 255, 255, 0.1);
+  --track-strong: rgba(255, 255, 255, 0.22);
+  --term-bg: rgba(10, 10, 12, 0.85);
+
+  --ce-bg: rgba(16, 16, 22, 0.42);
+  --ce-chrome: rgba(255, 255, 255, 0.035);
+  --ce-tab-active: rgba(255, 255, 255, 0.07);
+  --ce-row-active: rgba(10, 132, 255, 0.18);
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: #1a2350;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Wallpaper ---------- */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.wallpaper[data-wp='0'] {
+  --wp-bg1: #0d1b4c;
+  --wp-bg2: #3a1f6e;
+  --wp-1a: #2c6bff;
+  --wp-1b: #8a5cff;
+  --wp-2a: #ff4f9a;
+  --wp-2b: #ff9a4d;
+  --wp-3a: #17c3ff;
+  --wp-3b: #3c4dff;
+  --wp-4a: #6a5cff;
+  --wp-4b: #ff6fb5;
+  --wp-glow: #ffb36b;
+}
+
+.wallpaper[data-wp='1'] {
+  --wp-bg1: #04192b;
+  --wp-bg2: #0a3a4a;
+  --wp-1a: #00c9a7;
+  --wp-1b: #2fa8ff;
+  --wp-2a: #6e4bff;
+  --wp-2b: #00e0c2;
+  --wp-3a: #17e3b0;
+  --wp-3b: #3d5afe;
+  --wp-4a: #00f59b;
+  --wp-4b: #7c4dff;
+  --wp-glow: #79ffd0;
+}
+
+.wallpaper[data-wp='2'] {
+  --wp-bg1: #2a0d36;
+  --wp-bg2: #6b1745;
+  --wp-1a: #ff6a3d;
+  --wp-1b: #ff2e7e;
+  --wp-2a: #ffb23a;
+  --wp-2b: #ff5e62;
+  --wp-3a: #b84bff;
+  --wp-3b: #ff3d8b;
+  --wp-4a: #ff8a00;
+  --wp-4b: #ff2e7e;
+  --wp-glow: #ffd36b;
+}
+
+.wallpaper-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+[data-theme='light'] .wallpaper-art {
+  filter: brightness(1.12) saturate(1.05);
+}
+
+[data-theme='dark'] .wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 4, 16, 0.3);
+}
+
+.wp-lines path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 2;
+}
+
+.wp-lines .faint {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.5;
+}
+
+.wp-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glow-drift 26s ease-in-out infinite alternate;
+}
+
+.wp-glow-2 {
+  animation-duration: 34s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes glow-drift {
+  to {
+    transform: translate(-70px, 40px) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-glow {
+    animation: none;
+  }
+}

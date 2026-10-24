@@ -1,0 +1,8 @@
+node_modules
+dist
+*.log
+# Build output of scripts/build-server.mjs (the frontend is embedded into the Go binary)
+server/web
+server/bin
+# Local overrides, e.g. TEMANLABS_SERVER for npm run dev
+*.local

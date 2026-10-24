@@ -1,0 +1,79 @@
+/*
+ * frosted glass — see components/Glass.tsx.
+ *  - backdrop: in Chromium, Glass.tsx sets an inline backdrop-filter that bends the wallpaper through a
+ *    lens-rim displacement map before frosting it. Elsewhere the blur below is used on its own.
+ *  - tint: barely-there fill so the glass reads as clear, not frosted plastic
+ *  - light: inset highlights, a gradient rim and a top-left sheen sell the thickness
+ */
+.glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius, 24px);
+  background: var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(170%);
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(170%);
+  box-shadow: var(--glass-inset), var(--glass-drop);
+}
+
+/* Rim light: a gradient border, brightest at the top-left, catching again at the bottom-right. */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--rim-a) 0%, transparent 32%, transparent 62%, var(--rim-b) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Sheen: soft light falling across the top of the surface, beneath the content. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(168deg, var(--sheen) 0%, transparent 40%);
+}
+
+.glass-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Panels (menus, Quick Settings, QuickSearch) and windows carry more tint so their text stays legible. */
+.tint-panel {
+  --glass-tint: var(--panel-tint);
+  color: var(--text);
+  text-shadow: none;
+}
+
+.tint-window {
+  --glass-tint: var(--window-tint);
+  color: var(--text);
+  text-shadow: none;
+}
+
+html[data-reduce-transparency='on'] .glass {
+  background: var(--solid-chrome);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-reduce-transparency='on'] .glass.tint-panel,
+html[data-reduce-transparency='on'] .glass.tint-window {
+  background: var(--solid);
+}
+
+html[data-reduce-transparency='on'] .glass::after {
+  display: none;
+}

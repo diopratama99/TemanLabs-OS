@@ -1,0 +1,482 @@
+// Kubernetes manifests the Kubernetes window can apply: a complete lab (web + database +
+// monitoring) and single building blocks. They're plain YAML on purpose, shown before they're
+// applied, so they double as examples to learn from.
+
+export interface K8sTemplate {
+  id: string
+  name: string
+  description: string
+  /** What to open afterwards, as NodePorts on the server. */
+  opens?: { label: string; nodePort: number }[]
+  namespace: string
+  yaml: string
+}
+
+const GRAFANA_DASHBOARD = JSON.stringify({
+  title: 'Server (node-exporter)',
+  uid: 'lab-node',
+  refresh: '10s',
+  time: { from: 'now-30m', to: 'now' },
+  schemaVersion: 39,
+  panels: [
+    {
+      type: 'timeseries',
+      title: 'CPU usage %',
+      gridPos: { x: 0, y: 0, w: 12, h: 8 },
+      fieldConfig: { defaults: { unit: 'percent', max: 100, min: 0 } },
+      targets: [{ expr: '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)', legendFormat: 'CPU' }],
+    },
+    {
+      type: 'timeseries',
+      title: 'Memory used %',
+      gridPos: { x: 12, y: 0, w: 12, h: 8 },
+      fieldConfig: { defaults: { unit: 'percent', max: 100, min: 0 } },
+      targets: [{ expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)', legendFormat: 'Memory' }],
+    },
+    {
+      type: 'timeseries',
+      title: 'Network traffic',
+      gridPos: { x: 0, y: 8, w: 12, h: 8 },
+      fieldConfig: { defaults: { unit: 'Bps' } },
+      targets: [
+        { expr: 'sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|cni.*|flannel.*|docker.*|br-.*"}[1m]))', legendFormat: 'Download' },
+        { expr: 'sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|cni.*|flannel.*|docker.*|br-.*"}[1m]))', legendFormat: 'Upload' },
+      ],
+    },
+    {
+      type: 'gauge',
+      title: 'Disk used % (/)',
+      gridPos: { x: 12, y: 8, w: 12, h: 8 },
+      fieldConfig: { defaults: { unit: 'percent', max: 100, min: 0 } },
+      targets: [{ expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})', legendFormat: '/' }],
+    },
+  ],
+})
+
+const indent = (text: string, spaces: number) =>
+  text
+    .split('\n')
+    .map(l => (l ? ' '.repeat(spaces) + l : l))
+    .join('\n')
+
+const WEB = `# ---------- Web: nginx, 3 replicas behind a Service ----------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-content
+  namespace: lab
+data:
+  default.conf: |
+    server {
+      listen 80;
+      ssi on;            # lets the page print which pod answered
+      root /usr/share/nginx/html;
+      add_header X-Served-By $hostname;
+    }
+  index.html: |
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>Lab web</title>
+    <style>body{font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#0b1530;color:#fff}
+    .card{padding:40px 56px;border-radius:24px;background:rgba(255,255,255,.08);text-align:center}
+    code{font-size:22px;color:#6cf}</style></head>
+    <body><div class="card"><h1>Hello from Kubernetes 👋</h1>
+    <p>This page was served by pod</p><code><!--# echo var="hostname" --></code>
+    <p>Reload: the Service spreads requests over the replicas.</p></div></body></html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab
+  labels: { app: web, tier: frontend }
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 1, maxSurge: 1 }
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web, tier: frontend }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports: [{ containerPort: 80 }]
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          volumeMounts:
+            - { name: content, mountPath: /usr/share/nginx/html/index.html, subPath: index.html }
+            - { name: content, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf }
+      volumes:
+        - name: content
+          configMap: { name: web-content }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab
+spec:
+  type: NodePort
+  selector: { app: web }
+  ports:
+    - { port: 80, targetPort: 80, nodePort: 30080 }
+`
+
+const DATABASE = `# ---------- Database: PostgreSQL (StatefulSet + persistent volume) and Adminer ----------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: lab
+type: Opaque
+stringData:
+  POSTGRES_USER: lab
+  POSTGRES_PASSWORD: lab-password
+  POSTGRES_DB: labdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: lab
+spec:
+  selector: { app: db }
+  ports:
+    - { port: 5432, targetPort: 5432 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: lab
+  labels: { app: db, tier: database }
+spec:
+  serviceName: db
+  replicas: 1
+  selector:
+    matchLabels: { app: db }
+  template:
+    metadata:
+      labels: { app: db, tier: database }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          envFrom: [{ secretRef: { name: db-secret } }]
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "lab"] }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: local-path
+        resources:
+          requests: { storage: 1Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adminer
+  namespace: lab
+  labels: { app: adminer, tier: database }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: adminer }
+  template:
+    metadata:
+      labels: { app: adminer, tier: database }
+    spec:
+      containers:
+        - name: adminer
+          image: adminer:4
+          env:
+            - { name: ADMINER_DEFAULT_SERVER, value: db }
+          ports: [{ containerPort: 8080 }]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adminer
+  namespace: lab
+spec:
+  type: NodePort
+  selector: { app: adminer }
+  ports:
+    - { port: 8080, targetPort: 8080, nodePort: 30081 }
+`
+
+const MONITORING = `# ---------- Monitoring: node-exporter (DaemonSet), Prometheus and Grafana ----------
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: lab
+  labels: { app: node-exporter, tier: monitoring }
+spec:
+  selector:
+    matchLabels: { app: node-exporter }
+  template:
+    metadata:
+      labels: { app: node-exporter, tier: monitoring }
+    spec:
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args: ["--path.procfs=/host/proc", "--path.sysfs=/host/sys", "--path.rootfs=/host/root"]
+          ports: [{ containerPort: 9100 }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          volumeMounts:
+            - { name: proc, mountPath: /host/proc, readOnly: true }
+            - { name: sys, mountPath: /host/sys, readOnly: true }
+            - { name: root, mountPath: /host/root, readOnly: true }
+      volumes:
+        - { name: proc, hostPath: { path: /proc } }
+        - { name: sys, hostPath: { path: /sys } }
+        - { name: root, hostPath: { path: / } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: lab
+spec:
+  selector: { app: node-exporter }
+  ports:
+    - { port: 9100, targetPort: 9100 }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: lab
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: prometheus
+        static_configs: [{ targets: ["localhost:9090"] }]
+      - job_name: node
+        static_configs: [{ targets: ["node-exporter.lab.svc:9100"] }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: lab
+  labels: { app: prometheus, tier: monitoring }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: prometheus }
+  template:
+    metadata:
+      labels: { app: prometheus, tier: monitoring }
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.54.1
+          args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=3d"]
+          ports: [{ containerPort: 9090 }]
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus }
+      volumes:
+        - name: config
+          configMap: { name: prometheus-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: lab
+spec:
+  type: NodePort
+  selector: { app: prometheus }
+  ports:
+    - { port: 9090, targetPort: 9090, nodePort: 30090 }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: lab
+data:
+  datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus:9090
+        isDefault: true
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: lab
+        folder: Lab
+        options: { path: /var/lib/grafana/dashboards }
+  node.json: |
+${indent(GRAFANA_DASHBOARD, 4)}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: lab
+  labels: { app: grafana, tier: monitoring }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: grafana }
+  template:
+    metadata:
+      labels: { app: grafana, tier: monitoring }
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.2.0
+          env:
+            - { name: GF_SECURITY_ADMIN_USER, value: admin }
+            - { name: GF_SECURITY_ADMIN_PASSWORD, value: admin }
+            - { name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH, value: /var/lib/grafana/dashboards/node.json }
+          ports: [{ containerPort: 3000 }]
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 384Mi }
+          volumeMounts:
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yml, subPath: datasource.yml }
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml, subPath: dashboards.yml }
+            - { name: provisioning, mountPath: /var/lib/grafana/dashboards/node.json, subPath: node.json }
+      volumes:
+        - name: provisioning
+          configMap: { name: grafana-provisioning }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: lab
+spec:
+  type: NodePort
+  selector: { app: grafana }
+  ports:
+    - { port: 3000, targetPort: 3000, nodePort: 30300 }
+`
+
+const NAMESPACE = `apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab
+---
+`
+
+export const K8S_TEMPLATES: K8sTemplate[] = [
+  {
+    id: 'lab',
+    name: 'Lab Stack: Web + Database + Monitoring',
+    description:
+      'Everything for a small network services lab in the "lab" namespace: nginx (3 replicas, load balanced), PostgreSQL with a persistent volume, Adminer, and Prometheus + Grafana with a server dashboard.',
+    namespace: 'lab',
+    opens: [
+      { label: 'Web (nginx)', nodePort: 30080 },
+      { label: 'Adminer (database UI)', nodePort: 30081 },
+      { label: 'Prometheus', nodePort: 30090 },
+      { label: 'Grafana (admin / admin)', nodePort: 30300 },
+    ],
+    yaml: NAMESPACE + WEB + '---\n' + DATABASE + '---\n' + MONITORING,
+  },
+  {
+    id: 'web',
+    name: 'Web server (nginx, 3 replicas)',
+    description: 'A Deployment with 3 replicas behind a NodePort Service: shows scaling, load balancing and self-healing.',
+    namespace: 'lab',
+    opens: [{ label: 'Web', nodePort: 30080 }],
+    yaml: NAMESPACE + WEB,
+  },
+  {
+    id: 'db',
+    name: 'Database (PostgreSQL + Adminer)',
+    description: 'A StatefulSet with a persistent volume and a Secret for the password; Adminer to browse it.',
+    namespace: 'lab',
+    opens: [{ label: 'Adminer', nodePort: 30081 }],
+    yaml: NAMESPACE + DATABASE,
+  },
+  {
+    id: 'monitoring',
+    name: 'Monitoring (Prometheus + Grafana)',
+    description: 'node-exporter on every node (DaemonSet), Prometheus scraping it, Grafana with a ready dashboard.',
+    namespace: 'lab',
+    opens: [
+      { label: 'Prometheus', nodePort: 30090 },
+      { label: 'Grafana (admin / admin)', nodePort: 30300 },
+    ],
+    yaml: NAMESPACE + MONITORING,
+  },
+]
+
+/** A Deployment + Service from a few fields, for the Quick Deploy form. */
+export function quickDeployYaml(o: { name: string; image: string; replicas: number; port: number; nodePort?: number; namespace: string }) {
+  const svcType = o.nodePort ? 'NodePort' : 'ClusterIP'
+  return `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${o.name}
+  namespace: ${o.namespace}
+  labels: { app: ${o.name} }
+spec:
+  replicas: ${o.replicas}
+  selector:
+    matchLabels: { app: ${o.name} }
+  template:
+    metadata:
+      labels: { app: ${o.name} }
+    spec:
+      containers:
+        - name: ${o.name}
+          image: ${o.image}
+          ports: [{ containerPort: ${o.port} }]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${o.name}
+  namespace: ${o.namespace}
+spec:
+  type: ${svcType}
+  selector: { app: ${o.name} }
+  ports:
+    - { port: ${o.port}, targetPort: ${o.port}${o.nodePort ? `, nodePort: ${o.nodePort}` : ''} }
+`
+}
