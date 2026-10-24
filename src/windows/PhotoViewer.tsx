@@ -17,6 +17,7 @@ import { siblingsOf, folderOf, type MediaRequest } from '../lib/media'
 import { nameOf } from '../lib/paths'
 import { useSettings } from '../lib/settings'
 import { ToolbarTitle, useWindowKeys, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8]
 const SLIDESHOW_MS = 4000
@@ -95,30 +96,30 @@ export function PhotoViewer({ request, onTitle }: Props) {
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
-        { label: 'Zoom In', icon: ZoomIn, onSelect: () => step(1) },
-        { label: 'Zoom Out', icon: ZoomOut, onSelect: () => step(-1) },
-        { label: 'Actual Size', checked: zoom === 1, onSelect: () => setZoom(1) },
-        { label: 'Zoom to Fit', icon: Maximize, checked: zoom === null, onSelect: () => setZoom(null) },
+        { label: tr('Zoom In'), icon: ZoomIn, onSelect: () => step(1) },
+        { label: tr('Zoom Out'), icon: ZoomOut, onSelect: () => step(-1) },
+        { label: tr('Actual Size'), checked: zoom === 1, onSelect: () => setZoom(1) },
+        { label: tr('Zoom to Fit'), icon: Maximize, checked: zoom === null, onSelect: () => setZoom(null) },
         'separator',
-        { label: playing ? 'Stop Slideshow' : 'Slideshow', icon: playing ? Pause : Play, onSelect: () => setPlaying(p => !p) },
+        { label: playing ? tr('Stop Slideshow') : tr('Slideshow'), icon: playing ? Pause : Play, onSelect: () => setPlaying(p => !p) },
       ],
     },
     {
-      label: 'Go',
+      label: tr('Go'),
       items: [
-        { label: 'Previous Image', icon: ChevronLeft, disabled: list.length < 2, onSelect: () => go(-1) },
-        { label: 'Next Image', icon: ChevronRight, disabled: list.length < 2, onSelect: () => go(1) },
+        { label: tr('Previous Image'), icon: ChevronLeft, disabled: list.length < 2, onSelect: () => go(-1) },
+        { label: tr('Next Image'), icon: ChevronRight, disabled: list.length < 2, onSelect: () => go(1) },
       ],
     },
     {
-      label: 'Image',
+      label: tr('Image'),
       items: [
-        { label: 'Rotate Right', icon: RotateCw, onSelect: () => setRotation(r => r + 90) },
+        { label: tr('Rotate Right'), icon: RotateCw, onSelect: () => setRotation(r => r + 90) },
         'separator',
-        { label: 'Set as Wallpaper', icon: ImageIcon, disabled: !current, onSelect: () => void setAsWallpaper() },
-        { label: 'Download', icon: Download, disabled: !current, onSelect: download },
+        { label: tr('Set as Wallpaper'), icon: ImageIcon, disabled: !current, onSelect: () => void setAsWallpaper() },
+        { label: tr('Download'), icon: Download, disabled: !current, onSelect: download },
       ],
     },
   ])
@@ -156,7 +157,7 @@ export function PhotoViewer({ request, onTitle }: Props) {
     return (
       <div className="media-empty">
         <ImageIcon size={40} />
-        <p>Open a photo from Files to view it here.</p>
+        <p>{tr('Open a photo from Files to view it here.')}</p>
       </div>
     )
   }
@@ -165,35 +166,35 @@ export function PhotoViewer({ request, onTitle }: Props) {
     <div className="pv">
       <WindowToolbar>
         <div className="tb-group">
-        <button className="tb-btn" onClick={() => go(-1)} disabled={list.length < 2} aria-label="Previous">
+        <button className="tb-btn" onClick={() => go(-1)} disabled={list.length < 2} aria-label={tr('Previous')}>
           <ChevronLeft size={16} />
         </button>
-        <button className="tb-btn" onClick={() => go(1)} disabled={list.length < 2} aria-label="Next">
+        <button className="tb-btn" onClick={() => go(1)} disabled={list.length < 2} aria-label={tr('Next')}>
           <ChevronRight size={16} />
         </button>
         </div>
-        <ToolbarTitle title={nameOf(current)} subtitle={list.length > 1 ? `${index + 1} of ${list.length}` : undefined} />
+        <ToolbarTitle title={nameOf(current)} subtitle={list.length > 1 ? tr('{0} of {1}', index + 1, list.length) : undefined} />
         <span className="tb-spacer" />
         <div className="tb-group">
-        <button className="tb-btn" onClick={() => step(-1)} aria-label="Zoom out">
+        <button className="tb-btn" onClick={() => step(-1)} aria-label={tr('Zoom out')}>
           <ZoomOut size={15} />
         </button>
-        <button className="tb-btn tb-text" onClick={() => setZoom(z => (z === null ? 1 : null))} title="Toggle actual size / fit">
-          {zoom === null ? 'Fit' : `${Math.round(zoom * 100)}%`}
+        <button className="tb-btn tb-text" onClick={() => setZoom(z => (z === null ? 1 : null))} title={tr('Toggle actual size / fit')}>
+          {zoom === null ? tr('Fit') : `${Math.round(zoom * 100)}%`}
         </button>
-        <button className="tb-btn" onClick={() => step(1)} aria-label="Zoom in">
+        <button className="tb-btn" onClick={() => step(1)} aria-label={tr('Zoom in')}>
           <ZoomIn size={15} />
         </button>
-        <button className="tb-btn" onClick={() => setRotation(r => r + 90)} aria-label="Rotate">
+        <button className="tb-btn" onClick={() => setRotation(r => r + 90)} aria-label={tr('Rotate')}>
           <RotateCw size={15} />
         </button>
-        <button className={`icon-btn ${playing ? 'is-on' : ''}`} onClick={() => setPlaying(p => !p)} aria-label="Slideshow" title="Slideshow">
+        <button className={`icon-btn ${playing ? 'is-on' : ''}`} onClick={() => setPlaying(p => !p)} aria-label={tr('Slideshow')} title={tr('Slideshow')}>
           {playing ? <Pause size={15} /> : <Play size={15} />}
         </button>
-        <button className="tb-btn" onClick={() => void setAsWallpaper()} aria-label="Set as wallpaper" title="Set as Wallpaper">
+        <button className="tb-btn" onClick={() => void setAsWallpaper()} aria-label={tr('Set as wallpaper')} title={tr('Set as Wallpaper')}>
           <ImageIcon size={15} />
         </button>
-        <button className="tb-btn" onClick={download} aria-label="Download" title="Download">
+        <button className="tb-btn" onClick={download} aria-label={tr('Download')} title={tr('Download')}>
           <Download size={15} />
         </button>
         </div>
@@ -212,9 +213,9 @@ export function PhotoViewer({ request, onTitle }: Props) {
         {broken ? (
           <div className="media-empty">
             <ImageIcon size={40} />
-            <p>This browser can’t display {nameOf(current)}.</p>
+            <p>{tr('This browser can’t display')} {nameOf(current)}.</p>
             <button className="btn" onClick={download}>
-              <Download size={13} /> Download
+              <Download size={13} /> {tr('Download')}
             </button>
           </div>
         ) : (

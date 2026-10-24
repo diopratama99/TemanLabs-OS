@@ -6,6 +6,8 @@ import { HISTORY_LENGTH, type StatsHistory } from '../../hooks/useSystemStats'
 import { formatBitrate, formatBytes, formatSpeed } from '../../lib/format'
 import { WIDGET_INFO, type WidgetConfig, type WidgetOptions, type WidgetSize } from '../../lib/widgets'
 import { AppIcon } from '../AppIcon'
+import { tr } from '../../lib/i18n'
+import { CalendarWidget, NoteWidget, PowerWidget, ServerWidget, TodoWidget, type OnOptions } from './ExtraWidgets'
 
 export interface WidgetData {
   stats: SystemStats
@@ -13,7 +15,7 @@ export interface WidgetData {
   apps: InstalledApp[]
 }
 
-function Head({ icon: Icon, title, aside }: { icon: LucideIcon; title: string; aside?: ReactNode }) {
+export function Head({ icon: Icon, title, aside }: { icon: LucideIcon; title: string; aside?: ReactNode }) {
   return (
     <div className="w-head">
       <Icon size={13} strokeWidth={2.4} />
@@ -191,7 +193,7 @@ function CpuWidget({ size, options, data }: { size: WidgetSize; options: WidgetO
       <>
         {head}
         {big}
-        <div className="w-sub">{cpu.cores} cores</div>
+        <div className="w-sub">{cpu.cores} {tr('cores')}</div>
         {options.graph ? <CpuBars history={data.history.cpu} count={18} /> : <div className="w-foot">{cpu.model}</div>}
       </>
     )
@@ -202,7 +204,7 @@ function CpuWidget({ size, options, data }: { size: WidgetSize; options: WidgetO
       <div className="w-split">
         <div className="w-col">
           {big}
-          <div className="w-sub">{cpu.cores} cores</div>
+          <div className="w-sub">{cpu.cores} {tr('cores')}</div>
           <div className="w-foot">{cpu.model}</div>
         </div>
         {options.graph && (
@@ -220,7 +222,7 @@ function CpuWidget({ size, options, data }: { size: WidgetSize; options: WidgetO
 function MemoryWidget({ size, options, data }: { size: WidgetSize; options: WidgetOptions['memory']; data: WidgetData }) {
   const { used, total } = data.stats.memory
   const pct = (used / total) * 100
-  const head = <Head icon={WIDGET_INFO.memory.icon} title="Memory" />
+  const head = <Head icon={WIDGET_INFO.memory.icon} title={tr('Memory')} />
   const visual =
     options.display === 'ring' ? (
       <Ring pct={pct} size={size === 'small' ? 76 : 92} />
@@ -235,11 +237,11 @@ function MemoryWidget({ size, options, data }: { size: WidgetSize; options: Widg
     )
   const details = (
     <dl className="w-details">
-      <dt>Used</dt>
+      <dt>{tr('Used')}</dt>
       <dd>{formatBytes(used)}</dd>
-      <dt>Free</dt>
+      <dt>{tr('Free')}</dt>
       <dd>{formatBytes(total - used)}</dd>
-      <dt>Total</dt>
+      <dt>{tr('Total')}</dt>
       <dd>{formatBytes(total, 0)}</dd>
     </dl>
   )
@@ -273,14 +275,14 @@ function MemoryWidget({ size, options, data }: { size: WidgetSize; options: Widg
 function AppsWidget({ size, options, data }: { size: WidgetSize; options: WidgetOptions['apps']; data: WidgetData }) {
   const running = data.apps.filter(app => app.status === 'running')
   const listed = options.show === 'running' ? running : data.apps
-  const head = <Head icon={WIDGET_INFO.apps.icon} title="Apps" />
+  const head = <Head icon={WIDGET_INFO.apps.icon} title={tr('Apps')} />
   const count = (
     <>
       <div className="w-big">
         {running.length}
         <small>/{data.apps.length}</small>
       </div>
-      <div className="w-sub">running</div>
+      <div className="w-sub">{tr('running')}</div>
     </>
   )
 
@@ -322,17 +324,17 @@ function AppsWidget({ size, options, data }: { size: WidgetSize; options: Widget
 // ---------- Storage ----------
 
 function StorageWidget({ size, options, data }: { size: WidgetSize; options: WidgetOptions['storage']; data: WidgetData }) {
-  const disks = data.stats.disks.filter(d => !options.hidden.includes(d.mount))
-  const head = <Head icon={WIDGET_INFO.storage.icon} title="Storage" />
+  const disks = data.stats.disks.filter(d => !d.cloud && !options.hidden.includes(d.mount))
+  const head = <Head icon={WIDGET_INFO.storage.icon} title={tr('Storage')} />
   const describe = (used: number, total: number) =>
-    options.show === 'free' ? `${formatBytes(total - used)} free of ${formatBytes(total, 0)}` : `${formatBytes(used)} used of ${formatBytes(total, 0)}`
+    options.show === 'free' ? tr('{0} free of {1}', formatBytes(total - used), formatBytes(total, 0)) : tr('{0} used of {1}', formatBytes(used), formatBytes(total, 0))
   const pctOf = (used: number, total: number) => ((options.show === 'free' ? total - used : used) / total) * 100
 
   if (disks.length === 0) {
     return (
       <>
         {head}
-        <div className="w-empty">No disks selected. Right-click to choose disks.</div>
+        <div className="w-empty">{tr('No disks selected. Right-click to choose disks.')}</div>
       </>
     )
   }
@@ -400,13 +402,13 @@ function NetworkWidget({ size, options, data }: { size: WidgetSize; options: Wid
     <div className="net-stats">
       <div className="net-stat">
         <small>
-          <ArrowDown size={11} strokeWidth={3} className="net-rx" /> Download
+          <ArrowDown size={11} strokeWidth={3} className="net-rx" /> {tr('Download')}
         </small>
         <strong>{speed(rx)}</strong>
       </div>
       <div className="net-stat">
         <small>
-          <ArrowUp size={11} strokeWidth={3} className="net-tx" /> Upload
+          <ArrowUp size={11} strokeWidth={3} className="net-tx" /> {tr('Upload')}
         </small>
         <strong>{speed(tx)}</strong>
       </div>
@@ -422,7 +424,7 @@ function NetworkWidget({ size, options, data }: { size: WidgetSize; options: Wid
   )
   return (
     <>
-      <Head icon={WIDGET_INFO.network.icon} title="Network" aside={iface} />
+      <Head icon={WIDGET_INFO.network.icon} title={tr('Network')} aside={iface} />
       <div className={size === 'small' ? 'net-body net-body-small' : 'net-body'}>
         {stats}
         {graph}
@@ -431,9 +433,20 @@ function NetworkWidget({ size, options, data }: { size: WidgetSize; options: Wid
   )
 }
 
-/** Renders the content of one widget for its type, size and options. */
-export function WidgetContent({ config, data }: { config: WidgetConfig; data: WidgetData }) {
+/** Renders the content of one widget for its type, size and options. onOptions saves what a
+ * widget keeps itself (a note's text); without it the widget is shown read-only (the gallery). */
+export function WidgetContent({ config, data, onOptions }: { config: WidgetConfig; data: WidgetData; onOptions?: OnOptions }) {
   switch (config.type) {
+    case 'note':
+      return <NoteWidget options={config.options} onOptions={onOptions} />
+    case 'todo':
+      return <TodoWidget size={config.size} options={config.options} onOptions={onOptions} />
+    case 'calendar':
+      return <CalendarWidget size={config.size} options={config.options} />
+    case 'power':
+      return <PowerWidget size={config.size} options={config.options} data={data} />
+    case 'server':
+      return <ServerWidget size={config.size} options={config.options} data={data} />
     case 'clock':
       return <ClockWidget size={config.size} options={config.options} />
     case 'cpu':

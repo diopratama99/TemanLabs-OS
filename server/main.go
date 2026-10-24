@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -51,8 +52,33 @@ func main() {
 		Handler:           srv.routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Printf("TemanLabsOS listening on %s (files root %s, terminal user %s)", cfg.Addr, cfg.Root, cfg.User)
+	for _, addr := range cfg.RedirectFrom {
+		go func() {
+			r := &http.Server{Addr: addr, Handler: redirectTo(cfg.Addr), ReadHeaderTimeout: 10 * time.Second}
+			log.Printf("redirect from %s: %v", addr, r.ListenAndServe())
+		}()
+	}
+	log.Printf("TemanLabsOS %s listening on %s (files root %s, terminal user %s)", version, cfg.Addr, cfg.Root, cfg.User)
 	log.Fatal(httpServer.ListenAndServe())
+}
+
+// redirectTo sends requests on to the same host and path at addr's port (none for 80). The
+// redirect is temporary, so browsers don't remember it if the address changes again.
+func redirectTo(addr string) http.Handler {
+	_, port, _ := net.SplitHostPort(addr)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(r.Host); err == nil {
+			host = h
+		}
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+		if port != "" && port != "80" {
+			host += ":" + port
+		}
+		http.Redirect(w, r, "http://"+host+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	})
 }
 
 func setPasswordFromStdin(cfg *Config) error {

@@ -43,6 +43,7 @@ Dokumen untuk developer: cara kerja frontend dan backend, alur build, dan daftar
 | `lib/appMenus.tsx` | `useAppMenus()`: app mendaftarkan menunya sendiri ke menu bar. Shortcut keyboard di item menu otomatis aktif. |
 | `lib/windowChrome.tsx` | `WindowToolbar` dan `ToolbarTitle`: toolbar yang menyatu dengan title bar. |
 | `lib/contextMenu.tsx` | `useContextMenu().show(event, items)`: menu klik kanan, juga dipakai `PopUpButton`. |
+| `lib/i18n.ts` + `lib/i18n-id.ts` | Terjemahan. Teks Inggris jadi kunci: `tr('Open')`, nilai lewat `tr('{0} apps', n)`. Kamus Indonesia ada di `i18n-id.ts`; teks tanpa terjemahan tampil dalam bahasa Inggris. |
 | `api/httpApi.ts` | Semua panggilan ke backend. |
 | `api/mockApi.ts`, `api/mockSystem.ts` | Implementasi `Api` yang sama dengan data di memori, untuk `npm run dev:mock`. |
 | `api/types.ts` | Tipe data yang sama dengan JSON dari backend. |
@@ -69,11 +70,12 @@ Satu file per area. Semua handler didaftarkan di `server.go` (`routes()`).
 | `docker.go`, `monitor.go`, `apps.go` | Docker Engine API lewat Unix socket, statistik per container, daftar app (compose project dan metadata CasaOS). |
 | `store.go`, `custom.go` | Katalog App Center (template compose) dan Custom Install. |
 | `native.go`, `services.go`, `processes.go`, `ports.go` | App non-Docker (dideteksi dari socket yang listening), service systemd, proses, dan port. |
-| `frameproxy.go` | Reverse proxy per app yang membuang `X-Frame-Options` / CSP `frame-ancestors`, supaya app bisa tampil di jendela. |
+| `frameproxy.go`, `appauth.go` | Reverse proxy per app yang membuang `X-Frame-Options` / CSP `frame-ancestors`, supaya app bisa tampil di jendela. Untuk app dengan login HTTP Basic (mis. Supabase Studio di balik Kong), jendela meminta login sekali; server memeriksanya ke app, menyimpannya (`app-logins.json`, 0600), lalu proxy mengirimnya di setiap request dan membuang tantangan `WWW-Authenticate` supaya dialog login browser tidak muncul. |
 | `files.go`, `copy.go`, `thumbs.go`, `media.go` | File manager, copy/move, thumbnail (Go untuk foto, `ffmpeg` untuk video), streaming media. |
 | `terminal.go` | Shell login di PTY, dijembatani ke WebSocket. |
 | `jobs.go` | Tugas panjang di latar belakang (apt, install k3s), dengan log yang dipantau UI. Satu job per jenis. |
 | `updates.go`, `logs.go`, `disks.go`, `network.go`, `cron.go`, `users.go`, `smb.go`, `wallpaper.go` | Utilitas server. |
+| `devices.go`, `remote.go` | Perangkat lain di jaringan: status (ping + ketuk port), Wake-on-LAN (magic packet ke semua broadcast LAN), pencarian (sapu /24 lalu baca tabel ARP; nama dari DNS, mDNS, NetBIOS). Remote layar: container `guacd` (`127.0.0.1:4822`) dijalankan lewat Docker API; server melakukan handshake Guacamole dengan password tersimpan, lalu meneruskan instruksi ke WebSocket. |
 | `k8s.go` | Install/uninstall k3s, membaca resource cluster, dan aksi (`apply`, `scale`, `rollout`, `delete`, …) lewat `k3s kubectl`. |
 
 ### Prinsip keamanan di backend
@@ -111,10 +113,45 @@ Semua endpoint (kecuali login) butuh session cookie. Respons berupa JSON, dan er
 | POST | `/api/apps/custom` | Custom Install (image atau compose) |
 | POST | `/api/apps/{id}/install` · `start` · `stop` | Install / start / stop app |
 | DELETE | `/api/apps/{id}` | Uninstall |
-| GET | `/api/apps/{id}/frame` · `icon` | Alamat frame proxy / ikon app |
+| GET | `/api/apps/{id}/frame` · `icon` | Alamat frame proxy (plus `auth: "basic"`, `signedIn` untuk app yang minta login) / ikon app |
+| PUT · DELETE | `/api/apps/{id}/signin` | Simpan login HTTP Basic app (dicek dulu ke app; salah = 422) / lupakan |
 | GET | `/api/containers` · `/api/networks` | Container (dengan statistik) dan network Docker |
 | POST | `/api/containers/{id}/{action}` | Start / stop / restart container |
 | GET | `/api/containers/{id}/logs` | Log container |
+
+### Mengelola app & App Store
+| Method | Path | Fungsi |
+|---|---|---|
+| GET · PUT | `/api/apps/{id}/config` | Pengaturan app (form layanan utama + compose YAML) / simpan dan buat ulang container (job `app-{id}`) |
+| POST | `/api/apps/{id}/update` | Pull image baru lalu recreate (compose atau docker run) |
+| GET | `/api/apps/updates?refresh=1` | Hasil cek digest image ke registry, per app |
+| DELETE | `/api/apps/{id}?data=1` | Uninstall, opsional hapus volume dan folder `/DATA/AppData/…` |
+| WS | `/ws/apps/{id}/terminal?container=` | Shell di dalam container (`docker exec`) |
+| GET | `/api/appstore` | Semua app dari app store (format CasaOS) dan daftar store |
+| GET · POST | `/api/appstore/apps/{id}` · `/install` | Detail + compose yang sudah diisi variabelnya / install |
+| POST · PUT | `/api/appstore/refresh` · `/api/appstore/sources` | Unduh ulang store / ganti daftar store |
+
+### Storage & cloud
+| Method | Path | Fungsi |
+|---|---|---|
+| POST | `/api/disks/automount` · `format` · `eject` | Mount saat startup (fstab) / format (job `disk-format`) / eject USB |
+| GET | `/api/storage` | Entri fstab, merged storage, status mergerfs, auto-mount USB |
+| POST · DELETE | `/api/storage/merge[/{name}]` | Buat / hapus merged storage (mergerfs) |
+| PUT | `/api/storage/usb` | Nyalakan / matikan auto-mount USB |
+| GET · POST · DELETE | `/api/cloud[/{name}]` | Cloud drive (rclone) |
+| POST | `/api/cloud/auth` · `/api/cloud/{name}/{action}` | Login browser (OAuth) / mount, unmount, restart |
+| GET | `/api/convert` · `/api/convert/probe?path=` | Remux: status ffmpeg, encoder, antrean / isi file (stream, codec) |
+| POST | `/api/convert` | Tambah konversi ke antrean (remux atau encode ulang dengan ffmpeg) |
+| DELETE | `/api/convert/tasks[/{id}]` | Batalkan / hapus konversi, atau bersihkan yang sudah selesai |
+| POST | `/api/convert/ffmpeg` | Pasang ffmpeg (job `apt`) |
+| GET | `/api/commands?tools=` | Commands: tool yang terpasang, app terpasang (container, folder compose, unit), perintah simpanan, riwayat shell |
+| PUT | `/api/commands/book` | Simpan perintah sendiri dan favorit |
+| GET · PUT | `/api/media/position` | Posisi terakhir video (untuk melanjutkan menonton) |
+| GET · POST | `/api/devices` | Devices: daftar perangkat (tanpa password) dan status mesin remote desktop / tambah perangkat |
+| PUT · DELETE | `/api/devices/{id}` | Ubah / hapus perangkat (password kosong = tetap) |
+| GET | `/api/devices/status` · `/discover` · `/mac?host=` | Menyala/mati dan port layar terbuka / cari komputer di jaringan / cari alamat MAC |
+| POST | `/api/devices/{id}/wake` · `/api/devices/engine` | Kirim Wake-on-LAN / pasang dan jalankan mesin remote desktop (`guacd`) |
+| GET · POST | `/api/system/release` · `/install` | Cek rilis GitHub / update diri sendiri (job `self-update`) |
 
 ### Kubernetes
 | Method | Path | Fungsi |
@@ -166,6 +203,7 @@ Semua endpoint (kecuali login) butuh session cookie. Respons berupa JSON, dan er
 | POST | `/api/files/folders` · `rename` · `copy` | Buat folder, rename, copy/move |
 | GET · PUT | `/api/files/content` | Baca / simpan file teks |
 | GET | `/api/files/raw` · `/api/files/thumb` | File mentah (streaming) / thumbnail |
+| GET | `/api/files/info` | Lihat Info: ukuran (folder dihitung), tanggal, pemilik dan izin, disk, detail media |
 | GET | `/api/files/search` · `/api/files/tree` | Cari isi file / daftar file (Go to File) |
 | POST | `/api/files/upload` | Upload (multipart) |
 | GET · POST · DELETE | `/api/wallpapers[/{name}]`, POST `/api/wallpapers/from-file` | Wallpaper |
@@ -174,3 +212,4 @@ Semua endpoint (kecuali login) butuh session cookie. Respons berupa JSON, dan er
 | Path | Fungsi |
 |---|---|
 | `/ws/terminal` | PTY. Binary frame = input/output terminal; text frame = JSON kontrol (`{"type":"resize","cols":80,"rows":24}`). |
+| `/ws/remote/{id}` | Layar perangkat (subprotocol `guacamole`). Server membuka sesi VNC/RDP di `guacd` dengan password tersimpan, lalu meneruskan instruksi Guacamole utuh dua arah; ping tunnel dijawab server. |

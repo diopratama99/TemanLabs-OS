@@ -18,6 +18,15 @@ import (
 // Client → server: binary frames are keystrokes; text frames are JSON control messages
 // ({"type":"resize","cols":80,"rows":24}). Server → client: binary frames of terminal output.
 func (s *server) handleTerminal(w http.ResponseWriter, r *http.Request) {
+	cmd, attrs := s.shellCommand()
+	s.servePTY(w, r, cmd, attrs)
+}
+
+// servePTY runs cmd in a PTY sized from the cols/rows query and bridges it to a WebSocket.
+func (s *server) servePTY(w http.ResponseWriter, r *http.Request, cmd *exec.Cmd, attrs *syscall.SysProcAttr) {
+	if attrs == nil {
+		attrs = &syscall.SysProcAttr{Setsid: true, Setctty: true}
+	}
 	// websocket.Accept rejects cross-origin upgrades by default (Origin must match Host).
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
@@ -31,7 +40,6 @@ func (s *server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 		cols, rows = 80, 24
 	}
 
-	cmd, attrs := s.shellCommand()
 	tty, err := pty.StartWithAttrs(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}, attrs)
 	if err != nil {
 		conn.Close(websocket.StatusInternalError, "could not start shell: "+err.Error())

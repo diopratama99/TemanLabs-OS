@@ -25,6 +25,16 @@ type server struct {
 	frames   *frameProxies
 	native   *nativeApps
 	thumbs   *thumbnailer
+	updates  *updateChecker
+	stores   *appStores
+	usb      *usbMounter
+	cloud    *cloudDrives
+	convert  *converter
+	commands *commandStore
+	playback *playbackStore
+	devices  *deviceStore
+	remote   *remoteEngine
+	logins   *appLogins
 	owner    *owner
 }
 
@@ -71,7 +81,7 @@ func newServer(cfg *Config) (*server, error) {
 	docker := newDockerClient()
 	s := &server{
 		cfg:      cfg,
-		sessions: newSessions(),
+		sessions: newSessions(cfg.StateDir),
 		limiter:  newLoginLimiter(),
 		stats:    newStatsSampler(),
 		docker:   docker,
@@ -82,6 +92,16 @@ func newServer(cfg *Config) (*server, error) {
 	s.thumbs = newThumbnailer(cfg.StateDir)
 	s.store.native = s.native
 	s.monitor = newContainerMonitor(docker)
+	s.updates = newUpdateChecker(docker)
+	s.stores = newAppStores(cfg.StateDir)
+	s.usb = newUSBMounter(cfg.StateDir, o)
+	s.cloud = newCloudDrives(cfg.StateDir, o)
+	s.convert = newConverter(cfg.StateDir, s.chown)
+	s.commands = newCommandStore(cfg.StateDir)
+	s.playback = newPlaybackStore(cfg.StateDir)
+	s.devices = newDeviceStore(cfg.StateDir)
+	s.remote = newRemoteEngine(docker)
+	s.logins = newAppLogins(cfg.StateDir)
 	s.frames = newFrameProxies(s)
 	go s.stats.run()
 	return s, nil
@@ -93,6 +113,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/me", s.handleMe)
+	// The lock screen shows the wallpaper before anyone signs in. Names are random (64 bits) and
+	// listing, uploading and deleting them still need a session.
+	mux.HandleFunc("GET /api/wallpapers/{name}", s.handleGetWallpaper)
 
 	api := http.NewServeMux()
 	api.HandleFunc("POST /api/password", s.handleChangePassword)
@@ -103,7 +126,16 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("POST /api/apps/{id}/install", s.handleInstall)
 	api.HandleFunc("POST /api/apps/{id}/start", s.handleStart)
 	api.HandleFunc("POST /api/apps/{id}/stop", s.handleStop)
-	api.HandleFunc("DELETE /api/apps/{id}", s.handleUninstall)
+	api.HandleFunc("DELETE /api/apps/{id}", s.handleUninstallApp)
+	api.HandleFunc("GET /api/apps/updates", s.handleAppUpdates)
+	api.HandleFunc("GET /api/appstore", s.handleAppStore)
+	api.HandleFunc("GET /api/appstore/apps/{id}", s.handleStoreApp)
+	api.HandleFunc("POST /api/appstore/apps/{id}/install", s.handleInstallStoreApp)
+	api.HandleFunc("POST /api/appstore/refresh", s.handleRefreshStores)
+	api.HandleFunc("PUT /api/appstore/sources", s.handleSetStores)
+	api.HandleFunc("GET /api/apps/{id}/config", s.handleAppConfig)
+	api.HandleFunc("PUT /api/apps/{id}/config", s.handleSaveAppConfig)
+	api.HandleFunc("POST /api/apps/{id}/update", s.handleUpdateApp)
 	api.HandleFunc("GET /api/apps/{id}/frame", s.handleAppFrame)
 	api.HandleFunc("GET /api/apps/{id}/icon", s.handleAppIcon)
 	api.HandleFunc("GET /api/services", s.handleServices)
@@ -127,6 +159,42 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/logs", s.handleLogs)
 	api.HandleFunc("GET /api/disks", s.handleDisks)
 	api.HandleFunc("POST /api/disks/mount", s.handleMount)
+	api.HandleFunc("POST /api/disks/automount", s.handleAutomount)
+	api.HandleFunc("POST /api/disks/format", s.handleFormat)
+	api.HandleFunc("POST /api/disks/eject", s.handleEject)
+	api.HandleFunc("GET /api/storage", s.handleStorage)
+	api.HandleFunc("POST /api/storage/merge", s.handleMerge)
+	api.HandleFunc("DELETE /api/storage/merge/{name}", s.handleUnmerge)
+	api.HandleFunc("POST /api/storage/mergerfs", s.handleInstallMergerfs)
+	api.HandleFunc("PUT /api/storage/usb", s.handleUSBSetting)
+	api.HandleFunc("GET /api/cloud", s.handleCloud)
+	api.HandleFunc("GET /api/system/release", s.handleReleaseStatus)
+	api.HandleFunc("POST /api/system/release/install", s.handleSelfUpdate)
+	api.HandleFunc("POST /api/cloud", s.handleAddCloud)
+	api.HandleFunc("POST /api/cloud/auth", s.handleCloudAuth)
+	api.HandleFunc("POST /api/cloud/{name}/{action}", s.handleCloudAction)
+	api.HandleFunc("DELETE /api/cloud/{name}", s.handleRemoveCloud)
+	api.HandleFunc("GET /api/convert", s.handleConvert)
+	api.HandleFunc("GET /api/convert/probe", s.handleConvertProbe)
+	api.HandleFunc("POST /api/convert", s.handleConvertStart)
+	api.HandleFunc("DELETE /api/convert/tasks", s.handleConvertClear)
+	api.HandleFunc("DELETE /api/convert/tasks/{id}", s.handleConvertCancel)
+	api.HandleFunc("POST /api/convert/ffmpeg", s.handleInstallFFmpeg)
+	api.HandleFunc("GET /api/commands", s.handleCommands)
+	api.HandleFunc("GET /api/media/position", s.handleGetPosition)
+	api.HandleFunc("PUT /api/media/position", s.handleSetPosition)
+	api.HandleFunc("PUT /api/apps/{id}/signin", s.handleAppSignIn)
+	api.HandleFunc("DELETE /api/apps/{id}/signin", s.handleAppSignOut)
+	api.HandleFunc("GET /api/devices", s.handleListDevices)
+	api.HandleFunc("POST /api/devices", s.handleCreateDevice)
+	api.HandleFunc("GET /api/devices/status", s.handleDeviceStatus)
+	api.HandleFunc("GET /api/devices/discover", s.handleDiscover)
+	api.HandleFunc("GET /api/devices/mac", s.handleLookupMAC)
+	api.HandleFunc("POST /api/devices/engine", s.handleInstallRemote)
+	api.HandleFunc("PUT /api/devices/{id}", s.handleUpdateDevice)
+	api.HandleFunc("DELETE /api/devices/{id}", s.handleDeleteDevice)
+	api.HandleFunc("POST /api/devices/{id}/wake", s.handleWakeDevice)
+	api.HandleFunc("PUT /api/commands/book", s.handleSaveCommands)
 	api.HandleFunc("GET /api/disks/usage", s.handleUsage)
 	api.HandleFunc("GET /api/network/interfaces", s.handleInterfaces)
 	api.HandleFunc("POST /api/network/tool", s.handleNetTool)
@@ -156,7 +224,6 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/wallpapers", s.handleListWallpapers)
 	api.HandleFunc("POST /api/wallpapers", s.handleUploadWallpaper)
 	api.HandleFunc("POST /api/wallpapers/from-file", s.handleWallpaperFromFile)
-	api.HandleFunc("GET /api/wallpapers/{name}", s.handleGetWallpaper)
 	api.HandleFunc("DELETE /api/wallpapers/{name}", s.handleDeleteWallpaper)
 	api.HandleFunc("POST /api/containers/{id}/{action}", s.handleContainerAction)
 	api.HandleFunc("GET /api/containers/{id}/logs", s.handleContainerLogs)
@@ -169,11 +236,14 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/files/content", s.handleReadFile)
 	api.HandleFunc("GET /api/files/raw", s.handleRawFile)
 	api.HandleFunc("GET /api/files/thumb", s.handleThumb)
+	api.HandleFunc("GET /api/files/info", s.handleFileInfo)
 	api.HandleFunc("PUT /api/files/content", s.handleWriteFile)
 	api.HandleFunc("GET /api/files/search", s.handleSearch)
 	api.HandleFunc("GET /api/files/tree", s.handleTree)
 	api.HandleFunc("POST /api/files/upload", s.handleUpload)
 	api.HandleFunc("GET /ws/terminal", s.handleTerminal)
+	api.HandleFunc("GET /ws/apps/{id}/terminal", s.handleAppTerminal)
+	api.HandleFunc("GET /ws/remote/{id}", s.handleRemoteTunnel)
 
 	mux.Handle("/api/", s.requireAuth(api))
 	mux.Handle("/ws/", s.requireAuth(api))

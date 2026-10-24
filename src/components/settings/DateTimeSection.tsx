@@ -3,6 +3,7 @@ import { Clock, Server } from 'lucide-react'
 import { api } from '../../api'
 import type { TimeInfo } from '../../api/types'
 import { Switch } from '../Switch'
+import { tr } from '../../lib/i18n'
 
 /** Date & Time plus the server's name: timedatectl and hostnamectl without a terminal. */
 export function DateTimeSection() {
@@ -45,12 +46,12 @@ export function DateTimeSection() {
       <div className="group">
         <div className="row">
           <span>
-            <Clock size={13} /> Server time
+            <Clock size={13} /> {tr('Server time')}
           </span>
           <span className="row-value">{serverTime}</span>
         </div>
         <div className="row">
-          <span>Time zone</span>
+          <span>{tr('Time zone')}</span>
           <select
             className="ug-input"
             value={info?.timezone ?? ''}
@@ -65,15 +66,15 @@ export function DateTimeSection() {
         </div>
         <div className="row">
           <span>
-            Set time automatically
-            <small className="row-hint">{info?.synced ? 'In sync with internet time servers' : 'Not synchronized yet'}</small>
+            {tr('Set time automatically')}
+            <small className="row-hint">{info?.synced ? tr('In sync with internet time servers') : tr('Not synchronized yet')}</small>
           </span>
           <Switch checked={!!info?.ntp} onChange={ntp => void apply({ ntp }, ntp ? 'Automatic time is on.' : 'Automatic time is off.')} label="NTP" />
         </div>
       </div>
-      <p className="pane-note">Scheduled tasks and log times use the server’s time zone.</p>
+      <p className="pane-note">{tr('Scheduled tasks and log times use the server’s time zone.')}</p>
 
-      <h4 className="du-heading">Server name</h4>
+      <h4 className="du-heading">{tr('Server name')}</h4>
       <form
         className="group ug-password"
         onSubmit={e => {
@@ -84,7 +85,7 @@ export function DateTimeSection() {
         <Server size={14} />
         <input value={hostname} onChange={e => setHostname(e.target.value)} spellCheck={false} />
         <button className="btn" disabled={!hostname || hostname === info?.hostname}>
-          Rename
+          {tr('Rename')}
         </button>
       </form>
       {message && <p className={message.ok ? 'form-ok' : 'form-error'}>{message.text}</p>}

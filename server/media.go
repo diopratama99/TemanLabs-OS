@@ -57,6 +57,8 @@ func (s *server) handleRawFile(w http.ResponseWriter, r *http.Request) {
 // Formats the system MIME database often lacks.
 var mediaTypes = map[string]string{
 	".mkv":  "video/x-matroska",
+	".m2ts": "video/mp2t",
+	".mts":  "video/mp2t",
 	".mov":  "video/quicktime",
 	".m4v":  "video/mp4",
 	".flac": "audio/flac",

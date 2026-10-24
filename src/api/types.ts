@@ -52,6 +52,8 @@ export interface Disk {
   mount: string
   used: number
   total: number
+  /** A cloud drive (rclone); widgets leave it out. */
+  cloud?: boolean
 }
 
 export interface NetworkAddresses {
@@ -71,6 +73,10 @@ export interface SystemStats {
   disks: Disk[]
   network: { rx: number; tx: number }
   addresses: NetworkAddresses
+  /** Power draw, when something measures it: a laptop battery, or the processor's own counters (CPU and RAM only). */
+  power?: { watts: number; source: 'cpu' | 'battery'; parts?: { name: string; watts: number }[] }
+  /** Load averages over 1, 5 and 15 minutes. */
+  load?: [number, number, number]
 }
 
 export type FileKind = 'folder' | 'image' | 'video' | 'audio' | 'document' | 'archive' | 'code'
@@ -123,6 +129,12 @@ export interface ContainerInfo {
 export interface AppFrame {
   proxied: boolean
   port?: number
+  /** The app asks for an HTTP Basic login, which the window collects and the proxy sends. */
+  auth?: 'basic'
+  /** A saved sign-in that the app accepts. */
+  signedIn?: boolean
+  /** The saved (or last used) user name. */
+  username?: string
 }
 
 export interface Session {
@@ -178,6 +190,8 @@ export interface ListenPort {
 export interface WallpaperImage {
   name: string
   url: string
+  /** A small copy for the picker (falls back to url). */
+  thumb?: string
 }
 
 /** A systemd service. */
@@ -334,6 +348,8 @@ export interface BlockDevice {
   fsavail?: number
   children?: BlockDevice[]
   smart?: SmartInfo
+  /** Where /etc/fstab mounts it at startup. */
+  startup?: string
 }
 
 export interface DiskUsage {
@@ -524,4 +540,356 @@ export interface K8sActionRequest {
   container?: string
   image?: string
   yaml?: string
+}
+
+/** A container belonging to an installed app. */
+export interface AppContainer {
+  id: string
+  name: string
+  service?: string
+  state: string
+  image: string
+}
+
+/** An app's settings as App Settings edits them: its compose file and the main service as a form. */
+export interface AppConfig {
+  source: AppSource
+  /** Whether there is a compose file to edit; reason says why not. */
+  editable: boolean
+  reason?: string
+  canUpdate: boolean
+  file?: string
+  extraFiles?: string[]
+  yaml?: string
+  service?: string
+  services?: string[]
+  /** The edited service as the Manual Install form (arrays may be null). */
+  spec?: CustomAppSpec
+  containers: AppContainer[]
+  /** Folders under /DATA/AppData that "delete app data" removes. */
+  dataDirs: string[]
+}
+
+export interface ImageUpdate {
+  image: string
+  available: boolean
+  /** Built on the server or not in a public registry: nothing to compare with. */
+  local?: boolean
+  error?: string
+  checked: string
+}
+
+export interface AppUpdates {
+  checking: boolean
+  checked: string
+  apps: Record<string, { available: boolean; images: ImageUpdate[] }>
+}
+
+/** A CasaOS-format app store TemanLabsOS downloads (a zip of Apps/<name>/docker-compose.yml). */
+export interface StoreSource {
+  id: string
+  name: string
+  url: string
+  apps: number
+  updated?: string
+  error?: string
+}
+
+/** An app in the App Center: from a store, or one of TemanLabsOS's built-in picks (source "TemanLabsOS"). */
+export interface StoreEntry {
+  id: string
+  name: string
+  tagline: string
+  category: string
+  iconUrl: string
+  developer?: string
+  source: string
+  port?: number
+  /** Installed app running this (by store ID or image). */
+  installedAs?: string
+}
+
+export interface StoreListing {
+  syncing: boolean
+  sources: StoreSource[]
+  apps: StoreEntry[]
+}
+
+/** A store app ready to install: its compose file with $AppID, $PUID… filled in, and the form. */
+export interface StoreAppDetails extends StoreEntry {
+  description: string
+  screenshots: string[] | null
+  tips?: string
+  /** Who packaged it for the store. */
+  author?: string
+  /** Processors it runs on (amd64, arm64…), when the store says. */
+  architectures?: string[]
+  yaml: string
+  service: string
+  services: string[]
+  spec: CustomAppSpec
+  /** The app ID it will install as (folders under /DATA/AppData use it). */
+  appId: string
+}
+
+/** Drives merged into one folder with mergerfs. */
+export interface MergedStorage {
+  name: string
+  target: string
+  branches: string[]
+  mounted: boolean
+  size: number
+  free: number
+}
+
+export interface StorageInfo {
+  fstab: { source: string; target: string; fstype: string; options: string; managed: boolean }[]
+  merged: MergedStorage[]
+  /** Whether mergerfs is installed. */
+  mergerfs: boolean
+  usbAutomount: boolean
+  /** Filesystems Format can create on this server. */
+  filesystems: string[]
+}
+
+export type FormatFS = 'ext4' | 'xfs' | 'btrfs' | 'exfat' | 'ntfs'
+
+export interface CloudProvider {
+  type: string
+  name: string
+  /** Signs in through the provider's page (Google Drive, Dropbox, OneDrive). */
+  oauth?: boolean
+  fields?: { key: string; label: string; placeholder?: string; secret?: boolean; optional?: boolean }[]
+}
+
+export interface CloudRemote {
+  name: string
+  type: string
+  mount: string
+  mounted: boolean
+  service: string
+  error?: string
+}
+
+export interface CloudInfo {
+  rclone: boolean
+  providers: CloudProvider[]
+  remotes: CloudRemote[]
+}
+
+/** TemanLabsOS's own version and the newest GitHub release. */
+export interface ReleaseStatus {
+  current: string
+  latest?: string
+  available: boolean
+  notes?: string
+  url?: string
+  published?: string
+  checked?: string
+  error?: string
+  arch: string
+}
+
+// ----- Remux (ffmpeg) -----
+
+export type ConvertContainer = 'mp4' | 'mkv' | 'webm' | 'mov' | 'ts' | 'mp3' | 'm4a' | 'flac' | 'opus' | 'wav'
+export type ConvertVideo = 'copy' | 'h264' | 'hevc' | 'vp9' | 'av1'
+export type ConvertAudio = 'copy' | 'aac' | 'opus' | 'mp3' | 'flac' | 'pcm' | 'none'
+export type ConvertQuality = 'high' | 'medium' | 'small'
+
+export interface ProbeStream {
+  index: number
+  type: 'video' | 'audio' | 'subtitle' | 'attachment' | 'data'
+  codec: string
+  width?: number
+  height?: number
+  fps?: number
+  hdr?: boolean
+  channels?: number
+  language?: string
+  title?: string
+  /** A cover picture, not part of the film. */
+  cover?: boolean
+  bitrate?: number
+}
+
+export interface MediaProbe {
+  path: string
+  /** ffmpeg's name for the container ("matroska,webm", "mov,mp4,m4a,3gp,3g2,mj2"). */
+  container: string
+  duration: number
+  size: number
+  bitrate?: number
+  streams: ProbeStream[]
+  /** Per result format: why its video or sound can't be copied in as it is (unset when it can). */
+  remux: Record<ConvertContainer, { video?: string; audio?: string }>
+}
+
+export interface ConvertRequest {
+  path: string
+  container: ConvertContainer
+  video: ConvertVideo
+  audio: ConvertAudio
+  quality: ConvertQuality
+  /** Shrink to this height; 0 keeps the size. */
+  height: number
+  subtitles: boolean
+  /** The result's file name, in the same folder; optional. */
+  name?: string
+}
+
+export interface ConvertTask {
+  id: string
+  input: string
+  output: string
+  container: ConvertContainer
+  video?: ConvertVideo
+  audio: ConvertAudio
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+  progress: number
+  /** × real time. */
+  speed?: number
+  /** MP4/MOV's last pass (moving the index to the front of the file), and how far it is. */
+  final?: boolean
+  finishing?: number
+  error?: string
+  size?: number
+  /** Of the input, in seconds. */
+  duration: number
+  created: string
+  started?: string
+  ended?: string
+}
+
+export interface ConvertInfo {
+  ffmpeg: boolean
+  version?: string
+  /** Codecs this server's ffmpeg can make (h264, hevc, vp9, av1, aac, opus, mp3, flac, pcm). */
+  encoders: string[]
+  tasks: ConvertTask[]
+}
+
+// ----- Commands (command book) -----
+
+export interface CommandApp {
+  id: string
+  name: string
+  containers?: string[]
+  /** Compose apps: the project, its folder and compose files. */
+  project?: string
+  dir?: string
+  files?: string[]
+  /** Native apps: the systemd service that runs it. */
+  unit?: string
+}
+
+/** A command the user saved themselves. */
+export interface SavedCommand {
+  id: string
+  title: string
+  command: string
+  note?: string
+  keywords?: string
+}
+
+export interface CommandBook {
+  custom: SavedCommand[]
+  /** Ids of starred commands (library, app and saved ones alike). */
+  favorites: string[]
+}
+
+export interface CommandsInfo {
+  /** Which of the asked-for programs are installed. */
+  tools: Record<string, boolean>
+  apps: CommandApp[]
+  book: CommandBook
+  /** The shell history of the TemanLabsOS user, newest first. */
+  history: string[]
+  user: string
+  /** The user is in the docker group, so docker needs no sudo. */
+  dockerGroup: boolean
+}
+
+/** Get Info: everything about one file or folder. */
+export interface FileDetails {
+  name: string
+  path: string
+  kind: FileKind
+  folder: boolean
+  size: number
+  /** Folders: entries directly inside, and everything inside added up (partial: it took too long). */
+  items?: number
+  total?: number
+  files?: number
+  partial?: boolean
+  modified: string
+  accessed?: string
+  changed?: string
+  /** Not every filesystem records it. */
+  created?: string
+  /** e.g. -rw-r--r-- (the last nine characters are the permissions). */
+  mode: string
+  octal: string
+  owner: string
+  group: string
+  uid: number
+  gid: number
+  /** A symlink's target. */
+  link?: string
+  mime?: string
+  hidden?: boolean
+  volume?: { mount: string; fstype: string; size: number; free: number }
+  media?: { width?: number; height?: number; duration?: number; video?: string; audio?: string; fps?: number; bitrate?: number; channels?: number }
+}
+
+// ----- Devices (Wake-on-LAN and remote screens) -----
+
+export type DeviceKind = 'windows' | 'mac' | 'linux' | 'other'
+/** How its screen is shown: VNC, RDP, or not at all (wake only). */
+export type ScreenProtocol = 'vnc' | 'rdp' | ''
+
+export interface Device {
+  id: string
+  name: string
+  kind: DeviceKind
+  /** IP address or host name. */
+  host: string
+  /** For Wake-on-LAN; empty when not set. */
+  mac: string
+  protocol: ScreenProtocol
+  port: number
+  username: string
+  /** Whether a password is saved (it never leaves the server). */
+  hasPassword: boolean
+}
+
+/** A device to save; leaving out password keeps the saved one. */
+export type DeviceInput = Omit<Device, 'id' | 'hasPassword'> & { password?: string }
+
+export interface DeviceStatus {
+  online: boolean
+  /** Its screen-sharing port answers. */
+  screen: boolean
+  latency?: number
+}
+
+/** The remote desktop engine (a container on the server). */
+export interface RemoteEngine {
+  docker: boolean
+  installed: boolean
+  running: boolean
+  installing: boolean
+  step?: string
+  error?: string
+}
+
+/** A computer found on the local network. */
+export interface FoundDevice {
+  ip: string
+  mac: string
+  name?: string
+  kind: DeviceKind
+  ports: number[] | null
+  self?: boolean
+  router?: boolean
 }

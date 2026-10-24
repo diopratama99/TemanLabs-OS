@@ -6,6 +6,7 @@ import { useClock } from '../hooks/useClock'
 import { Glass } from './Glass'
 import { Wallpaper } from './Wallpaper'
 import { LogoTile } from './Logo'
+import { tr } from '../lib/i18n'
 
 interface Props {
   hostname: string
@@ -27,7 +28,7 @@ export function Login({ hostname, onSignedIn }: Props) {
     try {
       onSignedIn(await api.login(password))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in.')
+      setError(err instanceof Error ? err.message : tr('Could not sign in.'))
       setPassword('')
     } finally {
       setPending(false)
@@ -43,24 +44,24 @@ export function Login({ hostname, onSignedIn }: Props) {
       </div>
       <form className="login-form" onSubmit={submit}>
         <LogoTile size={72} />
-        <strong className="login-host">{hostname || 'TemanLabsOS'}</strong>
+        <strong className="login-host">{hostname || tr('TemanLabsOS')}</strong>
         <Glass radius={20} bezel={12} depth={12} blur={16} className={`login-field ${error ? 'has-error' : ''}`}>
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="Enter Password"
-            aria-label="Password"
+            placeholder={tr('Enter Password')}
+            aria-label={tr('Password')}
             autoComplete="current-password"
             autoFocus
             disabled={pending}
           />
-          <button type="submit" aria-label="Sign in" disabled={!password || pending}>
+          <button type="submit" aria-label={tr('Sign in')} disabled={!password || pending}>
             {pending ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}
           </button>
         </Glass>
         <span className="login-message" role="alert">
-          {error ?? 'TemanLabsOS'}
+          {error ?? tr('TemanLabsOS')}
         </span>
       </form>
     </div>

@@ -2,10 +2,13 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -18,12 +21,47 @@ const (
 	loginWindow      = 10 * time.Minute
 )
 
+// sessions are kept in memory and in <stateDir>/sessions.json, so a restart (an update, a
+// deploy) doesn't sign anyone out. The file holds SHA-256 hashes of the tokens, never the tokens.
 type sessions struct {
 	mu     sync.Mutex
-	expiry map[string]time.Time
+	expiry map[string]time.Time // by token hash
+	path   string
 }
 
-func newSessions() *sessions { return &sessions{expiry: map[string]time.Time{}} }
+func newSessions(stateDir string) *sessions {
+	s := &sessions{expiry: map[string]time.Time{}}
+	if stateDir != "" {
+		s.path = filepath.Join(stateDir, "sessions.json")
+		if data, err := os.ReadFile(s.path); err == nil {
+			_ = json.Unmarshal(data, &s.expiry)
+		}
+	}
+	return s
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// save writes the sessions out; callers hold s.mu.
+func (s *sessions) save() {
+	if s.path == "" {
+		return
+	}
+	now := time.Now()
+	for h, exp := range s.expiry {
+		if now.After(exp) {
+			delete(s.expiry, h)
+		}
+	}
+	data, _ := json.Marshal(s.expiry)
+	tmp := s.path + ".tmp"
+	if os.WriteFile(tmp, data, 0o600) == nil {
+		_ = os.Rename(tmp, s.path)
+	}
+}
 
 func (s *sessions) create() string {
 	b := make([]byte, 32)
@@ -31,16 +69,22 @@ func (s *sessions) create() string {
 	token := hex.EncodeToString(b)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.expiry[token] = time.Now().Add(sessionTTL)
+	s.expiry[hashToken(token)] = time.Now().Add(sessionTTL)
+	s.save()
 	return token
 }
 
 func (s *sessions) valid(token string) bool {
+	if token == "" {
+		return false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	exp, ok := s.expiry[token]
+	h := hashToken(token)
+	exp, ok := s.expiry[h]
 	if ok && time.Now().After(exp) {
-		delete(s.expiry, token)
+		delete(s.expiry, h)
+		s.save()
 		return false
 	}
 	return ok
@@ -49,18 +93,21 @@ func (s *sessions) valid(token string) bool {
 func (s *sessions) delete(token string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.expiry, token)
+	delete(s.expiry, hashToken(token))
+	s.save()
 }
 
 // deleteOthers signs out every session except keep (after a password change).
 func (s *sessions) deleteOthers(keep string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for token := range s.expiry {
-		if token != keep {
-			delete(s.expiry, token)
+	k := hashToken(keep)
+	for h := range s.expiry {
+		if h != k {
+			delete(s.expiry, h)
 		}
 	}
+	s.save()
 }
 
 type loginLimiter struct {

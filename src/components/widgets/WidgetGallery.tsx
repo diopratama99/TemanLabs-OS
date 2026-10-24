@@ -3,6 +3,7 @@ import { Plus, RotateCcw } from 'lucide-react'
 import { useWidgets } from '../../hooks/useWidgets'
 import { WIDGET_INFO, WIDGET_TYPES } from '../../lib/widgets'
 import { Glass } from '../Glass'
+import { tr } from '../../lib/i18n'
 
 /** Shown while editing the widget layout: add widgets, reset, or finish. */
 export function WidgetGallery({ onDone }: { onDone: () => void }) {
@@ -15,19 +16,19 @@ export function WidgetGallery({ onDone }: { onDone: () => void }) {
       blur={22}
       className="widget-gallery tint-panel"
       role="dialog"
-      aria-label="Widget gallery"
+      aria-label={tr('Widget gallery')}
       onContextMenu={e => e.preventDefault()}
     >
       <div className="wg-head">
         <div>
-          <strong>Widgets</strong>
-          <small>Add widgets below. Drag widgets on the desktop to rearrange them, or press − to remove.</small>
+          <strong>{tr('Widgets')}</strong>
+          <small>{tr('Add widgets below. Drag widgets on the desktop to rearrange them, or press − to remove.')}</small>
         </div>
         <button className="btn" onClick={reset}>
-          <RotateCcw size={13} /> Reset
+          <RotateCcw size={13} /> {tr('Reset')}
         </button>
         <button className="btn btn-primary" onClick={onDone}>
-          Done
+          {tr('Done')}
         </button>
       </div>
       <div className="wg-list">
@@ -44,11 +45,11 @@ export function WidgetGallery({ onDone }: { onDone: () => void }) {
                 <small>{info.description}</small>
               </div>
               <div className="wg-add">
-                <button className="pill-btn" onClick={() => add(type, 'small')} aria-label={`Add small ${info.name} widget`}>
-                  <Plus size={12} /> Small
+                <button className="pill-btn" onClick={() => add(type, 'small')} aria-label={tr('Add small {0} widget', info.name)}>
+                  <Plus size={12} /> {tr('Small')}
                 </button>
-                <button className="pill-btn" onClick={() => add(type, 'medium')} aria-label={`Add medium ${info.name} widget`}>
-                  <Plus size={12} /> Medium
+                <button className="pill-btn" onClick={() => add(type, 'medium')} aria-label={tr('Add medium {0} widget', info.name)}>
+                  <Plus size={12} /> {tr('Medium')}
                 </button>
               </div>
             </div>

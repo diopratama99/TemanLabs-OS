@@ -6,20 +6,21 @@ import { useAppMenus } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { WindowToolbar, ToolbarTitle } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 const VIEWS: { id: LogView; label: string; icon: LucideIcon }[] = [
-  { id: 'all', label: 'All Messages', icon: List },
-  { id: 'errors', label: 'Errors', icon: AlertOctagon },
-  { id: 'warnings', label: 'Warnings & Errors', icon: CircleAlert },
-  { id: 'kernel', label: 'Kernel', icon: Cpu },
-  { id: 'auth', label: 'Logins & sudo', icon: KeyRound },
+  { id: 'all', label: tr('All Messages'), icon: List },
+  { id: 'errors', label: tr('Errors'), icon: AlertOctagon },
+  { id: 'warnings', label: tr('Warnings & Errors'), icon: CircleAlert },
+  { id: 'kernel', label: tr('Kernel'), icon: Cpu },
+  { id: 'auth', label: tr('Logins & sudo'), icon: KeyRound },
 ]
 
 const RANGES = [
-  { id: '', label: 'Latest' },
-  { id: '1 hour ago', label: 'Last hour' },
-  { id: 'today', label: 'Today' },
-  { id: 'boot', label: 'Since restart' },
+  { id: '', label: tr('Latest') },
+  { id: '1 hour ago', label: tr('Last hour') },
+  { id: 'today', label: tr('Today') },
+  { id: 'boot', label: tr('Since restart') },
 ]
 
 const LIVE_MS = 2000
@@ -94,13 +95,13 @@ export function LogViewer() {
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
         ...VIEWS.map(v => ({ label: v.label, icon: v.icon, checked: view === v.id, onSelect: () => setView(v.id) })),
         'separator',
-        { label: live ? 'Pause Live Updates' : 'Resume Live Updates', icon: live ? Pause : Play, onSelect: () => setLive(l => !l) },
-        { label: 'Reload', icon: RotateCw, onSelect: () => void load() },
-        { label: 'Clear', icon: Trash2, onSelect: () => setEntries([]) },
+        { label: live ? tr('Pause Live Updates') : tr('Resume Live Updates'), icon: live ? Pause : Play, onSelect: () => setLive(l => !l) },
+        { label: tr('Reload'), icon: RotateCw, onSelect: () => void load() },
+        { label: tr('Clear'), icon: Trash2, onSelect: () => setEntries([]) },
       ],
     },
   ])
@@ -111,7 +112,7 @@ export function LogViewer() {
   return (
     <div className="split">
       <aside className="sidebar">
-        <div className="sidebar-group">Reports</div>
+        <div className="sidebar-group">{tr('Reports')}</div>
         {VIEWS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -125,14 +126,14 @@ export function LogViewer() {
             <Icon size={15} /> {label}
           </button>
         ))}
-        <div className="sidebar-group">Service</div>
+        <div className="sidebar-group">{tr('Service')}</div>
         <label className="sidebar-search">
           <input
             value={unitDraft}
             onChange={e => setUnitDraft(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && setUnit(unitDraft.trim())}
             onBlur={() => setUnit(unitDraft.trim())}
-            placeholder="e.g. docker.service ⏎"
+            placeholder={tr('e.g. docker.service ⏎')}
             spellCheck={false}
           />
         </label>
@@ -140,7 +141,7 @@ export function LogViewer() {
 
       <div className="cn">
         <WindowToolbar>
-          <ToolbarTitle title="Log Viewer" subtitle={unit || VIEWS.find(v => v.id === view)?.label} />
+          <ToolbarTitle title={tr('Log Viewer')} subtitle={unit || VIEWS.find(v => v.id === view)?.label} />
           <span className="tb-spacer" />
           <div className="tb-segmented">
             {RANGES.map(r => (
@@ -150,23 +151,23 @@ export function LogViewer() {
             ))}
           </div>
           <div className="tb-group">
-            <button className={`tb-btn ${live ? 'is-on' : ''}`} onClick={() => setLive(l => !l)} aria-label={live ? 'Pause' : 'Live'} title={live ? 'Pause live updates' : 'Live updates'}>
+            <button className={`tb-btn ${live ? 'is-on' : ''}`} onClick={() => setLive(l => !l)} aria-label={live ? tr('Pause') : tr('Live')} title={live ? tr('Pause live updates') : tr('Live updates')}>
               {live ? <Pause size={15} /> : <Play size={15} />}
             </button>
-            <button className="tb-btn" onClick={() => void load()} aria-label="Reload" title="Reload">
+            <button className="tb-btn" onClick={() => void load()} aria-label={tr('Reload')} title={tr('Reload')}>
               <RotateCw size={14} className={loading ? 'spin' : ''} />
             </button>
           </div>
           <label className="tb-search">
             <Search size={13} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search messages" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Search messages')} />
           </label>
         </WindowToolbar>
 
         <div className="cn-head">
-          <span>Time</span>
-          <span>Process</span>
-          <span>Message</span>
+          <span>{tr('Time')}</span>
+          <span>{tr('Process')}</span>
+          <span>{tr('Message')}</span>
         </div>
         <div
           className="cn-list"
@@ -177,7 +178,7 @@ export function LogViewer() {
           }}
         >
           {error && <p className="am-empty form-error">{error}</p>}
-          {!error && entries.length === 0 && <p className="am-empty">{loading ? 'Reading the log…' : 'No messages.'}</p>}
+          {!error && entries.length === 0 && <p className="am-empty">{loading ? tr('Reading the log…') : tr('No messages.')}</p>}
           {entries.map((e, i) => (
             <div
               key={`${e.time}-${i}`}
@@ -186,12 +187,12 @@ export function LogViewer() {
               onContextMenu={ev => {
                 setSelected(i)
                 show(ev, [
-                  { label: 'Copy Message', icon: Copy, onSelect: () => void copyText(e.message) },
-                  { label: 'Copy Line', icon: Copy, onSelect: () => void copyText(`${time(e.time)} ${e.source}: ${e.message}`) },
+                  { label: tr('Copy Message'), icon: Copy, onSelect: () => void copyText(e.message) },
+                  { label: tr('Copy Line'), icon: Copy, onSelect: () => void copyText(`${time(e.time)} ${e.source}: ${e.message}`) },
                   ...(e.unit
                     ? [
                         {
-                          label: `Show only ${e.unit}`,
+                          label: tr('Show only {0}', e.unit),
                           icon: List,
                           onSelect: () => {
                             setUnit(e.unit!)
@@ -221,8 +222,8 @@ export function LogViewer() {
             </>
           ) : (
             <span>
-              {entries.length} messages{errors ? ` · ${errors} errors` : ''}
-              {live ? ' · live' : ''}
+              {entries.length} {tr('messages')}{errors ? tr(' · {0} errors', errors) : ''}
+              {live ? tr(' · live') : ''}
             </span>
           )}
         </div>

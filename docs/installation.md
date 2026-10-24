@@ -34,7 +34,30 @@ Panduan memasang TemanLabsOS di server, mengubah konfigurasi, menjalankan versi 
 
 ## Instalasi di server
 
-### 1. Build
+### Cara cepat (satu perintah)
+
+```bash
+curl -fsSL https://github.com/diopratama99/TemanLabs-OS/releases/latest/download/install.sh | sudo bash
+```
+
+Script ini:
+- mendeteksi arsitektur server (amd64 / arm64),
+- memasang Docker lewat get.docker.com kalau belum ada (lewati dengan `TEMANLABS_SKIP_DOCKER=1`),
+- mengunduh binary dari GitHub Releases dan mencocokkannya dengan `SHA256SUMS`,
+- menjalankan installer service (sama dengan cara manual di bawah).
+
+Opsi lewat variabel lingkungan, misalnya `curl … | sudo TEMANLABS_VERSION=v1.0.0 bash`:
+
+| Variabel | Arti |
+|---|---|
+| `TEMANLABS_VERSION` | Pasang rilis tertentu, bukan yang terbaru |
+| `TEMANLABS_USER` | User Linux untuk Terminal dan pemilik file baru (bawaan: user yang memakai sudo) |
+| `TEMANLABS_PORT` | Port web desktop, hanya saat instalasi pertama (bawaan 7700) |
+| `TEMANLABS_SKIP_DOCKER` | `1` = jangan pasang Docker |
+
+### Cara manual: build sendiri
+
+#### 1. Build
 
 ```bash
 npm install
@@ -44,7 +67,7 @@ npm run build:server          # → server/bin/temanlabsos-linux-amd64
 
 Perintah ini mem-build frontend, meng-embed-nya ke backend, lalu meng-compile binary Linux.
 
-### 2. Salin ke server dan install
+#### 2. Salin ke server dan install
 
 ```bash
 scp server/bin/temanlabsos-linux-amd64 deploy/install.sh user@server:temanlabsos-deploy/
@@ -67,7 +90,7 @@ Variabel opsional:
 
 Contoh: `sudo TEMANLABS_ROOT=/DATA ./install.sh ./temanlabsos-linux-amd64 <linux-user>`. Variabel ini hanya dipakai saat instalasi pertama, ketika `config.json` dibuat. Setelah itu, ubah lewat [Konfigurasi](#konfigurasi).
 
-### 3. Buka
+#### 3. Buka
 
 Buka `http://<ip-server>:7700`, lalu login dengan password tadi. Password bisa diganti di **Settings → Account**.
 
@@ -75,7 +98,20 @@ Buka `http://<ip-server>:7700`, lalu login dengan password tadi. Password bisa d
 
 ## Update
 
-Ulangi langkah 1–2. Konfigurasi dan password tidak akan berubah.
+- **Dari UI**: Settings → About → *Check for Updates*. TemanLabsOS mengunduh rilis terbaru dari GitHub, mencocokkan checksum, mengganti binary-nya, lalu restart sendiri. Kalau checksum tidak cocok, tidak ada yang diubah.
+- **Dari terminal**: jalankan lagi perintah satu baris di atas.
+- **Build sendiri**: ulangi langkah manual 1–2.
+
+Konfigurasi dan password tidak berubah saat update.
+
+### Membuat rilis (untuk pengelola repo)
+
+Push tag versi; GitHub Actions (`.github/workflows/release.yml`) mem-build amd64 dan arm64 lalu membuat Release berisi binary, `install.sh`, `install-service.sh`, dan `SHA256SUMS`:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 > Kalau binary lama sedang berjalan, `scp` langsung ke nama yang sama bisa gagal dengan error *text file busy*. Upload dengan nama lain (mis. `.new`), lalu `mv`.
 
@@ -87,13 +123,25 @@ File: `/var/lib/temanlabsos/config.json`
 
 | Kunci | Bawaan | Arti |
 |---|---|---|
-| `addr` | `:7700` | Alamat dan port yang didengarkan. |
+| `addr` | `:7700` | Alamat dan port yang didengarkan. Isi `:80` supaya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. |
+| `redirectFrom` | (kosong) | Alamat lama yang diarahkan ke `addr`, misalnya `[":7700"]` setelah pindah ke `:80`, supaya bookmark lama tetap jalan. |
 | `root` | `/` | Folder teratas untuk Files dan Code. Isi `/DATA` untuk membatasi. |
 | `user` | (dari installer) | User Linux untuk Terminal dan pemilik file baru. |
 | `stateDir` | `/var/lib/temanlabsos` | Tempat file compose app, wallpaper, dan cache thumbnail. |
 | `passwordHash` | (dibuat otomatis) | Hash PBKDF2 dari password. Jangan diedit manual; pakai `set-password`. |
 
 Restart service setelah mengubah konfigurasi.
+
+### Pindah dari CasaOS
+
+TemanLabsOS bisa berjalan bersama CasaOS. Kalau CasaOS mau dilepas dan TemanLabsOS memakai port 80:
+
+1. Pastikan disk data dipasang lewat `/etc/fstab` (**Disk Manager → Mount saat startup**), bukan oleh CasaOS.
+2. Backup lalu hentikan service CasaOS (`casaos`, `casaos-gateway`, `casaos-app-management`, `casaos-local-storage`, `casaos-message-bus`, `casaos-user-service`, serta `rclone` dan `devmon@devmon` yang dipasangnya), dan hapus file unit serta `/usr/bin/casaos*`.
+3. **Jangan** pakai `casaos-uninstall` kalau app-nya mau tetap jalan: script itu bisa menghapus semua container, image, dan `/DATA/AppData`. Jangan hapus juga `/var/lib/casaos/apps` (file compose app-nya, dipakai TemanLabsOS untuk mengelola app itu), `/etc/samba/smb.casa.conf` (share Samba), dan `/usr/bin/rclone` (dipakai cloud drive).
+4. Set `"addr": ":80"` dan `"redirectFrom": [":7700"]`, lalu restart TemanLabsOS. Kalau nginx terpasang dengan situs default di port 80, nonaktifkan supaya tidak berebut port saat boot.
+
+App Docker tidak terpengaruh: container dijalankan ulang oleh Docker sendiri sesuai restart policy-nya.
 
 ---
 
@@ -136,9 +184,9 @@ Cara kerja kode dan daftar endpoint API ada di [architecture.md](architecture.md
 | Masalah | Solusi |
 |---|---|
 | Lupa password | `sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password` |
-| Halaman tidak terbuka | `systemctl status temanlabsos`, lalu `journalctl -u temanlabsos -n 50`. Pastikan port 7700 diizinkan di firewall. |
+| Halaman tidak terbuka | `systemctl status temanlabsos`, lalu `journalctl -u temanlabsos -n 50`. Pastikan port TemanLabsOS (bawaan 7700, atau 80) diizinkan di firewall dan tidak dipakai program lain. |
 | `scp` gagal: *text file busy* | Upload dengan nama lain lalu `mv` (lihat [Update](#update)). |
 | App tidak bisa dibuka di jendela | Pakai tombol **Open in New Tab**. Beberapa app menolak ditampilkan di dalam frame. |
 | Thumbnail video tidak muncul | Install `ffmpeg`: `sudo apt install ffmpeg`. |
-| Pod Kubernetes lama di *ContainerCreating* | Image masih diunduh. Cek **Kubernetes → Events**. Lihat juga [kubernetes-lab.md](kubernetes-lab.md#10-troubleshooting). |
+| Pod Kubernetes lama di *ContainerCreating* | Image masih diunduh. Cek **Kubernetes → Events**. |
 | Efek kaca tidak muncul | Pakai browser berbasis Chromium, atau matikan *Reduce transparency* di Settings. |

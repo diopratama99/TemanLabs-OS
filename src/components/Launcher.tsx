@@ -1,5 +1,5 @@
-import { useEffect, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
-import { Eye, EyeOff, FolderInput, FolderMinus, FolderOpen, FolderPlus, Pencil, Search, Ungroup } from 'lucide-react'
+import { useEffect, useState, type DragEvent, type MouseEvent } from 'react'
+import { Eye, EyeOff, FolderInput, FolderMinus, FolderPlus, LayoutGrid, MoreHorizontal, Pencil, Ungroup } from 'lucide-react'
 import type { InstalledApp } from '../api/types'
 import { useContextMenu } from '../lib/contextMenu'
 import { layoutFolders, moveTo, newFolder, renameFolder, ungroup, type FolderView } from '../lib/launchpadFolders'
@@ -7,7 +7,10 @@ import { useSettings } from '../lib/settings'
 import { SYSTEM_APPS, UTILITY_IDS } from '../lib/systemApps'
 import { AppIcon } from './AppIcon'
 import type { MenuAnchor, MenuItem } from './ContextMenu'
+import { Glass } from './Glass'
 import type { SystemWindowId, WindowId } from './Window'
+import { tr } from '../lib/i18n'
+import { DRAG_GROUP_TYPE, DRAG_TYPE } from '../lib/dockDrag'
 
 interface Entry {
   key: string
@@ -32,9 +35,8 @@ interface Props {
   onSystemMenu: (id: SystemWindowId, anchor: MenuAnchor, extra?: MenuItem[]) => void
 }
 
-const DRAG_TYPE = 'application/x-temanlabs-launchpad'
-// How many app icons a folder tile previews.
-const PREVIEW = 9
+// Apps in the "Recently used" row.
+const RECENT = 7
 
 /** A sensible name for a folder made by dropping one app onto another. */
 function suggestName(a?: Entry, b?: Entry) {
@@ -45,25 +47,33 @@ function suggestName(a?: Entry, b?: Entry) {
   return 'Folder'
 }
 
+/** One section of the Launcher: the built-in apps, a folder, or a category of installed apps. */
+interface Group {
+  id: string
+  title: string
+  keys: string[]
+  folder?: FolderView
+}
+
+/**
+ * The Launcher: a floating panel over the desktop with every app, in sections (built-in apps,
+ * folders, the installed apps by category) that tabs along the top narrow down.
+ */
 export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWindow, onAppMenu, onSystemMenu }: Props) {
   const { settings, update } = useSettings()
   const { show } = useContextMenu()
   const [query, setQuery] = useState('')
-  const [openFolderId, setOpenFolderId] = useState<string | null>(null)
-  const [renaming, setRenaming] = useState(false)
+  const [tab, setTab] = useState('all')
+  const [renaming, setRenaming] = useState<string | null>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
   const [showHidden, setShowHidden] = useState(false)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (openFolderId) setOpenFolderId(null)
-      else onClose()
-    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !renaming && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, openFolderId])
+  }, [onClose, renaming])
 
   const entries: Entry[] = [
     ...SYSTEM_APPS.map(app => ({
@@ -91,10 +101,34 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
   const visibleKeys = entries.filter(e => !hidden.has(e.key)).map(e => e.key)
   const { folders, loose } = layoutFolders(settings, visibleKeys, autoOf)
   const folderOf = (key: string) => folders.find(f => f.items.includes(key))
-  const openFolder = folders.find(f => f.id === openFolderId) ?? null
+
+  // ----- Sections -----
+  const looseSystem = loose.filter(k => byKey.get(k)?.systemId)
+  const byCategory = new Map<string, string[]>()
+  for (const k of loose) {
+    const app = byKey.get(k)?.app
+    if (!app) continue
+    const cat = app.category?.trim() || 'Other'
+    byCategory.set(cat, [...(byCategory.get(cat) ?? []), k])
+  }
+  const categories = [...byCategory.keys()].sort((a, b) => (a === 'Other' ? 1 : b === 'Other' ? -1 : tr(a).localeCompare(tr(b))))
+  const groups: Group[] = [
+    ...(looseSystem.length ? [{ id: 'system', title: tr('System'), keys: looseSystem }] : []),
+    ...folders.map(f => ({ id: `folder:${f.id}`, title: tr(f.name), keys: f.items, folder: f })),
+    ...categories.map(c => ({ id: `cat:${c}`, title: tr(c), keys: byCategory.get(c)! })),
+    ...(showHidden && hidden.size ? [{ id: 'hidden', title: tr('Hidden'), keys: [...hidden].filter(k => byKey.has(k)) }] : []),
+  ]
+  const activeTab = groups.some(g => g.id === tab) ? tab : 'all'
+  const recent = (settings.recentApps ?? []).filter(k => byKey.has(k) && !hidden.has(k)).slice(0, RECENT)
 
   const q = query.trim().toLowerCase()
-  const iconSize = window.innerWidth < 720 ? 62 : 84
+  const results = q ? entries.filter(e => (showHidden || !hidden.has(e.key)) && e.name.toLowerCase().includes(q)) : []
+  const iconSize = window.innerWidth < 720 ? 52 : 60
+
+  const launch = (entry: Entry) => {
+    entry.open()
+    onClose()
+  }
 
   // ----- Folder edits -----
   const move = (key: string, folderId: string | null) => update(s => moveTo(s, key, folderId, !!autoOf(key)))
@@ -105,14 +139,14 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
 
   const entryExtras = (entry: Entry): MenuItem[] => {
     const current = folderOf(entry.key)
-    if (hidden.has(entry.key)) return [{ label: 'Show in Launcher', icon: Eye, onSelect: () => setHidden(entry.key, false) }]
+    if (hidden.has(entry.key)) return [{ label: tr('Show in Launcher'), icon: Eye, onSelect: () => setHidden(entry.key, false) }]
     return [
       ...folders
         .filter(f => f !== current)
-        .map(f => ({ label: `Move to “${f.name}”`, icon: FolderInput, onSelect: () => move(entry.key, f.id) })),
-      { label: 'New Folder with This App', icon: FolderPlus, onSelect: () => update(s => newFolder(s, [entry.key], 'New Folder')) },
-      ...(current ? [{ label: 'Remove from Folder', icon: FolderMinus, onSelect: () => move(entry.key, null) }] : []),
-      { label: 'Hide from Launcher', icon: EyeOff, onSelect: () => setHidden(entry.key, true) },
+        .map(f => ({ label: tr('Move to “{0}”', tr(f.name)), icon: FolderInput, onSelect: () => move(entry.key, f.id) })),
+      { label: tr('New Folder with This App'), icon: FolderPlus, onSelect: () => update(s => newFolder(s, [entry.key], 'New Folder')) },
+      ...(current ? [{ label: tr('Remove from Folder'), icon: FolderMinus, onSelect: () => move(entry.key, null) }] : []),
+      { label: tr('Hide from Launcher'), icon: EyeOff, onSelect: () => setHidden(entry.key, true) },
     ]
   }
 
@@ -127,26 +161,20 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
   const folderMenu = (e: MouseEvent, folder: FolderView) => {
     e.preventDefault()
     show(e, [
-      { label: 'Open', icon: FolderOpen, onSelect: () => setOpenFolderId(folder.id) },
-      {
-        label: 'Rename…',
-        icon: Pencil,
-        onSelect: () => {
-          setOpenFolderId(folder.id)
-          setRenaming(true)
-        },
-      },
+      { label: tr('Rename…'), icon: Pencil, onSelect: () => setRenaming(folder.id) },
       'separator',
-      { label: 'Ungroup Folder', icon: Ungroup, onSelect: () => update(s => ungroup(s, folder, autoOf)) },
+      { label: tr('Ungroup Folder'), icon: Ungroup, onSelect: () => update(s => ungroup(s, folder, autoOf)) },
     ])
   }
 
-  // ----- Drag and drop: onto an app makes a folder, onto a folder adds to it, onto the background takes it out -----
+  // ----- Drag and drop: onto an app makes a folder, onto a folder's section adds to it, onto
+  // empty space takes it out, onto the Dock keeps it there. -----
   const dragProps = (key: string) => ({
     draggable: true,
     onDragStart: (e: DragEvent) => {
       e.dataTransfer.setData(DRAG_TYPE, key)
-      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData(DRAG_GROUP_TYPE(key.startsWith('app:') ? 'apps' : 'system'), '1')
+      e.dataTransfer.effectAllowed = 'copyMove'
       setDragKey(key)
     },
     onDragEnd: () => {
@@ -176,18 +204,18 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
       e.preventDefault()
       const dragged = e.dataTransfer.getData(DRAG_TYPE)
       if (dragged && folderOf(dragged)) move(dragged, null)
-      setOpenFolderId(null)
     },
   }
 
-  const appTile = (entry: Entry, inFolder: FolderView | null) => (
+  const tile = (entry: Entry, inFolder?: FolderView) => (
     <button
       key={entry.key}
-      className={`lp-item ${entry.app && entry.app.status !== 'running' ? 'is-stopped' : ''} ${
-        dragKey === entry.key ? 'is-dragging' : ''
-      } ${dropKey === entry.key ? 'is-drop-target' : ''} ${hidden.has(entry.key) ? 'is-hidden' : ''}`}
-      onClick={entry.open}
+      className={`lp-item ${entry.app && entry.app.status !== 'running' ? 'is-stopped' : ''} ${dragKey === entry.key ? 'is-dragging' : ''} ${
+        dropKey === entry.key ? 'is-drop-target' : ''
+      } ${hidden.has(entry.key) ? 'is-hidden' : ''}`}
+      onClick={() => launch(entry)}
       onContextMenu={e => entryMenu(e, entry)}
+      title={entry.name}
       {...dragProps(entry.key)}
       {...(inFolder
         ? dropProps(entry.key, dragged => move(dragged, inFolder.id))
@@ -199,125 +227,120 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
     >
       <AppIcon icon={entry.icon} iconUrl={entry.iconUrl} color={entry.color} size={iconSize} />
       <span className="lp-name">{entry.name}</span>
-      {entry.app && entry.app.status !== 'running' && (
-        <span className="lp-status">{entry.app.status === 'installing' ? 'Installing…' : 'Stopped'}</span>
-      )}
+      {entry.app && entry.app.status !== 'running' && <span className="lp-status">{entry.app.status === 'installing' ? tr('Installing…') : tr('Stopped')}</span>}
     </button>
   )
 
-  const folderTile = (folder: FolderView) => (
-    <button
-      key={`folder:${folder.id}`}
-      className={`lp-item lp-folder ${dropKey === `folder:${folder.id}` ? 'is-drop-target' : ''}`}
-      onClick={() => setOpenFolderId(folder.id)}
-      onContextMenu={e => folderMenu(e, folder)}
-      {...dropProps(`folder:${folder.id}`, dragged => move(dragged, folder.id))}
+  const section = (g: Group, titled: boolean) => (
+    <section
+      key={g.id}
+      className={`lp-section ${dropKey === g.id ? 'is-drop-target' : ''}`}
+      {...(g.folder ? dropProps(g.id, dragged => move(dragged, g.folder!.id)) : {})}
     >
-      <span className="lp-folder-icon" style={{ width: iconSize, height: iconSize, '--tile': `${iconSize}px` } as CSSProperties}>
-        {folder.items.slice(0, PREVIEW).map(key => {
-          const e = byKey.get(key)
-          return e ? <AppIcon key={key} icon={e.icon} iconUrl={e.iconUrl} color={e.color} size={Math.round(iconSize * 0.2)} /> : null
+      {titled &&
+        (g.folder && renaming === g.folder.id ? (
+          <input
+            className="lp-section-rename"
+            autoFocus
+            defaultValue={g.folder.name}
+            onBlur={e => {
+              const name = e.target.value.trim()
+              if (name) update(s => renameFolder(s, g.folder!.id, name))
+              setRenaming(null)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') setRenaming(null)
+            }}
+          />
+        ) : (
+          <h3
+            className={`lp-section-title ${g.folder ? 'is-folder' : ''}`}
+            onClick={() => g.folder && setRenaming(g.folder.id)}
+            onContextMenu={e => g.folder && folderMenu(e, g.folder)}
+            title={g.folder ? tr('Click to rename') : undefined}
+          >
+            {g.title}
+          </h3>
+        ))}
+      <div className="lp-grid">
+        {g.keys.map(k => {
+          const e = byKey.get(k)
+          return e ? tile(e, g.folder) : null
         })}
-      </span>
-      <span className="lp-name">{folder.name}</span>
-      <span className="lp-status">{folder.items.length} apps</span>
-    </button>
+      </div>
+    </section>
   )
 
-  const closeOnBackground = (e: MouseEvent<HTMLElement>) => e.target === e.currentTarget && onClose()
-  const searchResults = q ? entries.filter(e => (showHidden || !hidden.has(e.key)) && e.name.toLowerCase().includes(q)) : []
-  // System apps first, then folders, then everything else, as before folders existed.
-  const looseEntries = loose.map(k => byKey.get(k)!).filter(Boolean)
-  const hiddenEntries = showHidden ? entries.filter(e => hidden.has(e.key)) : []
+  const more = (e: MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    show({ x: r.right - 230, y: r.bottom + 6 }, [
+      {
+        label: showHidden ? tr('Hide hidden apps') : tr('Show {0} hidden app{1}', hidden.size, hidden.size > 1 ? 's' : ''),
+        icon: showHidden ? EyeOff : Eye,
+        disabled: hidden.size === 0,
+        onSelect: () => setShowHidden(v => !v),
+      },
+    ])
+  }
 
   return (
-    <div
-      className={`launchpad ${closing ? 'is-closing' : ''} ${openFolder ? 'has-folder' : ''}`}
-      onClick={closeOnBackground}
-      {...backgroundDrop}
-    >
-      <label className="lp-search">
-        <Search size={14} />
-        <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search" />
-      </label>
-      <div className="lp-grid" onClick={closeOnBackground}>
-        {q ? (
-          searchResults.map(e => appTile(e, null))
-        ) : (
-          <>
-            {looseEntries.filter(e => e.systemId).map(e => appTile(e, null))}
-            {folders.map(folderTile)}
-            {looseEntries.filter(e => !e.systemId).map(e => appTile(e, null))}
-            {hiddenEntries.map(e => appTile(e, null))}
-          </>
-        )}
-      </div>
-      {q && searchResults.length === 0 && <p className="lp-empty">No apps match “{query}”.</p>}
-      {hidden.size > 0 && !q && (
-        <button className="lp-hidden-toggle" onClick={() => setShowHidden(v => !v)}>
-          {showHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-          {showHidden ? 'Hide hidden apps' : `Show ${hidden.size} hidden app${hidden.size > 1 ? 's' : ''}`}
-        </button>
-      )}
+    <div className={`launchpad ${closing ? 'is-closing' : ''}`} onClick={e => e.target === e.currentTarget && onClose()} {...backgroundDrop}>
+      <Glass radius={30} bezel={18} depth={16} blur={14} className="lp-panel tint-panel" role="dialog" aria-label={tr('Launcher')}>
+        <header className="lp-head">
+          <LayoutGrid size={22} strokeWidth={1.8} />
+          <input
+            className="lp-query"
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && results[0] && launch(results[0])}
+            placeholder={tr('Apps')}
+            aria-label={tr('Search apps')}
+          />
+          <button className="icon-btn lp-more" onClick={more} aria-label={tr('More')}>
+            <MoreHorizontal size={18} />
+          </button>
+        </header>
 
-      {openFolder && (
-        <div
-          className="lp-folder-backdrop"
-          onClick={e => {
-            e.stopPropagation()
-            if (e.target === e.currentTarget) {
-              setOpenFolderId(null)
-              setRenaming(false)
-            }
-          }}
-          {...backgroundDrop}
-        >
-          <div
-            className="lp-folder-panel"
-            key={openFolder.id}
-            // Dropping on the panel itself keeps the app in the folder.
-            onDragOver={e => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onDrop={e => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-          >
-            {renaming ? (
-              <input
-                className="lp-folder-name"
-                autoFocus
-                defaultValue={openFolder.name}
-                onBlur={e => {
-                  const name = e.target.value.trim()
-                  if (name) update(s => renameFolder(s, openFolder.id, name))
-                  setRenaming(false)
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') e.currentTarget.blur()
-                  if (e.key === 'Escape') {
-                    e.stopPropagation()
-                    setRenaming(false)
-                  }
-                }}
-              />
-            ) : (
-              <button className="lp-folder-title" onClick={() => setRenaming(true)} title="Click to rename">
-                {openFolder.name}
+        {!q && (
+          <nav className="lp-tabs" aria-label={tr('Sections')}>
+            <button className={activeTab === 'all' ? 'is-active' : ''} onClick={() => setTab('all')}>
+              {tr('All')}
+            </button>
+            {groups.map(g => (
+              <button key={g.id} className={activeTab === g.id ? 'is-active' : ''} onClick={() => setTab(g.id)} {...(g.folder ? dropProps(`tab:${g.id}`, dragged => move(dragged, g.folder!.id)) : {})}>
+                {g.title}
               </button>
-            )}
-            <div className="lp-folder-grid">
-              {openFolder.items.map(key => {
-                const e = byKey.get(key)
-                return e ? appTile(e, openFolder) : null
-              })}
-            </div>
-            <p className="lp-folder-hint">Drag an app out of the folder to take it out.</p>
-          </div>
+            ))}
+          </nav>
+        )}
+
+        <div className="lp-scroll">
+          {q ? (
+            results.length ? (
+              <div className="lp-grid lp-results">{results.map(e => tile(e))}</div>
+            ) : (
+              <p className="lp-empty">
+                {tr('No apps match “')}
+                {query}”.
+              </p>
+            )
+          ) : activeTab === 'all' ? (
+            <>
+              {recent.length > 0 && (
+                <section className="lp-section lp-recent">
+                  <h3 className="lp-section-title">{tr('Recently Used')}</h3>
+                  <div className="lp-grid">{recent.map(k => tile(byKey.get(k)!))}</div>
+                </section>
+              )}
+              {groups.map(g => section(g, true))}
+            </>
+          ) : (
+            groups.filter(g => g.id === activeTab).map(g => section(g, !!g.folder))
+          )}
         </div>
-      )}
+      </Glass>
     </div>
   )
 }

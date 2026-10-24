@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ClipboardPaste, Copy, Eraser, RotateCw } from 'lucide-react'
+import { BookMarked, ClipboardPaste, Copy, Eraser, RotateCw } from 'lucide-react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -9,6 +9,7 @@ import { useAppMenus } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { useSettings } from '../lib/settings'
+import { tr } from '../lib/i18n'
 
 const THEMES: Record<'light' | 'dark', ITheme> = {
   dark: {
@@ -26,7 +27,9 @@ const THEMES: Record<'light' | 'dark', ITheme> = {
     white: '#f1f1f0',
   },
   light: {
-    background: '#00000000',
+    // Transparent, but white: reverse video (bash highlights pasted text with it) draws the text
+    // in the background colour made opaque, which must be light here.
+    background: '#ffffff00',
     foreground: '#1d1d1f',
     cursor: '#0a7d32',
     selectionBackground: '#0a84ff44',
@@ -48,10 +51,21 @@ interface Props {
   menus?: boolean
   /** Window title, as terminal apps show it: the shell's title and the size, e.g. "user@host: ~ — 80×24". */
   onTitle?: (title: string) => void
+  /** Where to connect instead of the server shell, e.g. a shell inside a container. */
+  connect?: (cols: number, rows: number) => string | null
+  /** A command to put on the prompt (from Commands). It is pasted, never run: Enter is the user's. */
+  input?: { text: string; nonce: number } | null
+  /** Opens Commands (Shell → Find a Command…). */
+  onFindCommand?: () => void
 }
 
+// After connecting, text can go in once the shell has drawn its prompt: when its output has been
+// quiet this long (or, if it prints nothing, after the fallback).
+const PROMPT_QUIET_MS = 250
+const PROMPT_FALLBACK_MS = 2500
+
 /** A real shell on the server: xterm.js bridged to a PTY over the /ws/terminal WebSocket. */
-export function Terminal({ menus = true, onTitle }: Props) {
+export function Terminal({ menus = true, onTitle, connect, input, onFindCommand }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
@@ -62,6 +76,10 @@ export function Terminal({ menus = true, onTitle }: Props) {
   const { show } = useContextMenu()
   const titleRef = useRef(onTitle)
   titleRef.current = onTitle
+  const connectRef = useRef(connect)
+  connectRef.current = connect
+  // A command that arrived before the shell was ready.
+  const pending = useRef<string | null>(null)
 
   useEffect(() => {
     const host = hostRef.current
@@ -82,7 +100,7 @@ export function Terminal({ menus = true, onTitle }: Props) {
     termRef.current = term
     setStatus('connecting')
 
-    const url = api.terminalUrl(term.cols, term.rows)
+    const url = (connectRef.current ?? api.terminalUrl)(term.cols, term.rows)
     if (!url) {
       term.writeln('The terminal needs the TemanLabsOS server; it is not available in mock mode.')
       setStatus('unavailable')
@@ -96,13 +114,29 @@ export function Terminal({ menus = true, onTitle }: Props) {
     const send = (data: string | Uint8Array<ArrayBuffer>) => socket.readyState === WebSocket.OPEN && socket.send(data)
     const sendResize = () => send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
 
+    // A waiting command goes in once the shell has gone quiet (its prompt is drawn), or after a
+    // while if it never says anything.
+    let pasteTimer = 0
+    const pasteSoon = (ms: number) => {
+      if (pending.current === null) return
+      clearTimeout(pasteTimer)
+      pasteTimer = window.setTimeout(() => {
+        if (pending.current === null || socket.readyState !== WebSocket.OPEN) return
+        term.paste(pending.current)
+        pending.current = null
+      }, ms)
+    }
     socket.onopen = () => {
       setStatus('open')
       fit.fit()
       sendResize()
       term.focus()
+      pasteSoon(PROMPT_FALLBACK_MS)
     }
-    socket.onmessage = e => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data as ArrayBuffer))
+    socket.onmessage = e => {
+      term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data as ArrayBuffer))
+      pasteSoon(PROMPT_QUIET_MS)
+    }
     socket.onclose = () => {
       setStatus('closed')
       term.writeln('\r\n\x1b[2m[session ended — right-click → Reconnect]\x1b[0m')
@@ -131,6 +165,7 @@ export function Terminal({ menus = true, onTitle }: Props) {
     observer.observe(host)
 
     return () => {
+      clearTimeout(pasteTimer)
       observer.disconnect()
       subscriptions.forEach(s => s.dispose())
       socket.close()
@@ -146,6 +181,16 @@ export function Terminal({ menus = true, onTitle }: Props) {
     if (termRef.current) termRef.current.options.theme = THEMES[settings.theme]
   }, [settings.theme])
 
+  // Pasted (bracketed paste when the shell supports it), so even a multi-line command waits for Enter.
+  useEffect(() => {
+    if (!input) return
+    const term = termRef.current
+    if (term && socketRef.current?.readyState === WebSocket.OPEN) {
+      term.paste(input.text)
+      term.focus()
+    } else pending.current = input.text
+  }, [input?.nonce])
+
   const paste = () =>
     void navigator.clipboard
       .readText()
@@ -160,21 +205,22 @@ export function Terminal({ menus = true, onTitle }: Props) {
   const editItems = (): MenuItem[] => {
     const selection = termRef.current?.getSelection() ?? ''
     return [
-      { label: 'Copy', icon: Copy, disabled: !selection, onSelect: () => void copyText(selection) },
-      { label: 'Paste', icon: ClipboardPaste, disabled: !navigator.clipboard?.readText, onSelect: paste },
+      { label: tr('Copy'), icon: Copy, disabled: !selection, onSelect: () => void copyText(selection) },
+      { label: tr('Paste'), icon: ClipboardPaste, disabled: !navigator.clipboard?.readText, onSelect: paste },
     ]
   }
   const shellItems = (): MenuItem[] => [
-    { label: 'Clear Scrollback', icon: Eraser, onSelect: clear },
-    { label: status === 'open' ? 'Restart Session' : 'Reconnect', icon: RotateCw, onSelect: reconnect },
+    ...(onFindCommand ? [{ label: tr('Find a Command…'), icon: BookMarked, onSelect: onFindCommand }, 'separator' as const] : []),
+    { label: tr('Clear Scrollback'), icon: Eraser, onSelect: clear },
+    { label: status === 'open' ? tr('Restart Session') : tr('Reconnect'), icon: RotateCw, onSelect: reconnect },
   ]
 
   const openMenu = (e: MouseEvent) => show(e, [...editItems(), 'separator', ...shellItems()])
 
   useAppMenus(
     () => [
-      { label: 'Shell', items: shellItems() },
-      { label: 'Edit', items: editItems() },
+      { label: tr('Shell'), items: shellItems() },
+      { label: tr('Edit'), items: editItems() },
     ],
     menus,
   )
@@ -182,7 +228,7 @@ export function Terminal({ menus = true, onTitle }: Props) {
   return (
     <div className={`terminal terminal-${status}`} onContextMenu={openMenu}>
       <div className="terminal-host" ref={hostRef} />
-      {status === 'connecting' && <div className="terminal-status">Connecting…</div>}
+      {status === 'connecting' && <div className="terminal-status">{tr('Connecting…')}</div>}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { usePresence } from '../hooks/usePresence'
 import { useAppMenus } from '../lib/appMenus'
 import { formatFileDate } from '../lib/format'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const pad = (n: string | number) => String(n).padStart(2, '0')
@@ -136,7 +137,7 @@ export function ScheduledTasks() {
     setOutput({ title: task.name || task.command, text: '', running: true })
     try {
       const res = await api.runCron(user, task.command)
-      setOutput({ title: task.name || task.command, text: `${res.output || '(no output)'}\n\n— finished with exit code ${res.exit}`, running: false })
+      setOutput({ title: task.name || task.command, text: tr("{0}\n\n— finished with exit code {1}", res.output || '(no output)', res.exit), running: false })
     } catch (err) {
       setOutput({ title: task.name || task.command, text: err instanceof Error ? err.message : String(err), running: false })
     }
@@ -144,10 +145,10 @@ export function ScheduledTasks() {
 
   useAppMenus(() => [
     {
-      label: 'File',
+      label: tr('File'),
       items: [
         {
-          label: 'New Task…',
+          label: tr('New Task…'),
           icon: Plus,
           disabled: !tab,
           onSelect: () => tab && setEditing({ user: tab.user, index: null, task: { schedule: '0 3 * * *', command: '', enabled: true } }),
@@ -159,30 +160,30 @@ export function ScheduledTasks() {
   return (
     <div className="split">
       <aside className="sidebar">
-        <div className="sidebar-group">Tasks of</div>
+        <div className="sidebar-group">{tr('Tasks of')}</div>
         {tabs.map(t => (
           <button key={t.user} className={`sidebar-item ${section === t.user ? 'is-active' : ''}`} onClick={() => setSection(t.user)}>
             <User size={15} /> {t.user}
             <span className="sidebar-badge">{t.tasks.length}</span>
           </button>
         ))}
-        <div className="sidebar-group">System</div>
+        <div className="sidebar-group">{tr('System')}</div>
         <button className={`sidebar-item ${section === 'timers' ? 'is-active' : ''}`} onClick={() => setSection('timers')}>
-          <Timer size={15} /> systemd timers
+          <Timer size={15} /> {tr('systemd timers')}
           <span className="sidebar-badge">{timers.length}</span>
         </button>
       </aside>
       <div className="pane st">
         <WindowToolbar>
-          <ToolbarTitle title={section === 'timers' ? 'systemd timers' : `Tasks of ${section}`} subtitle={section === 'timers' ? 'Read only' : 'cron'} />
+          <ToolbarTitle title={section === 'timers' ? tr('systemd timers') : tr('Tasks of {0}', section)} subtitle={section === 'timers' ? tr('Read only') : 'cron'} />
           <span className="tb-spacer" />
           {tab && (
             <div className="tb-group">
               <button
                 className="tb-btn"
                 onClick={() => setEditing({ user: tab.user, index: null, task: { schedule: '0 3 * * *', command: '', enabled: true } })}
-                aria-label="New task"
-                title="New Task"
+                aria-label={tr('New task')}
+                title={tr('New Task')}
               >
                 <Plus size={17} />
               </button>
@@ -193,7 +194,7 @@ export function ScheduledTasks() {
 
         {tab && (
           <div className="group st-list">
-            {tab.tasks.length === 0 && <p className="sh-empty">No scheduled tasks. Click + to add one.</p>}
+            {tab.tasks.length === 0 && <p className="sh-empty">{tr('No scheduled tasks. Click + to add one.')}</p>}
             {tab.tasks.map((t, i) => (
               <div key={i} className={`st-row ${t.enabled ? '' : 'is-off'}`}>
                 <CalendarClock size={20} className="st-icon" />
@@ -204,13 +205,13 @@ export function ScheduledTasks() {
                     <code>{t.command}</code>
                   </small>
                 </span>
-                <button className="icon-btn" onClick={() => void run(tab.user, t)} title="Run now" aria-label="Run now">
+                <button className="icon-btn" onClick={() => void run(tab.user, t)} title={tr('Run now')} aria-label={tr('Run now')}>
                   <Play size={14} />
                 </button>
-                <button className="icon-btn" onClick={() => setEditing({ user: tab.user, index: i, task: t })} title="Edit" aria-label="Edit">
+                <button className="icon-btn" onClick={() => setEditing({ user: tab.user, index: i, task: t })} title={tr('Edit')} aria-label={tr('Edit')}>
                   <Pencil size={14} />
                 </button>
-                <Switch checked={t.enabled} onChange={enabled => void update(i, { ...t, enabled })} label="Enabled" />
+                <Switch checked={t.enabled} onChange={enabled => void update(i, { ...t, enabled })} label={tr('Enabled')} />
               </div>
             ))}
           </div>
@@ -223,11 +224,11 @@ export function ScheduledTasks() {
                 <Clock size={20} className="st-icon" />
                 <span className="st-main">
                   <strong>{t.unit.replace(/\.timer$/, '')}</strong>
-                  <small>runs {t.activates}</small>
+                  <small>{tr('runs')} {t.activates}</small>
                 </span>
                 <span className="st-when">
-                  <small>Next: {t.next ? formatFileDate(new Date(t.next).toISOString()) : '—'}</small>
-                  <small>Last: {t.last ? formatFileDate(new Date(t.last).toISOString()) : 'never'}</small>
+                  <small>{tr('Next:')} {t.next ? formatFileDate(new Date(t.next).toISOString()) : '—'}</small>
+                  <small>{tr('Last:')} {t.last ? formatFileDate(new Date(t.last).toISOString()) : 'never'}</small>
                 </span>
               </div>
             ))}
@@ -239,7 +240,7 @@ export function ScheduledTasks() {
             <div className="su-job-head">
               {output.running ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}
               <strong>{output.title}</strong>
-              <button className="icon-btn" onClick={() => setOutput(null)} aria-label="Close output">
+              <button className="icon-btn" onClick={() => setOutput(null)} aria-label={tr('Close output')}>
                 ×
               </button>
             </div>
@@ -323,43 +324,43 @@ function TaskForm({
     <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onPointerDown={e => e.target === e.currentTarget && onClose()}>
       <form className="sheet sh-sheet ci" onSubmit={e => void submit(e)}>
         <header className="ci-head">
-          <strong>{editing.index === null ? 'New Scheduled Task' : 'Edit Task'}</strong>
-          <small className="form-hint">runs as {editing.user}</small>
+          <strong>{editing.index === null ? tr('New Scheduled Task') : tr('Edit Task')}</strong>
+          <small className="form-hint">{tr('runs as')} {editing.user}</small>
         </header>
         <div className="ci-body">
           <label className="ci-field">
-            <span className="ci-label">Name</span>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Nightly backup" />
+            <span className="ci-label">{tr('Name')}</span>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder={tr('e.g. Nightly backup')} />
           </label>
           <label className="ci-field">
-            <span className="ci-label">Command</span>
+            <span className="ci-label">{tr('Command')}</span>
             <input value={command} onChange={e => setCommand(e.target.value)} placeholder="/home/user/backup.sh >> /home/user/backup.log 2>&1" spellCheck={false} autoFocus />
-            <small>Runs in a plain shell; give full paths. Add {'>> file.log 2>&1'} to keep its output.</small>
+            <small>{tr('Runs in a plain shell; give full paths. Add')} {tr('>> file.log 2>&1')} {tr('to keep its output.')}</small>
           </label>
           <div className="ci-field">
-            <span className="ci-label">When</span>
+            <span className="ci-label">{tr('When')}</span>
             <div className="st-when-row">
               <select value={draft.preset} onChange={e => set({ preset: e.target.value as Preset })}>
-                <option value="minutes">Every few minutes</option>
-                <option value="hourly">Every hour</option>
-                <option value="daily">Every day</option>
-                <option value="weekly">Every week</option>
-                <option value="monthly">Every month</option>
-                <option value="reboot">When the server starts</option>
-                <option value="custom">Custom (cron)</option>
+                <option value="minutes">{tr('Every few minutes')}</option>
+                <option value="hourly">{tr('Every hour')}</option>
+                <option value="daily">{tr('Every day')}</option>
+                <option value="weekly">{tr('Every week')}</option>
+                <option value="monthly">{tr('Every month')}</option>
+                <option value="reboot">{tr('When the server starts')}</option>
+                <option value="custom">{tr('Custom (cron)')}</option>
               </select>
               {draft.preset === 'minutes' && (
                 <label className="st-inline">
-                  every <input value={draft.every} onChange={e => set({ every: e.target.value.replace(/\D/g, '') })} inputMode="numeric" /> minutes
+                  {tr('every')} <input value={draft.every} onChange={e => set({ every: e.target.value.replace(/\D/g, '') })} inputMode="numeric" /> {tr('minutes')}
                 </label>
               )}
               {draft.preset === 'hourly' && (
                 <label className="st-inline">
-                  at minute <input value={draft.minute} onChange={e => set({ minute: e.target.value.replace(/\D/g, '') })} inputMode="numeric" />
+                  {tr('at minute')} <input value={draft.minute} onChange={e => set({ minute: e.target.value.replace(/\D/g, '') })} inputMode="numeric" />
                 </label>
               )}
               {draft.preset === 'weekly' && (
-                <select value={draft.day} onChange={e => set({ day: e.target.value })} aria-label="Day">
+                <select value={draft.day} onChange={e => set({ day: e.target.value })} aria-label={tr('Day')}>
                   {DAYS.map((d, i) => (
                     <option key={d} value={i}>
                       {d}
@@ -369,18 +370,18 @@ function TaskForm({
               )}
               {draft.preset === 'monthly' && (
                 <label className="st-inline">
-                  on day <input value={draft.date} onChange={e => set({ date: e.target.value.replace(/\D/g, '') })} inputMode="numeric" />
+                  {tr('on day')} <input value={draft.date} onChange={e => set({ date: e.target.value.replace(/\D/g, '') })} inputMode="numeric" />
                 </label>
               )}
               {(draft.preset === 'daily' || draft.preset === 'weekly' || draft.preset === 'monthly') && (
-                <input type="time" value={draft.time} onChange={e => set({ time: e.target.value })} aria-label="Time" />
+                <input type="time" value={draft.time} onChange={e => set({ time: e.target.value })} aria-label={tr('Time')} />
               )}
               {draft.preset === 'custom' && (
-                <input value={draft.custom} onChange={e => set({ custom: e.target.value })} placeholder="m h dom mon dow" spellCheck={false} />
+                <input value={draft.custom} onChange={e => set({ custom: e.target.value })} placeholder={tr('m h dom mon dow')} spellCheck={false} />
               )}
             </div>
             <small>
-              {describeSchedule(schedule)} · <code>{schedule}</code> (server time)
+              {describeSchedule(schedule)} · <code>{schedule}</code> {tr('(server time)')}
             </small>
           </div>
         </div>
@@ -393,14 +394,14 @@ function TaskForm({
               onClick={() => (confirmDelete ? void onDelete() : setConfirmDelete(true))}
               onBlur={() => setConfirmDelete(false)}
             >
-              <Trash2 size={13} /> {confirmDelete ? 'Click Again to Delete' : 'Delete'}
+              <Trash2 size={13} /> {confirmDelete ? tr('Click Again to Delete') : tr('Delete')}
             </button>
           )}
           <button type="button" className="btn" onClick={onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={!command.trim()}>
-            Save
+            {tr('Save')}
           </button>
         </footer>
       </form>

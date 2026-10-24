@@ -186,6 +186,10 @@ func (s *appStore) listApps(ctx context.Context) ([]*app, error) {
 	byKey := map[string]*app{}
 	var order []string
 	for _, c := range containers {
+		// TemanLabsOS's own helpers (the remote desktop engine) aren't apps.
+		if c.Labels[labelSystem] != "" {
+			continue
+		}
 		key := c.Labels[labelProject]
 		if key == "" {
 			key = c.name()
@@ -282,6 +286,9 @@ func (s *appStore) describe(a *app) {
 			}
 		}
 	}
+	// Settings saved from TemanLabsOS name any app with temanlabs.* labels.
+	labelOverrides(a, first.Labels)
+	a.CanUninstall = true
 	if a.IconURL == "" && a.Source != "temanlabs" {
 		a.IconURL = iconFor(first.Image)
 	}

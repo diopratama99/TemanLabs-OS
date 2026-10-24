@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ContextMenu, type MenuAnchor, type MenuItem } from '../components/ContextMenu'
+import { tr } from './i18n'
 
 type PointerLike = { clientX: number; clientY: number; preventDefault: () => void }
 
@@ -102,6 +103,6 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
 
 export function useContextMenu() {
   const ctx = useContext(ContextMenuContext)
-  if (!ctx) throw new Error('useContextMenu must be used inside ContextMenuProvider')
+  if (!ctx) throw new Error(tr('useContextMenu must be used inside ContextMenuProvider'))
   return ctx
 }

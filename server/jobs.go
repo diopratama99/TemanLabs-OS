@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -113,6 +115,69 @@ func startJob(kind, title string, env []string, after func(), name string, args 
 		}
 	}()
 	return j, nil
+}
+
+// startFuncJob runs Go code as a job: fn writes its progress with logf, and a returned error
+// ends the job with exit code 1 and the error as its last line.
+func startFuncJob(kind, title string, fn func(ctx context.Context, logf func(format string, args ...any)) error) (*job, error) {
+	jobs.Lock()
+	defer jobs.Unlock()
+	if j := jobs.byKind[kind]; j != nil && j.snapshot().Running {
+		return nil, errJobRunning
+	}
+	j := &job{Kind: kind, Title: title, Running: true, Started: time.Now()}
+	jobs.byKind[kind] = j
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
+		defer cancel()
+		err := fn(ctx, func(format string, args ...any) { j.add(fmt.Sprintf(format, args...)) })
+		j.mu.Lock()
+		j.Running = false
+		j.Ended = time.Now()
+		if err != nil {
+			j.Exit = 1
+		}
+		j.mu.Unlock()
+		if err != nil {
+			j.add("Error: " + err.Error())
+		}
+	}()
+	return j, nil
+}
+
+// chainJob runs several commands one after another as one job, stopping at the first failure.
+func chainJob(kind, title string, after func(), dir string, steps ...[]string) (*job, error) {
+	return startFuncJob(kind, title, func(ctx context.Context, logf func(string, ...any)) error {
+		if after != nil {
+			defer after()
+		}
+		for _, step := range steps {
+			logf("$ %s", strings.Join(step, " "))
+			cmd := exec.CommandContext(ctx, step[0], step[1:]...)
+			cmd.Dir = dir
+			pr, pw := io.Pipe()
+			cmd.Stdout, cmd.Stderr = pw, pw
+			if err := cmd.Start(); err != nil {
+				return err
+			}
+			done := make(chan struct{})
+			go func() {
+				scanner := bufio.NewScanner(pr)
+				scanner.Buffer(make([]byte, 64<<10), 1<<20)
+				for scanner.Scan() {
+					logf("%s", scanner.Text())
+				}
+				close(done)
+			}()
+			err := cmd.Wait()
+			pw.Close()
+			<-done
+			if err != nil {
+				return fmt.Errorf("%s failed: %w", step[0], err)
+			}
+		}
+		return nil
+	})
 }
 
 func (s *server) handleJob(w http.ResponseWriter, r *http.Request) {

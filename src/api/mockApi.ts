@@ -9,11 +9,14 @@ import type {
   CustomAppSpec,
   FileEntry,
   InstalledApp,
+  Job,
   SearchMatch,
   SmbShare,
   SmbShareSpec,
   SmbUser,
   StoreApp,
+  StoreEntry,
+  StoreSource,
   WallpaperImage,
 } from './types'
 
@@ -58,10 +61,49 @@ const nativeApp = (id: string, name: string, port: number, unit?: string): Insta
 })
 installed = [
   ...installed,
-  nativeApp('casaos-gateway', 'CasaOS', 80, 'casaos-gateway.service'),
+  nativeApp('caddy', 'Caddy', 80, 'caddy.service'),
   nativeApp('pm2-teman', 'BensinKu', 3001, 'pm2-teman.service'),
   nativeApp('porto', 'My Portofolio', 3000, 'porto-diopratama.service'),
 ]
+
+let mockSources: StoreSource[] = [
+  { id: 'casaos', name: 'CasaOS', url: 'https://casaos.app/store/main.zip', apps: 180, updated: new Date().toISOString() },
+  { id: 'big-bear-casaos', name: 'big-bear-casaos', url: 'https://github.com/bigbeartechworld/big-bear-casaos/archive/refs/heads/master.zip', apps: 491, updated: new Date().toISOString() },
+]
+
+const MOCK_STORE_EXTRA: StoreEntry[] = [
+  ['Memos', 'Productivity', 'A lightweight, self-hosted memo hub.'],
+  ['Grafana', 'Developer', 'Dashboards for all your metrics.'],
+  ['AdGuard Home', 'Networking', 'Network-wide ads and trackers blocking.'],
+  ['Ollama', 'AI', 'Run large language models locally.'],
+  ['Open WebUI', 'AI', 'A friendly web interface for LLMs.'],
+  ['Actual Budget', 'Finance', 'A local-first personal finance tool.'],
+  ['Mastodon', 'Social', 'Your own corner of the fediverse.'],
+  ['Syncthing', 'Cloud', 'Continuous file synchronisation.'],
+  ['Calibre-web', 'Media', 'Browse and read your ebook library.'],
+  ['Wiki.js', 'Others', 'A modern and powerful wiki app.'],
+].map(([name, category, tagline]) => ({
+  id: `big-bear-casaos.${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+  name,
+  category,
+  tagline,
+  iconUrl: '',
+  source: 'big-bear-casaos',
+  port: 8000,
+}))
+
+// App Settings: edited compose files, pretend update checks, and the jobs they start.
+const mockCompose: Record<string, string> = {}
+const mockUpdates: Record<string, true> = { jellyfin: true, nextcloud: true }
+const mockJobs: Record<string, Job> = {}
+
+function runMockJob(kind: string, title: string, lines: string[], ms: number) {
+  mockJobs[kind] = { kind, title, running: true, started: new Date().toISOString(), exit: 0, log: [`$ docker compose up -d`] }
+  void delay(ms).then(() => {
+    mockJobs[kind] = { ...mockJobs[kind], running: false, exit: 0, log: [...mockJobs[kind].log, ...lines] }
+  })
+  return kind
+}
 
 function setStatus(id: string, status: AppStatus) {
   installed = installed.map(app => (app.id === id ? { ...app, status } : app))
@@ -98,6 +140,20 @@ const SEARCH_LIMIT = 200
 const byKindThenName = (a: FileEntry, b: FileEntry) =>
   Number(b.kind === 'folder') - Number(a.kind === 'folder') || a.name.localeCompare(b.name)
 
+/** A made-up app screenshot for the store pages (an SVG data URL). */
+function mockScreenshot(scheme: number) {
+  const hue = [222, 280, 168][scheme]
+  const posters = Array.from({ length: 12 }, (_, k) => {
+    const x = 300 + (k % 6) * 160
+    const y = 400 + Math.floor(k / 6) * 200
+    const h = (hue + k * 23) % 360
+    return `<defs><linearGradient id='p${k}' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${h},70%,62%)'/><stop offset='1' stop-color='hsl(${(h + 40) % 360},65%,38%)'/></linearGradient></defs><rect x='${x}' y='${y}' width='136' height='180' rx='12' fill='url(#p${k})'/>`
+  }).join('')
+  const nav = [0, 1, 2, 3, 4].map(k => `<rect x='32' y='${120 + k * 48}' width='${k ? 150 : 190}' height='14' rx='7' fill='hsl(${hue},25%,${k ? 40 : 70}%)'/>`).join('')
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='800'><rect width='1280' height='800' fill='hsl(${hue},30%,10%)'/><rect width='260' height='800' fill='hsl(${hue},28%,14%)'/><circle cx='52' cy='56' r='18' fill='hsl(${hue},80%,60%)'/><rect x='82' y='48' width='120' height='16' rx='8' fill='hsl(${hue},20%,75%)'/>${nav}<defs><linearGradient id='hero' x1='0' y1='0' x2='1' y2='0'><stop offset='0' stop-color='hsl(${hue},75%,45%)'/><stop offset='1' stop-color='hsl(${(hue + 60) % 360},70%,35%)'/></linearGradient></defs><rect x='300' y='40' width='940' height='320' rx='20' fill='url(#hero)'/><rect x='340' y='230' width='360' height='30' rx='15' fill='rgba(255,255,255,0.9)'/><rect x='340' y='280' width='240' height='16' rx='8' fill='rgba(255,255,255,0.6)'/><rect x='340' y='312' width='120' height='30' rx='15' fill='hsl(${hue},90%,70%)'/>${posters}</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 export const mockApi: Api = {
   ...mockSystem,
   ...mockK8s,
@@ -119,6 +175,97 @@ export const mockApi: Api = {
     return catalog
   },
 
+  async appStore() {
+    const fromStores: StoreEntry[] = [
+      ...catalog.map(c => ({ id: `casaos.${c.id}`, name: c.name, tagline: c.description, category: c.category === 'Smart Home' ? 'Home' : c.category, iconUrl: '', source: 'CasaOS', port: c.port })),
+      ...MOCK_STORE_EXTRA,
+    ]
+    const apps = fromStores.map(a => {
+      const plain = a.id.split('.').slice(1).join('.')
+      return installed.some(i => i.id === plain) ? { ...a, installedAs: plain } : a
+    })
+    return {
+      syncing: false,
+      sources: mockSources,
+      apps: apps.sort((a, b) => a.name.localeCompare(b.name)),
+    }
+  },
+
+  async storeApp(id: string) {
+    const entry = (await this.appStore()).apps.find(a => a.id === id)
+    if (!entry) throw new Error('app not in any store')
+    const appId = id.split('.').slice(1).join('.')
+    const port = entry.port ?? 8080
+    return {
+      ...entry,
+      description: `${entry.tagline} This is the long description from the store, with what the app does and how to use it.`,
+      // Stand-in screenshots: a media library (sidebar, banner, rows of posters) in three colour schemes.
+      screenshots: [0, 1, 2].map(mockScreenshot),
+      author: 'BigBearTechWorld',
+      architectures: ['amd64', 'arm64'],
+      tips: entry.name === 'Jellyfin' ? 'Put your media in /DATA/Media first; Jellyfin finds it on its first scan.' : undefined,
+      yaml: `services:\n  ${appId}:\n    image: ${appId}/${appId}:latest\n    container_name: ${appId}\n    ports:\n      - target: 80\n        published: "${port}"\n        protocol: tcp\n    volumes:\n      - type: bind\n        source: /DATA/AppData/${appId}/config\n        target: /config\n    environment:\n      PUID: "1000"\n      TZ: Asia/Jakarta\nx-casaos:\n  main: ${appId}\n  port_map: "${port}"\n`,
+      service: appId,
+      services: [appId],
+      appId,
+      spec: {
+        image: `${appId}/${appId}`,
+        tag: 'latest',
+        title: entry.name,
+        iconUrl: entry.iconUrl,
+        webUi: { scheme: 'http' as const, port, path: '/' },
+        network: '',
+        ports: [{ host: port, container: 80, protocol: 'tcp' as const }],
+        volumes: [{ host: `/DATA/AppData/${appId}/config`, container: '/config', readOnly: false }],
+        env: [
+          { key: 'PUID', value: '1000' },
+          { key: 'TZ', value: 'Asia/Jakarta' },
+        ],
+        devices: [],
+        command: '',
+        restart: 'unless-stopped' as const,
+        privileged: false,
+        memoryMb: 0,
+        cpuShares: 0,
+        capAdd: [],
+        hostname: '',
+      },
+    }
+  },
+
+  async installStoreApp(id: string, body: { appId: string; spec?: CustomAppSpec }) {
+    await delay(400)
+    const entry = (await this.appStore()).apps.find(a => a.id === id)!
+    const appId = body.appId
+    installed = [
+      ...installed,
+      {
+        id: appId,
+        name: body.spec?.title || entry.name,
+        icon: 'boxes',
+        iconUrl: entry.iconUrl || undefined,
+        color: ['#64d2ff', '#2f6bff'],
+        category: entry.category,
+        description: entry.tagline,
+        port: body.spec?.webUi.port || entry.port || null,
+        path: '/',
+        scheme: 'http',
+        status: 'installing',
+        source: 'temanlabs',
+        containers: 1,
+        canUninstall: true,
+      },
+    ]
+    void delay(3000).then(() => setStatus(appId, 'running'))
+    return appId
+  },
+
+  async refreshStores() {},
+
+  async setStoreSources(urls: string[]) {
+    mockSources = urls.map(url => mockSources.find(s => s.url === url) ?? { id: url, name: new URL(url).host, url, apps: 0, error: 'not downloaded in mock mode' })
+  },
+
   async listApps() {
     return installed
   },
@@ -134,6 +281,77 @@ export const mockApi: Api = {
     await delay(600)
     installed = installed.filter(app => app.id !== id)
   },
+
+  async appConfig(id: string) {
+    const app = installed.find(a => a.id === id)
+    if (!app) throw new Error('app not found')
+    if (app.source === 'native') {
+      return { source: app.source, editable: false, reason: 'This app runs outside Docker, so it has no container settings.', canUpdate: false, containers: [], dataDirs: [] }
+    }
+    const port = app.port ?? 8080
+    const yaml = mockCompose[id] ?? `services:\n  ${id}:\n    image: ${id}/${id}:latest\n    container_name: ${id}\n    restart: unless-stopped\n    ports:\n      - "${port}:80"\n    volumes:\n      - /DATA/AppData/${id}/config:/config\n    environment:\n      TZ: Asia/Jakarta\n`
+    return {
+      source: app.source,
+      editable: true,
+      canUpdate: true,
+      file: `/var/lib/temanlabsos/apps/${id}/docker-compose.yml`,
+      yaml,
+      service: id,
+      services: [id],
+      spec: {
+        image: `${id}/${id}`,
+        tag: 'latest',
+        title: app.name,
+        iconUrl: app.iconUrl ?? '',
+        webUi: { scheme: 'http' as const, port, path: app.path },
+        network: 'bridge',
+        ports: [{ host: port, container: 80, protocol: 'tcp' as const }],
+        volumes: [{ host: `/DATA/AppData/${id}/config`, container: '/config', readOnly: false }],
+        env: [{ key: 'TZ', value: 'Asia/Jakarta' }],
+        devices: [],
+        command: '',
+        restart: 'unless-stopped' as const,
+        privileged: false,
+        memoryMb: 0,
+        cpuShares: 0,
+        capAdd: [],
+        hostname: '',
+      },
+      containers: [{ id: `${id}0123456789ab`, name: id, service: id, state: app.status === 'running' ? 'running' : 'exited', image: `${id}/${id}:latest` }],
+      dataDirs: [`/DATA/AppData/${id}`],
+    }
+  },
+
+  async saveAppConfig(id: string, body: { yaml?: string; spec?: CustomAppSpec }) {
+    await delay(300)
+    if (body.yaml !== undefined) mockCompose[id] = body.yaml
+    if (body.spec) {
+      const spec = body.spec
+      installed = installed.map(a => (a.id === id ? { ...a, name: spec.title || a.name, port: spec.webUi.port || a.port } : a))
+    }
+    return { job: runMockJob(`app-${id}`, 'Applying settings', [' Container recreated', ' Container started'], 1500) }
+  },
+
+  async updateApp(id: string) {
+    delete mockUpdates[id]
+    return { job: runMockJob(`app-${id}`, 'Updating', ['latest: Pulling from library', 'Status: Downloaded newer image', ' Container recreated'], 2500) }
+  },
+
+  async appUpdates() {
+    const apps: Record<string, { available: boolean; images: { image: string; available: boolean; checked: string }[] }> = {}
+    for (const a of installed) {
+      if (a.source === 'native') continue
+      const available = !!mockUpdates[a.id]
+      apps[a.id] = { available, images: [{ image: `${a.id}/${a.id}:latest`, available, checked: new Date().toISOString() }] }
+    }
+    return { checking: false, checked: new Date().toISOString(), apps }
+  },
+
+  async job(kind: string) {
+    return mockJobs[kind] ?? mockSystem.job(kind)
+  },
+
+  appTerminalUrl: () => null,
 
   async setAppRunning(id: string, running: boolean) {
     await delay(800)
@@ -171,6 +389,8 @@ export const mockApi: Api = {
     return ['bridge', 'host', 'casaos']
   },
 
+  async appSignIn() {},
+  async appSignOut() {},
   async appFrame() {
     return { proxied: false }
   },
@@ -245,7 +465,7 @@ export const mockApi: Api = {
   async listServices() {
     const now = Math.floor(Date.now() / 1000)
     return [
-      { unit: 'casaos-gateway.service', description: 'CasaOS Gateway', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', mainPid: 1108, memory: 49e6, cpu: Math.random() * 2, since: now - 86400 * 13 },
+      { unit: 'caddy.service', description: 'Caddy web server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', mainPid: 1108, memory: 49e6, cpu: Math.random() * 2, since: now - 86400 * 13 },
       { unit: 'docker.service', description: 'Docker Application Container Engine', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', mainPid: 1432, memory: 635e6, cpu: 14, since: now - 86400 * 13, protected: true },
       { unit: 'ssh.service', description: 'OpenBSD Secure Shell server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', mainPid: 900, memory: 7e6, cpu: 0, since: now - 3600, protected: true },
       { unit: 'nginx.service', description: 'A high performance web server', load: 'loaded', active: 'failed', sub: 'failed', enabled: 'enabled', cpu: 0 },

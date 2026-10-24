@@ -25,6 +25,10 @@ const (
 
 var frameAncestors = regexp.MustCompile(`(?i)\s*frame-ancestors[^;]*;?`)
 
+// Apps that refuse frames only to browsers elsewhere on the network, so the server's own check
+// (from the server itself) can't see it: their images.
+var framesBlockedRemotely = []string{"tailscale/tailscale"}
+
 var upstreamTransport = &http.Transport{
 	Proxy:               nil,
 	TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, // self-signed certs on apps' own ports are normal
@@ -34,38 +38,62 @@ var upstreamTransport = &http.Transport{
 
 type frameProxies struct {
 	mu     sync.Mutex
-	ports  map[string]int // upstream origin → proxy port
+	ports  map[string]int    // upstream origin → proxy port
+	apps   map[string]string // upstream origin → app ID (for its saved sign-in)
 	server *server
 }
 
 func newFrameProxies(s *server) *frameProxies {
-	return &frameProxies{ports: map[string]int{}, server: s}
+	return &frameProxies{ports: map[string]int{}, apps: map[string]string{}, server: s}
 }
 
-// frameBlocked asks the app for its page and reports whether it forbids being framed.
-func frameBlocked(target string) (bool, error) {
+type frameProbe struct {
+	// It forbids being framed.
+	blocked bool
+	// It asks for an HTTP Basic login (still, if one was sent).
+	basic bool
+}
+
+// probeFrame asks the app for its page, with a Basic login if auth is set.
+func probeFrame(target, auth string) (frameProbe, error) {
 	client := &http.Client{Transport: upstreamTransport, Timeout: 6 * time.Second}
-	res, err := client.Get(target)
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
-		return false, err
+		return frameProbe{}, err
+	}
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return frameProbe{}, err
 	}
 	res.Body.Close()
-	if res.Header.Get("X-Frame-Options") != "" {
-		return true, nil
+	p := frameProbe{basic: isBasicChallenge(res), blocked: res.Header.Get("X-Frame-Options") != ""}
+	csp := strings.ToLower(res.Header.Get("Content-Security-Policy"))
+	if strings.Contains(csp, "frame-ancestors") && !strings.Contains(csp, "frame-ancestors *") {
+		p.blocked = true
 	}
-	for _, h := range []string{"Content-Security-Policy"} {
-		csp := strings.ToLower(res.Header.Get(h))
-		if strings.Contains(csp, "frame-ancestors") && !strings.Contains(csp, "frame-ancestors *") {
-			return true, nil
-		}
+	return p, nil
+}
+
+func appOrigin(a *app) string {
+	scheme := a.Scheme
+	if scheme != "https" {
+		scheme = "http"
 	}
-	return false, nil
+	host := "127.0.0.1"
+	if a.host != "" {
+		host = a.host
+	}
+	return fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(host, strconv.Itoa(*a.Port)))
 }
 
 // portFor returns the proxy port for an upstream origin, starting a proxy on first use.
-func (f *frameProxies) portFor(origin string, appPort int) (int, error) {
+func (f *frameProxies) portFor(origin string, appPort int, appID string) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.apps[origin] = appID
 	if p, ok := f.ports[origin]; ok {
 		return p, nil
 	}
@@ -78,7 +106,7 @@ func (f *frameProxies) portFor(origin string, appPort int) (int, error) {
 		if err != nil {
 			continue
 		}
-		srv := &http.Server{Handler: f.handler(upstream, appPort), ReadHeaderTimeout: 10 * time.Second}
+		srv := &http.Server{Handler: f.handler(origin, upstream, appPort), ReadHeaderTimeout: 10 * time.Second}
 		go func() {
 			if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {
 				log.Printf("frame proxy :%d: %v", p, err)
@@ -91,7 +119,15 @@ func (f *frameProxies) portFor(origin string, appPort int) (int, error) {
 	return 0, fmt.Errorf("no free port between %d and %d", framePortFirst, framePortLast)
 }
 
-func (f *frameProxies) handler(upstream *url.URL, appPort int) http.Handler {
+// login is the saved sign-in for the app behind an origin, if any.
+func (f *frameProxies) login(origin string) (appLogin, bool) {
+	f.mu.Lock()
+	id := f.apps[origin]
+	f.mu.Unlock()
+	return f.server.logins.get(id)
+}
+
+func (f *frameProxies) handler(origin string, upstream *url.URL, appPort int) http.Handler {
 	rp := &httputil.ReverseProxy{
 		Transport: upstreamTransport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -100,9 +136,16 @@ func (f *frameProxies) handler(upstream *url.URL, appPort int) http.Handler {
 			// The app sees the address the browser used, so links it builds stay on the proxy.
 			pr.Out.Host = pr.In.Host
 			withoutSessionCookie(pr.Out)
+			if login, ok := f.login(origin); ok && pr.Out.Header.Get("Authorization") == "" {
+				pr.Out.Header.Set("Authorization", login.header())
+			}
 		},
 		ModifyResponse: func(res *http.Response) error {
 			res.Header.Del("X-Frame-Options")
+			// The window signs in itself; the browser's own login dialog would only get in the way.
+			if isBasicChallenge(res) {
+				res.Header.Del("WWW-Authenticate")
+			}
 			for _, h := range []string{"Content-Security-Policy", "Content-Security-Policy-Report-Only"} {
 				if v := res.Header.Get(h); v != "" {
 					res.Header.Set(h, strings.TrimSpace(frameAncestors.ReplaceAllString(v, "")))
@@ -155,25 +198,42 @@ func (s *server) handleAppFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "this app has no web interface")
 		return
 	}
-	scheme := a.Scheme
-	if scheme != "https" {
-		scheme = "http"
+	origin := appOrigin(a)
+	// Apps listening on localhost only can't be reached from the browser except through the proxy;
+	// the window can also ask for it (?proxy=1) when an app doesn't show. Apps behind a Basic
+	// login go through it too, which sends the saved sign-in.
+	login, signedIn := s.logins.get(a.ID)
+	auth := ""
+	if signedIn {
+		auth = login.header()
 	}
-	host := "127.0.0.1"
-	if a.host != "" {
-		host = a.host
+	probe, err := probeFrame(origin+a.Path, auth)
+	blocked := probe.blocked || probe.basic || signedIn
+	for _, c := range a.containers {
+		for _, image := range framesBlockedRemotely {
+			if strings.HasPrefix(c.Image, image) {
+				blocked, err = true, nil
+			}
+		}
 	}
-	origin := fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(host, strconv.Itoa(*a.Port)))
-	// Apps listening on localhost only can't be reached from the browser except through the proxy.
-	blocked, err := frameBlocked(origin + a.Path)
+	if r.URL.Query().Get("proxy") == "1" {
+		blocked, err = true, nil
+	}
 	if !a.LocalOnly && (err != nil || !blocked) {
 		writeJSON(w, http.StatusOK, map[string]any{"proxied": false})
 		return
 	}
-	port, err := s.frames.portFor(origin, *a.Port)
+	port, err := s.frames.portFor(origin, *a.Port, a.ID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"proxied": false, "error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"proxied": true, "port": port})
+	res := map[string]any{"proxied": true, "port": port}
+	if probe.basic || signedIn {
+		// Signed in means the saved sign-in still works; otherwise the window asks for one.
+		res["auth"] = "basic"
+		res["signedIn"] = signedIn && !probe.basic
+		res["username"] = login.Username
+	}
+	writeJSON(w, http.StatusOK, res)
 }

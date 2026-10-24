@@ -60,6 +60,10 @@
   --track: rgba(0, 0, 0, 0.08);
   --track-strong: rgba(0, 0, 0, 0.18);
   --term-bg: rgba(252, 252, 254, 0.82);
+  /* Image Viewer: the stage behind a photo and the thumbnail strip */
+  --viewer-bg: #e9e9ec;
+  --viewer-glow: rgba(255, 255, 255, 0.7);
+  --viewer-strip: rgba(246, 246, 248, 0.96);
 
   /* Code editor */
   --ce-bg: rgba(255, 255, 255, 0.42);
@@ -114,6 +118,9 @@
   --track: rgba(255, 255, 255, 0.1);
   --track-strong: rgba(255, 255, 255, 0.22);
   --term-bg: rgba(10, 10, 12, 0.85);
+  --viewer-bg: rgba(20, 20, 24, 0.94);
+  --viewer-glow: rgba(255, 255, 255, 0.06);
+  --viewer-strip: rgba(20, 20, 24, 0.94);
 
   --ce-bg: rgba(16, 16, 22, 0.42);
   --ce-chrome: rgba(255, 255, 255, 0.035);

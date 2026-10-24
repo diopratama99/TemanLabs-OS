@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { tr } from '../lib/i18n'
 
 interface Props {
   name: string
@@ -30,7 +31,7 @@ export function RenameField({ name, onDone }: Props) {
       ref={ref}
       className="file-rename"
       defaultValue={name}
-      aria-label="New name"
+      aria-label={tr('New name')}
       onBlur={e => finish(e.target.value)}
       onKeyDown={e => {
         e.stopPropagation()

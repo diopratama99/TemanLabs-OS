@@ -4,6 +4,7 @@ import type { Session } from '../api/types'
 import { Login } from '../components/Login'
 import { Wallpaper } from '../components/Wallpaper'
 import { DATA_ROOT } from './places'
+import { tr } from './i18n'
 
 interface AuthContextValue {
   hostname: string
@@ -64,6 +65,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthGate')
+  if (!ctx) throw new Error(tr('useAuth must be used inside AuthGate'))
   return ctx
 }

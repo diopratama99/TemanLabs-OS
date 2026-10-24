@@ -68,6 +68,8 @@ const MEDIA: Record<string, FileKind> = {
   mov: 'video',
   avi: 'video',
   webm: 'video',
+  m2ts: 'video',
+  mts: 'video',
   mp3: 'audio',
   flac: 'audio',
   wav: 'audio',

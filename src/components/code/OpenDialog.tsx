@@ -8,19 +8,23 @@ import { isTextFile } from '../../lib/fileTypes'
 import { formatBytes } from '../../lib/format'
 import { ancestors, displayName, joinPath, parentOf } from '../../lib/paths'
 import { FileTypeIcon } from './FileTypeIcon'
+import { tr } from '../../lib/i18n'
 
 interface Props {
   mode: 'file' | 'folder'
   startDir: string
   /** A text file (file mode) or a folder (folder mode) was chosen. */
   onOpen: (path: string) => void
-  /** Files picked from the user's own computer, to upload into `dir` (file mode only). */
-  onUpload: (dir: string, files: File[]) => void
+  /** Files picked from the user's own computer, to upload into `dir` (file mode only; no button without it). */
+  onUpload?: (dir: string, files: File[]) => void
   onCancel: () => void
+  /** Which files can be chosen (file mode); text files by default. */
+  accept?: (entry: FileEntry) => boolean
+  title?: string
 }
 
 /** Open File / Open Folder panel, as a sheet, browsing the server's files. */
-export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props) {
+export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept = e => isTextFile(e.name), title: heading }: Props) {
   const { root } = useAuth()
   const { favorites, locations } = usePlaces()
   const [dir, setDir] = useState(startDir)
@@ -60,7 +64,7 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props
     setFilter('')
   }
 
-  const usable = (entry: FileEntry) => entry.kind === 'folder' || (mode === 'file' && isTextFile(entry.name))
+  const usable = (entry: FileEntry) => entry.kind === 'folder' || (mode === 'file' && accept(entry))
   const q = filter.trim().toLowerCase()
   const visible = entries.filter(e => e.name.toLowerCase().includes(q))
   const selectedEntry = visible.find(e => e.name === selected)
@@ -95,15 +99,15 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props
     .filter(c => root === '/' || c.path === root || c.path.startsWith(`${root}/`))
     .map(c => ({ label: c.name, path: c.path }))
 
-  const title = mode === 'file' ? 'Open File' : 'Open Folder'
+  const title = heading ?? (mode === 'file' ? tr('Open File') : tr('Open Folder'))
 
   return (
     <div className="ce-sheet-backdrop" onPointerDown={e => e.target === e.currentTarget && onCancel()}>
       <div className="ce-open" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
         <aside className="ce-open-side">
           {[
-            { title: 'Favorites', places: favorites },
-            { title: 'Locations', places: locations },
+            { title: tr('Favorites'), places: favorites },
+            { title: tr('Locations'), places: locations },
           ]
             .filter(group => group.places.length > 0)
             .map(group => (
@@ -128,7 +132,7 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props
             <strong>{title}</strong>
             <label className="sidebar-search ce-open-filter">
               <Search size={13} />
-              <input autoFocus value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter" />
+              <input autoFocus value={filter} onChange={e => setFilter(e.target.value)} placeholder={tr('Filter')} />
             </label>
           </div>
           <div className="ce-open-bar">
@@ -136,8 +140,8 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props
               className="icon-btn"
               onClick={() => go(parentOf(dir))}
               disabled={dir === root}
-              aria-label="Enclosing folder"
-              title="Enclosing Folder"
+              aria-label={tr('Enclosing folder')}
+              title={tr('Enclosing Folder')}
             >
               <ArrowUp size={16} />
             </button>
@@ -172,40 +176,42 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel }: Props
             ))}
             {visible.length === 0 && (
               <p className="ce-open-empty">
-                {loadError ? `Can’t open this folder: ${loadError}` : q ? 'No matches.' : 'This folder is empty.'}
+                {loadError ? tr('Can’t open this folder: {0}', loadError) : q ? tr('No matches.') : tr('This folder is empty.')}
               </p>
             )}
           </div>
 
           <div className="ce-open-foot">
             {mode === 'file' ? (
-              <>
-                <button className="btn" onClick={() => uploadRef.current?.click()}>
-                  <Upload size={13} /> From This Computer…
-                </button>
-                <input
-                  ref={uploadRef}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={e => {
-                    const picked = [...(e.target.files ?? [])]
-                    e.target.value = ''
-                    if (picked.length) onUpload(dir, picked)
-                  }}
-                />
-              </>
+              onUpload && (
+                <>
+                  <button className="btn" onClick={() => uploadRef.current?.click()}>
+                    <Upload size={13} /> {tr('From This Computer…')}
+                  </button>
+                  <input
+                    ref={uploadRef}
+                    type="file"
+                    multiple
+                    hidden
+                    onChange={e => {
+                      const picked = [...(e.target.files ?? [])]
+                      e.target.value = ''
+                      if (picked.length) onUpload(dir, picked)
+                    }}
+                  />
+                </>
+              )
             ) : (
               <span className="ce-open-hint">
-                Opens {selectedEntry?.kind === 'folder' ? selectedEntry.name : displayName(dir)} as the workspace
+                {tr('Opens')} {selectedEntry?.kind === 'folder' ? selectedEntry.name : displayName(dir)} {tr('as the workspace')}
               </span>
             )}
             <span className="ce-status-grow" />
             <button className="btn" onClick={onCancel}>
-              Cancel
+              {tr('Cancel')}
             </button>
             <button className="btn btn-primary" onClick={confirm} disabled={!canConfirm}>
-              Open
+              {tr('Open')}
             </button>
           </div>
         </div>

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,7 +53,14 @@ func kubectl(ctx context.Context, stdin string, args ...string) ([]byte, string,
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
+		// One request for several kinds repeats the same error once per kind: say it once.
+		var lines []string
+		for _, line := range strings.Split(strings.TrimSpace(stderr.String()), "\n") {
+			if line = strings.TrimSpace(line); line != "" && !slices.Contains(lines, line) {
+				lines = append(lines, line)
+			}
+		}
+		msg := strings.Join(lines, "\n")
 		if msg == "" {
 			msg = err.Error()
 		}

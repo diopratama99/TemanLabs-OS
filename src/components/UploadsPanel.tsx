@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, LoaderCircle, X } from 'lucide-react'
 import type { UploadJob } from '../hooks/useUploads'
 import { formatBytes } from '../lib/format'
+import { tr } from '../lib/i18n'
 
 interface Props {
   jobs: UploadJob[]
@@ -24,15 +25,15 @@ export function UploadsPanel({ jobs, busy, onCancel, onClear }: Props) {
       <div className="uploads-head">
         <strong>
           {busy
-            ? `Copying ${done + 1 > jobs.length ? jobs.length : done + 1} of ${jobs.length}…`
+            ? tr('Copying {0} of {1}…', done + 1 > jobs.length ? jobs.length : done + 1, jobs.length)
             : failed.length
-              ? `${failed.length} of ${jobs.length} couldn’t be copied`
-              : `Copied ${jobs.length} item${jobs.length > 1 ? 's' : ''}`}
+              ? tr('{0} of {1} couldn’t be copied', failed.length, jobs.length)
+              : tr('Copied {0} item{1}', jobs.length, jobs.length > 1 ? 's' : '')}
         </strong>
         <small>
           {formatBytes(loaded)} of {formatBytes(total)}
         </small>
-        <button className="icon-btn" onClick={busy ? onCancel : onClear} aria-label={busy ? 'Cancel uploads' : 'Close'} title={busy ? 'Stop' : 'Close'}>
+        <button className="icon-btn" onClick={busy ? onCancel : onClear} aria-label={busy ? tr('Cancel uploads') : tr('Close')} title={busy ? tr('Stop') : tr('Close')}>
           <X size={13} />
         </button>
       </div>

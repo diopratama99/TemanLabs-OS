@@ -9,6 +9,7 @@ import { hasWebUI } from '../lib/apps'
 import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 3000
 
@@ -60,39 +61,39 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
     const web = !!p && p.protocol === 'tcp' && p.public
     const proxy = p?.process === 'docker-proxy'
     return [
-      { label: 'Open in Browser', icon: ExternalLink, disabled: !web, onSelect: () => p && window.open(browserUrl(p), '_blank', 'noopener') },
+      { label: tr('Open in Browser'), icon: ExternalLink, disabled: !web, onSelect: () => p && window.open(browserUrl(p), '_blank', 'noopener') },
       {
-        label: app ? `Open ${app.name}` : 'Open App Window',
+        label: app ? tr('Open {0}', app.name) : tr('Open App Window'),
         icon: AppWindow,
         disabled: !app || !hasWebUI(app),
         onSelect: () => app && onOpenApp(app),
       },
       'separator',
-      { label: 'Copy Address', icon: Copy, disabled: !p, onSelect: () => p && void copyText(`${location.hostname}:${p.port}`) },
-      { label: 'Copy Command Line', icon: Copy, disabled: !p?.command, onSelect: () => p?.command && void copyText(p.command) },
+      { label: tr('Copy Address'), icon: Copy, disabled: !p, onSelect: () => p && void copyText(`${location.hostname}:${p.port}`) },
+      { label: tr('Copy Command Line'), icon: Copy, disabled: !p?.command, onSelect: () => p?.command && void copyText(p.command) },
       'separator',
       {
-        label: p?.container ? `Stop Container ${p.container}` : 'Stop Container',
+        label: p?.container ? tr('Stop Container {0}', p.container) : tr('Stop Container'),
         icon: Square,
         disabled: !p?.containerId,
-        confirm: 'Click Again to Stop',
+        confirm: tr('Click Again to Stop'),
         onSelect: () => p?.containerId && void api.containerAction(p.containerId, 'stop').then(refresh),
       },
       // docker-proxy belongs to Docker; ending it would break the container's port, not free it.
       {
-        label: p?.process ? `End Process ${p.process}` : 'End Process',
+        label: p?.process ? tr('End Process {0}', p.process) : tr('End Process'),
         icon: OctagonX,
         disabled: !p?.pid || p.pid === 1 || proxy,
         danger: true,
-        confirm: 'Click Again to End',
+        confirm: tr('Click Again to End'),
         onSelect: () => p?.pid && void api.killProcess(p.pid).then(refresh),
       },
       {
-        label: 'Force Quit Process',
+        label: tr('Force Quit Process'),
         icon: Zap,
         disabled: !p?.pid || p.pid === 1 || proxy,
         danger: true,
-        confirm: 'Click Again to Force Quit',
+        confirm: tr('Click Again to Force Quit'),
         onSelect: () => p?.pid && void api.killProcess(p.pid, true).then(refresh),
       },
     ]
@@ -100,18 +101,18 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
-        { label: 'All Ports', checked: filter === 'all', onSelect: () => setFilter('all') },
-        { label: 'TCP Only', checked: filter === 'tcp', onSelect: () => setFilter('tcp') },
-        { label: 'UDP Only', checked: filter === 'udp', onSelect: () => setFilter('udp') },
+        { label: tr('All Ports'), checked: filter === 'all', onSelect: () => setFilter('all') },
+        { label: tr('TCP Only'), checked: filter === 'tcp', onSelect: () => setFilter('tcp') },
+        { label: tr('UDP Only'), checked: filter === 'udp', onSelect: () => setFilter('udp') },
         'separator',
-        { label: 'Reachable From Network Only', checked: publicOnly, onSelect: () => setPublicOnly(v => !v) },
+        { label: tr('Reachable From Network Only'), checked: publicOnly, onSelect: () => setPublicOnly(v => !v) },
         'separator',
-        { label: 'Refresh', icon: RotateCw, onSelect: () => void refresh() },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: () => void refresh() },
       ],
     },
-    { label: 'Port', items: portItems(selectedPort) },
+    { label: tr('Port'), items: portItems(selectedPort) },
   ])
 
   const q = query.trim().toLowerCase()
@@ -157,40 +158,40 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
   return (
     <div className="am">
       <WindowToolbar>
-        <ToolbarTitle title="System Monitor" subtitle="Listening Ports" />
+        <ToolbarTitle title={tr('System Monitor')} subtitle={tr('Listening Ports')} />
         <span className="tb-spacer" />
         {tabs}
         <span className="tb-spacer" />
           <label className="tb-search">
             <Search size={13} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Port, process, app…" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Port, process, app…')} />
           </label>
       </WindowToolbar>
       <div className="am-summary">
         <div>
-          <small>Listening</small>
+          <small>{tr('Listening')}</small>
           <strong>
             {ports?.length ?? '—'}
-            <em> ports</em>
+            <em> {tr('ports')}</em>
           </strong>
         </div>
         <div>
-          <small>From the network</small>
+          <small>{tr('From the network')}</small>
           <strong>
             {ports ? ports.filter(p => p.public).length : '—'}
-            <em> reachable</em>
+            <em> {tr('reachable')}</em>
           </strong>
         </div>
         <div className="pv-check">
-          <small>Is a port free?</small>
+          <small>{tr('Is a port free?')}</small>
           <input value={check} onChange={e => setCheck(e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="e.g. 8080" inputMode="numeric" />
           {checkPort > 0 && ports && (
             <span className={`pv-verdict ${checkHits.length ? 'is-used' : 'is-free'}`}>
               {checkHits.length
-                ? `In use by ${checkHits.map(p => ownerName(p) || p.process || 'unknown').join(', ')}`
+                ? tr('In use by {0}', checkHits.map(p => ownerName(p) || p.process || 'unknown').join(', '))
                 : checkPort > 65535
-                  ? 'Not a port'
-                  : 'Free'}
+                  ? tr('Not a port')
+                  : tr('Free')}
             </span>
           )}
         </div>
@@ -200,27 +201,27 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
         <div className="segmented">
           {(['all', 'tcp', 'udp'] as Filter[]).map(f => (
             <button key={f} className={filter === f ? 'is-active' : ''} onClick={() => setFilter(f)}>
-              {f === 'all' ? 'All' : f.toUpperCase()}
+              {f === 'all' ? tr('All') : f.toUpperCase()}
             </button>
           ))}
         </div>
         <label className="pv-toggle">
-          <input type="checkbox" checked={publicOnly} onChange={e => setPublicOnly(e.target.checked)} /> Reachable from network only
+          <input type="checkbox" checked={publicOnly} onChange={e => setPublicOnly(e.target.checked)} /> {tr('Reachable from network only')}
         </label>
       </div>
 
       <div className="am-table" role="table">
         <div className="pv-row am-head" role="row">
           {header('port', 'Port')}
-          <span>Address</span>
+          <span>{tr('Address')}</span>
           {header('process', 'Process')}
           {header('app', 'App / Container')}
-          <span>User</span>
+          <span>{tr('User')}</span>
         </div>
         <div className="am-body">
-          {loadError && <p className="am-empty form-error">Couldn’t read ports: {loadError}</p>}
-          {!ports && !loadError && <p className="am-empty">Scanning ports…</p>}
-          {ports && visible.length === 0 && <p className="am-empty">No ports match.</p>}
+          {loadError && <p className="am-empty form-error">{tr('Couldn’t read ports:')} {loadError}</p>}
+          {!ports && !loadError && <p className="am-empty">{tr('Scanning ports…')}</p>}
+          {ports && visible.length === 0 && <p className="am-empty">{tr('No ports match.')}</p>}
           {visible.map(p => {
             const app = p.appId ? appsById.get(p.appId) : undefined
             const key = keyOf(p)
@@ -243,7 +244,7 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
                   {p.targetPort && p.targetPort !== p.port && <small className="pv-target">→ {p.targetPort}</small>}
                 </span>
                 <span className="pv-addr">
-                  <i className={`pv-badge ${p.public ? 'is-public' : 'is-local'}`}>{p.public ? 'Network' : 'Local only'}</i>
+                  <i className={`pv-badge ${p.public ? 'is-public' : 'is-local'}`}>{p.public ? tr('Network') : tr('Local only')}</i>
                   <span className="am-name-text">{p.addresses.map(a => (a === '0.0.0.0' || a === '::' ? `${a} (all)` : a)).join(', ')}</span>
                 </span>
                 <span className="am-name-text">
@@ -252,7 +253,7 @@ export function PortsView({ apps, onOpenApp, tabs }: Props) {
                 </span>
                 <span className="pv-owner">
                   {app && <AppIcon icon={app.icon} iconUrl={app.iconUrl} color={app.color} size={18} />}
-                  <span className="am-name-text">{app?.name ?? p.container ?? (p.addresses.every(isLocalAddress) ? 'System (local)' : 'System')}</span>
+                  <span className="am-name-text">{app?.name ?? p.container ?? (p.addresses.every(isLocalAddress) ? tr('System (local)') : tr('System'))}</span>
                 </span>
                 <span className="am-name-text pv-user">{p.user ?? '—'}</span>
               </div>

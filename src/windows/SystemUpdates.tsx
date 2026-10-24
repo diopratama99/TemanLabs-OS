@@ -5,6 +5,7 @@ import type { Job, UpdatesInfo } from '../api/types'
 import { useAppMenus } from '../lib/appMenus'
 import { formatFileDate } from '../lib/format'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 const JOB_POLL_MS = 1200
 
@@ -61,10 +62,10 @@ export function SystemUpdates() {
 
   useAppMenus(() => [
     {
-      label: 'Update',
+      label: tr('Update'),
       items: [
-        { label: 'Check for Updates', icon: RefreshCw, disabled: running, onSelect: check },
-        { label: 'Install All Updates', disabled: running || !info?.updates.length, onSelect: () => install() },
+        { label: tr('Check for Updates'), icon: RefreshCw, disabled: running, onSelect: check },
+        { label: tr('Install All Updates'), disabled: running || !info?.updates.length, onSelect: () => install() },
       ],
     },
   ])
@@ -83,33 +84,32 @@ export function SystemUpdates() {
     <div className="pane su">
       <WindowToolbar>
         <ToolbarTitle
-          title="System Updates"
-          subtitle={info?.lastChecked ? `Last checked ${formatFileDate(info.lastChecked)}` : undefined}
+          title={tr('System Updates')}
+          subtitle={info?.lastChecked ? tr('Last checked {0}', formatFileDate(info.lastChecked)) : undefined}
         />
         <span className="tb-spacer" />
         <div className="tb-group">
-          <button className="tb-btn" onClick={check} disabled={running} aria-label="Check for updates" title="Check for Updates">
+          <button className="tb-btn" onClick={check} disabled={running} aria-label={tr('Check for updates')} title={tr('Check for Updates')}>
             <RefreshCw size={15} className={running && job?.title?.startsWith('Checking') ? 'spin' : ''} />
           </button>
         </div>
       </WindowToolbar>
 
-      {loadError && <p className="form-error">Couldn’t read updates: {loadError}</p>}
+      {loadError && <p className="form-error">{tr('Couldn’t read updates:')} {loadError}</p>}
 
       {info?.rebootRequired && (
         <div className="su-banner">
           <TriangleAlert size={18} />
           <span>
-            <strong>Restart required</strong>
+            <strong>{tr('Restart required')}</strong>
             <small>
-              Updates to {info.rebootFor?.slice(0, 3).join(', ') || 'the system'}
-              {info.rebootFor && info.rebootFor.length > 3 ? ` and ${info.rebootFor.length - 3} more` : ''} take effect after a restart.
-              Apps and shares are unavailable for a minute or two.
+              {tr('Updates to')} {info.rebootFor?.slice(0, 3).join(', ') || tr('the system')}
+              {info.rebootFor && info.rebootFor.length > 3 ? tr(' and {0} more', info.rebootFor.length - 3) : ''} {tr('take effect after a restart. Apps and shares are unavailable for a minute or two.')}
             </small>
           </span>
           {restarting ? (
             <span className="su-restarting">
-              <LoaderCircle size={14} className="spin" /> Restarting…
+              <LoaderCircle size={14} className="spin" /> {tr('Restarting…')}
             </span>
           ) : (
             <button
@@ -124,7 +124,7 @@ export function SystemUpdates() {
               }}
               onBlur={() => setConfirmRestart(false)}
             >
-              <Power size={13} /> {confirmRestart ? 'Click Again to Restart' : 'Restart Now…'}
+              <Power size={13} /> {confirmRestart ? tr('Click Again to Restart') : tr('Restart Now…')}
             </button>
           )}
         </div>
@@ -134,25 +134,25 @@ export function SystemUpdates() {
         {updates.length ? <ShieldAlert size={34} className={security ? 'is-security' : ''} /> : <CircleCheck size={34} className="is-ok" />}
         <div>
           <strong>
-            {info ? (updates.length ? `${updates.length} update${updates.length > 1 ? 's' : ''} available` : 'Your server is up to date') : 'Checking…'}
+            {info ? (updates.length ? tr('{0} update{1} available', updates.length, updates.length > 1 ? 's' : '') : tr('Your server is up to date')) : tr('Checking…')}
           </strong>
           <small>
             {updates.length
               ? security
-                ? `${security} ${security > 1 ? 'are security fixes' : 'is a security fix'}: install soon.`
-                : 'Bug fixes and improvements from Ubuntu and your other sources.'
-              : 'Ubuntu, Docker and your other apt sources have nothing new.'}
+                ? tr('{0} {1}: install soon.', security, security > 1 ? tr('are security fixes') : tr('is a security fix'))
+                : tr('Bug fixes and improvements from Ubuntu and your other sources.')
+              : tr('Ubuntu, Docker and your other apt sources have nothing new.')}
           </small>
         </div>
         {updates.length > 0 && (
           <div className="su-actions">
             {picked.size > 0 && (
               <button className="btn" onClick={() => install([...picked])} disabled={running}>
-                Install {picked.size} Selected
+                {tr('Install')} {picked.size} {tr('Selected')}
               </button>
             )}
             <button className="btn btn-primary" onClick={() => install()} disabled={running}>
-              Update All
+              {tr('Update All')}
             </button>
           </div>
         )}
@@ -163,7 +163,7 @@ export function SystemUpdates() {
           <div className="su-job-head">
             {job.running ? <LoaderCircle size={14} className="spin" /> : job.exit === 0 ? <CircleCheck size={14} className="is-ok" /> : <TriangleAlert size={14} className="is-bad" />}
             <strong>{job.title ?? 'apt'}</strong>
-            <small>{job.running ? 'Running…' : job.exit === 0 ? 'Finished' : `Failed (exit ${job.exit})`}</small>
+            <small>{job.running ? tr('Running…') : job.exit === 0 ? tr('Finished') : tr('Failed (exit {0})', job.exit)}</small>
           </div>
           <pre ref={logRef} className="su-log">
             {job.log.slice(-400).join('\n') || '…'}
@@ -185,7 +185,7 @@ export function SystemUpdates() {
                   {u.current} → {u.version}
                 </small>
               </span>
-              {u.security && <i className="su-badge">Security</i>}
+              {u.security && <i className="su-badge">{tr('Security')}</i>}
               <small className="su-origin">{u.origin.split(',')[0]}</small>
             </label>
           ))}

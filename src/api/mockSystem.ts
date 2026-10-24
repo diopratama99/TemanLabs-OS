@@ -1,5 +1,17 @@
 // Mock data for the system utilities (npm run dev:mock), shaped like the real server's answers.
 import type {
+  CommandBook,
+  Device,
+  DeviceInput,
+  DeviceStatus,
+  FoundDevice,
+  RemoteEngine,
+  FileDetails,
+  CommandsInfo,
+  ConvertInfo,
+  ConvertRequest,
+  ConvertTask,
+  MediaProbe,
   K8sActionRequest,
   K8sPod,
   K8sResources,
@@ -28,7 +40,7 @@ let updates: AptUpdate[] = [
   { name: 'tzdata', current: '2025a', version: '2025b', origin: 'noble-updates', security: false },
 ]
 
-const sources = ['systemd', 'sshd', 'dockerd', 'casaos-gateway', 'kernel', 'sudo', 'cron']
+const sources = ['systemd', 'sshd', 'dockerd', 'caddy', 'kernel', 'sudo', 'cron']
 const messages = [
   'Started Session 42 of User teman.',
   'Accepted publickey for teman from 192.168.1.11 port 52114',
@@ -108,7 +120,72 @@ const disks: BlockDevice[] = [
   },
 ]
 
+const mockConverts: ConvertTask[] = []
+const mockPositions = new Map<string, { position: number; duration: number }>()
+let mockBook: CommandBook = {
+  custom: [{ id: 'c1', title: 'Back up AppData', command: 'sudo tar -czf /DATA/Backup/appdata-$(date +%F).tar.gz /DATA/AppData', note: 'Stop the apps first.' }],
+  favorites: ['disk-free', 'c1'],
+}
+
+let mockDevices: Device[] = [
+  { id: 'pc', name: 'Gaming PC', kind: 'windows', host: '192.168.1.11', mac: '9c:6b:00:68:7d:27', protocol: 'vnc', port: 5900, username: '', hasPassword: true },
+  { id: 'mac', name: 'MacBook', kind: 'mac', host: '192.168.1.2', mac: '', protocol: 'vnc', port: 5900, username: 'dio', hasPassword: true },
+]
+const mockEngine: RemoteEngine = { docker: true, installed: false, running: false, installing: false }
+// The PC starts off; waking it brings it up a few seconds later.
+const mockOnline: Record<string, boolean> = { pc: false, mac: true }
+
 export const mockSystem = {
+  async devices() {
+    return { devices: mockDevices, engine: { ...mockEngine } }
+  },
+  async createDevice(body: DeviceInput) {
+    const { password, ...rest } = body
+    const device: Device = { ...rest, id: `d${Date.now().toString(36)}`, hasPassword: !!password }
+    mockDevices = [...mockDevices, device]
+    mockOnline[device.id] = true
+    return device
+  },
+  async updateDevice(id: string, body: DeviceInput) {
+    const { password, ...rest } = body
+    let saved: Device | undefined
+    mockDevices = mockDevices.map(d => (d.id === id ? (saved = { ...d, ...rest, hasPassword: password === undefined ? d.hasPassword : !!password }) : d))
+    if (!saved) throw new Error('no such device')
+    return saved
+  },
+  async deleteDevice(id: string) {
+    mockDevices = mockDevices.filter(d => d.id !== id)
+  },
+  async deviceStatus() {
+    await delay(600)
+    return Object.fromEntries(
+      mockDevices.map(d => [d.id, { online: !!mockOnline[d.id], screen: !!mockOnline[d.id] && d.protocol !== '', latency: mockOnline[d.id] ? 3 : undefined } satisfies DeviceStatus]),
+    )
+  },
+  async wakeDevice(id: string) {
+    setTimeout(() => (mockOnline[id] = true), 6000)
+  },
+  async discoverDevices(): Promise<FoundDevice[]> {
+    await delay(2500)
+    return [
+      { ip: '192.168.1.10', mac: '', name: 'serverdio', kind: 'linux', ports: [22], self: true },
+      { ip: '192.168.1.1', mac: '28:6d:da:46:7d:b0', kind: 'other', ports: [80], router: true },
+      { ip: '192.168.1.2', mac: '1e:f9:6b:b5:64:b2', name: 'MacBook', kind: 'mac', ports: [5000, 7000] },
+      { ip: '192.168.1.7', mac: '66:64:4a:02:14:69', name: 'raspberrypi', kind: 'linux', ports: [22] },
+      { ip: '192.168.1.11', mac: '9c:6b:00:68:7d:27', name: 'DESKTOP-4K2P', kind: 'windows', ports: [135, 445] },
+    ]
+  },
+  async lookupMac(host: string) {
+    await delay(500)
+    if (host === '192.168.1.11') return { mac: '9c:6b:00:68:7d:27' }
+    throw new Error('couldn’t find that device’s MAC address; it must be switched on and on this network')
+  },
+  async installRemoteEngine() {
+    Object.assign(mockEngine, { installing: true, step: 'Downloading' })
+    setTimeout(() => Object.assign(mockEngine, { step: 'Starting' }), 2500)
+    setTimeout(() => Object.assign(mockEngine, { installing: false, step: undefined, installed: true, running: true }), 4000)
+  },
+  remoteUrl: (): string | null => null,
   async job(kind: string) {
     return kind === 'apt' ? aptJob : { kind, running: false, log: [] }
   },
@@ -153,6 +230,190 @@ export const mockSystem = {
   async mountDisk() {
     return { message: 'Done' }
   },
+  async setAutomount() {},
+  async formatDisk(body: { label: string }) {
+    aptJob = { kind: 'disk-format', title: 'Formatting', running: false, exit: 0, log: ['$ mkfs.ext4 -F -L ' + body.label, 'Done.'] }
+    return { job: 'disk-format', target: '/DATA/' + body.label }
+  },
+  async ejectDisk() {},
+  async storage() {
+    return {
+      fstab: [],
+      merged: [{ name: 'Storage', target: '/DATA/Storage', branches: ['/mnt/HDD_DATA', '/DATA/Backup'], mounted: true, size: 1.2e12, free: 8e11 }],
+      mergerfs: true,
+      usbAutomount: true,
+      filesystems: ['ext4', 'xfs', 'btrfs', 'exfat', 'ntfs'],
+    }
+  },
+  async mergeStorage() {},
+  async unmergeStorage() {},
+  async installMergerfs() {
+    return { job: 'apt' }
+  },
+  async setUsbAutomount() {},
+  async commandsInfo(tools: string[]): Promise<CommandsInfo> {
+    // A server with Docker, k3s and ffmpeg but without a few extras.
+    const missing = ['ncdu', 'iotop', 'fdupes', 'tailscale', 'unrar', 'wakeonlan', 'pm2']
+    return {
+      tools: Object.fromEntries(tools.map(t => [t, !missing.includes(t)])),
+      apps: [
+        { id: 'jellyfin', name: 'Jellyfin', containers: ['jellyfin'], project: 'jellyfin', dir: '/DATA/AppData/jellyfin', files: ['/DATA/AppData/jellyfin/docker-compose.yml'] },
+        { id: 'pihole', name: 'Pi-hole', containers: ['pihole'] },
+        { id: 'native:filebrowser', name: 'File Browser', unit: 'filebrowser.service' },
+      ],
+      book: mockBook,
+      history: ['docker compose -f /DATA/AppData/jellyfin/docker-compose.yml pull', 'sudo apt update && sudo apt upgrade -y', 'df -h', 'journalctl -u temanlabsos -f', 'htop'],
+      user: 'dio',
+      dockerGroup: true,
+    }
+  },
+  async saveCommandBook(book: CommandBook) {
+    mockBook = book
+  },
+  async fileInfo(path: string): Promise<FileDetails> {
+    const name = path.slice(path.lastIndexOf('/') + 1) || '/'
+    const folder = !name.includes('.')
+    const kind = folder ? 'folder' : /.(mp4|mkv|mov)$/i.test(name) ? 'video' : /.(jpe?g|png|webp)$/i.test(name) ? 'image' : 'document'
+    const ago = (days: number) => new Date(Date.now() - days * 86400000).toISOString()
+    return {
+      name, path, kind, folder, size: folder ? 4096 : 734003200,
+      ...(folder ? { items: 12, total: 18.4e9, files: 1342 } : {}),
+      modified: ago(2), accessed: ago(0), changed: ago(2), created: ago(40),
+      mode: folder ? 'drwxrwxr-x' : '-rw-rw-r--', octal: folder ? '775' : '664', owner: 'dio', group: 'dio', uid: 1000, gid: 1000,
+      mime: kind === 'video' ? 'video/mp4' : undefined,
+      volume: { mount: '/mnt/HDD_DATA', fstype: 'ext4', size: 491e9, free: 470e9 },
+      media: kind === 'video' ? { width: 1920, height: 1080, duration: 5420, video: 'H.264', audio: 'AAC', fps: 23.98, bitrate: 8.2e6, channels: 6 } : kind === 'image' ? { width: 4032, height: 3024 } : undefined,
+    }
+  },
+  async mediaPosition(path: string) {
+    return mockPositions.get(path) ?? { position: 0, duration: 0 }
+  },
+  async saveMediaPosition(path: string, position: number, duration: number) {
+    if (position > 0) mockPositions.set(path, { position, duration })
+    else mockPositions.delete(path)
+  },
+  async convertInfo(): Promise<ConvertInfo> {
+    // A mock conversion takes about 8 seconds.
+    const now = Date.now()
+    let busy = false
+    for (const t of mockConverts) {
+      if (t.status === 'queued' && !busy) {
+        t.status = 'running'
+        t.started = new Date(now).toISOString()
+      }
+      if (t.status === 'running') {
+        t.progress = Math.min(1, (now - Date.parse(t.started!)) / 8000)
+        t.speed = 3.4
+        if (t.progress >= 1) Object.assign(t, { status: 'done', speed: undefined, size: 2.1e9, ended: new Date(now).toISOString() })
+        else busy = true
+      }
+    }
+    return { ffmpeg: true, version: '6.1.1', encoders: ['aac', 'flac', 'h264', 'hevc', 'mp3', 'opus', 'pcm', 'vp9'], tasks: [...mockConverts].reverse() }
+  },
+  async probeMedia(path: string): Promise<MediaProbe> {
+    const audioOnly = /\.(mp3|m4a|flac|wav|ogg|opus)$/i.test(path)
+    const no = (why: { video: string }) => ({ mp4: why, mkv: why, webm: why, mov: why, ts: why })
+    return {
+      path,
+      container: audioOnly ? 'mp3' : 'matroska,webm',
+      duration: audioOnly ? 214 : 6130,
+      size: audioOnly ? 8.4e6 : 4.6e9,
+      bitrate: 6e6,
+      streams: audioOnly
+        ? [{ index: 0, type: 'audio', codec: 'mp3', channels: 2 }]
+        : [
+            { index: 0, type: 'video', codec: 'h264', width: 1920, height: 1080, fps: 23.98 },
+            { index: 1, type: 'audio', codec: 'dts', channels: 6, language: 'eng' },
+            { index: 2, type: 'audio', codec: 'aac', channels: 2, language: 'jpn', title: 'Commentary' },
+            { index: 3, type: 'subtitle', codec: 'subrip', language: 'ind' },
+            { index: 4, type: 'subtitle', codec: 'hdmv_pgs_subtitle', language: 'eng' },
+          ],
+      remux: audioOnly
+        ? {
+            ...no({ video: 'this file has no video' }),
+            mp3: {},
+            m4a: { audio: 'MP3 sound can’t go into M4A as it is' },
+            flac: { audio: 'MP3 sound can’t go into FLAC as it is' },
+            opus: { audio: 'MP3 sound can’t go into OPUS as it is' },
+            wav: { audio: 'MP3 sound can’t go into WAV as it is' },
+          }
+        : {
+            mp4: { audio: 'DTS sound can’t go into MP4 as it is' },
+            mkv: {},
+            webm: { video: 'H.264 video can’t go into WEBM as it is', audio: 'DTS sound can’t go into WEBM as it is' },
+            mov: { audio: 'DTS sound can’t go into MOV as it is' },
+            ts: {},
+            mp3: { audio: 'DTS sound can’t go into MP3 as it is' },
+            m4a: { audio: 'DTS sound can’t go into M4A as it is' },
+            flac: { audio: 'DTS sound can’t go into FLAC as it is' },
+            opus: { audio: 'DTS sound can’t go into OPUS as it is' },
+            wav: { audio: 'DTS sound can’t go into WAV as it is' },
+          },
+    }
+  },
+  async startConvert(body: ConvertRequest): Promise<ConvertTask> {
+    const dir = body.path.slice(0, body.path.lastIndexOf('/'))
+    const base = body.path.slice(dir.length + 1).replace(/\.[^.]+$/, '')
+    const task: ConvertTask = {
+      id: String(Date.now()),
+      input: body.path,
+      output: `${dir}/${body.name || base + '.' + body.container}`,
+      container: body.container,
+      video: body.video,
+      audio: body.audio,
+      status: 'queued',
+      progress: 0,
+      duration: 6130,
+      created: new Date().toISOString(),
+    }
+    mockConverts.push(task)
+    return task
+  },
+  async cancelConvert(id: string) {
+    const i = mockConverts.findIndex(t => t.id === id)
+    if (i < 0) return
+    const t = mockConverts[i]
+    if (t.status === 'queued' || t.status === 'running') t.status = 'cancelled'
+    else mockConverts.splice(i, 1)
+  },
+  async clearConverts() {
+    for (let i = mockConverts.length - 1; i >= 0; i--) if (!['queued', 'running'].includes(mockConverts[i].status)) mockConverts.splice(i, 1)
+  },
+  async installFFmpeg() {
+    return { job: 'apt' }
+  },
+  async releaseStatus() {
+    return { current: 'v0.9.0', latest: 'v1.0.0', available: true, notes: '- App Center with the CasaOS app stores\n- Cloud drives and merged storage', arch: 'amd64', checked: new Date().toISOString() }
+  },
+  async installRelease() {
+    return { job: 'self-update' }
+  },
+  async cloud() {
+    return {
+      rclone: true,
+      providers: [
+        { type: 'drive', name: 'Google Drive', oauth: true },
+        { type: 'dropbox', name: 'Dropbox', oauth: true },
+        { type: 'onedrive', name: 'OneDrive', oauth: true },
+        {
+          type: 'webdav',
+          name: 'WebDAV (Nextcloud, ownCloud…)',
+          fields: [
+            { key: 'url', label: 'Address', placeholder: 'https://cloud.example.com/remote.php/dav/files/me' },
+            { key: 'user', label: 'User' },
+            { key: 'pass', label: 'Password', secret: true },
+          ],
+        },
+      ],
+      remotes: [{ name: 'GoogleDrive', type: 'drive', mount: '/DATA/Cloud/GoogleDrive', mounted: true, service: 'active' }],
+    }
+  },
+  async cloudSignIn() {
+    return { session: 'mock', url: 'https://accounts.google.com/o/oauth2/auth?mock=1' }
+  },
+  async addCloud() {},
+  async cloudAction() {},
+  async removeCloud() {},
   async diskUsage(path: string) {
     await delay(300)
     return {

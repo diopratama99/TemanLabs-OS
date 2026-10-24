@@ -6,6 +6,7 @@ import { LAUNCHER, SYSTEM_APPS } from '../lib/systemApps'
 import { AppIcon } from './AppIcon'
 import { Glass } from './Glass'
 import type { WindowId } from './Window'
+import { tr } from '../lib/i18n'
 
 interface Result {
   key: string
@@ -16,7 +17,7 @@ interface Result {
   run: () => void
 }
 
-const STATUS_LABEL = { running: 'Running', stopped: 'Stopped', installing: 'Installing' } as const
+const STATUS_LABEL = { running: tr('Running'), stopped: tr('Stopped'), installing: tr('Installing') } as const
 
 function ActionIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
@@ -69,11 +70,11 @@ export function QuickSearch({ closing = false, apps, onClose, onOpenApp, onOpenW
     {
       key: 'theme',
       group: 'Actions',
-      label: dark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+      label: dark ? tr('Switch to Light Mode') : tr('Switch to Dark Mode'),
       icon: <ActionIcon icon={dark ? Sun : Moon} />,
       run: () => update({ theme: dark ? 'light' : 'dark' }),
     },
-    { key: 'desktop', group: 'Actions', label: 'Show Desktop', icon: <ActionIcon icon={Monitor} />, run: onShowDesktop },
+    { key: 'desktop', group: 'Actions', label: tr('Show Desktop'), icon: <ActionIcon icon={Monitor} />, run: onShowDesktop },
   ]
 
   const q = query.trim().toLowerCase()
@@ -103,7 +104,7 @@ export function QuickSearch({ closing = false, apps, onClose, onOpenApp, onOpenW
 
   return (
     <div className={`spotlight-overlay ${closing ? 'is-closing' : ''}`} onPointerDown={e => e.target === e.currentTarget && onClose()}>
-      <Glass radius={28} bezel={18} depth={20} blur={20} className="spotlight tint-panel" role="dialog" aria-label="Quick Search">
+      <Glass radius={28} bezel={18} depth={20} blur={20} className="spotlight tint-panel" role="dialog" aria-label={tr('Quick Search')}>
         <div className="spot-input">
           <Search size={22} />
           <input
@@ -114,13 +115,13 @@ export function QuickSearch({ closing = false, apps, onClose, onOpenApp, onOpenW
               setSelected(0)
             }}
             onKeyDown={onKeyDown}
-            placeholder="Quick Search"
-            aria-label="Quick Search"
+            placeholder={tr('Quick Search')}
+            aria-label={tr('Quick Search')}
           />
         </div>
         {q && (
           <div className="spot-results" role="listbox">
-            {results.length === 0 && <p className="spot-empty">No results for “{query}”</p>}
+            {results.length === 0 && <p className="spot-empty">{tr('No results for “')}{query}”</p>}
             {results.map((result, i) => (
               <div key={result.key}>
                 {result.group !== results[i - 1]?.group && <div className="spot-group">{result.group}</div>}

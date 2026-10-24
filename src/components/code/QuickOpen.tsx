@@ -7,6 +7,7 @@ const RECENT_BOOST = 5
 const NAME_BOOST = 10
 
 import { displayName, nameOf, parentOf, relativeTo } from '../../lib/paths'
+import { tr } from '../../lib/i18n'
 
 /**
  * Subsequence match like VS Code's Quick Open: every query character must appear in order.
@@ -117,7 +118,7 @@ export function QuickOpen({ root, recent, onOpen, onClose }: Props) {
 
   return (
     <div className="ce-quick-backdrop" onPointerDown={e => e.target === e.currentTarget && onClose()}>
-      <div className="ce-quick" role="dialog" aria-label="Go to File">
+      <div className="ce-quick" role="dialog" aria-label={tr('Go to File')}>
         <input
           autoFocus
           value={query}
@@ -126,13 +127,13 @@ export function QuickOpen({ root, recent, onOpen, onClose }: Props) {
             setSelected(0)
           }}
           onKeyDown={onKeyDown}
-          placeholder={`Search files by name in ${displayName(root)}`}
-          aria-label="Search files by name"
+          placeholder={tr('Search files by name in {0}', displayName(root))}
+          aria-label={tr('Search files by name')}
           spellCheck={false}
         />
         <div className="ce-quick-list" role="listbox" ref={listRef}>
           {!query.trim() && results.length > 0 && (
-            <div className="ce-quick-group">{showingRecent ? 'recently opened' : 'files'}</div>
+            <div className="ce-quick-group">{showingRecent ? tr('recently opened') : 'files'}</div>
           )}
           {results.map((result, i) => {
             const name = nameOf(result.path)
@@ -155,8 +156,8 @@ export function QuickOpen({ root, recent, onOpen, onClose }: Props) {
               </div>
             )
           })}
-          {tree && results.length === 0 && <p className="ce-quick-empty">No matching files</p>}
-          {!tree && <p className="ce-quick-empty">Loading files…</p>}
+          {tree && results.length === 0 && <p className="ce-quick-empty">{tr('No matching files')}</p>}
+          {!tree && <p className="ce-quick-empty">{tr('Loading files…')}</p>}
         </div>
       </div>
     </div>

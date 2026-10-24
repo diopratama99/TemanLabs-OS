@@ -14,22 +14,21 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  AppWindow,
+  ArrowRightLeft,
   ClipboardPaste,
   Copy,
   CopyPlus,
-  FileArchive,
-  FileAudio,
-  FileCode,
-  FileImage,
-  FileText,
-  FileVideo,
+  Film,
   Folder,
   FolderOpen,
   FolderPlus,
   GalleryHorizontal,
   Image,
+  Info,
   LayoutGrid,
   List,
+  Music,
   Pencil,
   Play,
   RotateCw,
@@ -60,26 +59,9 @@ import { DATA_ROOT, type Place } from '../lib/places'
 import { MOD } from '../lib/platform'
 import { useSettings, type FilesSortKey, type FilesView } from '../lib/settings'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
+import { KIND_COLOR, KIND_ICON } from '../lib/fileKinds'
 
-const KIND_ICON: Record<FileKind, LucideIcon> = {
-  folder: Folder,
-  image: FileImage,
-  video: FileVideo,
-  audio: FileAudio,
-  document: FileText,
-  archive: FileArchive,
-  code: FileCode,
-}
-
-const KIND_COLOR: Record<FileKind, string> = {
-  folder: '#3d9cf5',
-  image: '#ff9f0a',
-  video: '#bf5af2',
-  audio: '#ff375f',
-  document: '#8e8e93',
-  archive: '#a2845e',
-  code: '#30b0c7',
-}
 
 const KIND_NOUN: Record<FileKind, string> = {
   folder: 'Folder',
@@ -101,16 +83,16 @@ function kindLabel(entry: FileEntry) {
 }
 
 const VIEWS: { id: FilesView; label: string; icon: LucideIcon }[] = [
-  { id: 'icons', label: 'as Icons', icon: LayoutGrid },
-  { id: 'list', label: 'as List', icon: List },
-  { id: 'gallery', label: 'as Gallery', icon: GalleryHorizontal },
+  { id: 'icons', label: tr('as Icons'), icon: LayoutGrid },
+  { id: 'list', label: tr('as List'), icon: List },
+  { id: 'gallery', label: tr('as Gallery'), icon: GalleryHorizontal },
 ]
 
 const SORTS: { key: FilesSortKey; label: string }[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'kind', label: 'Kind' },
-  { key: 'modified', label: 'Date Modified' },
-  { key: 'size', label: 'Size' },
+  { key: 'name', label: tr('Name') },
+  { key: 'kind', label: tr('Kind') },
+  { key: 'modified', label: tr('Date Modified') },
+  { key: 'size', label: tr('Size') },
 ]
 
 const ICON_SIZES = { min: 40, max: 144 }
@@ -140,20 +122,24 @@ interface Props {
   onOpenMedia: (path: string, kind: MediaKind) => void
   /** Opens File Sharing with a new share for this folder. */
   onShareFolder: (path: string) => void
+  /** Opens a video or sound file in Remux, to change its format. */
+  onConvert: (path: string) => void
+  /** Get Info: a window about one file or folder. */
+  onGetInfo: (path: string) => void
 }
 
 const isMedia = (entry: FileEntry): entry is FileEntry & { kind: MediaKind } =>
   entry.kind === 'image' || entry.kind === 'video' || entry.kind === 'audio'
 
 const OPEN_LABEL: Partial<Record<FileKind, string>> = {
-  folder: 'Open',
-  image: 'Open in Preview',
-  video: 'Play in Video Player',
-  audio: 'Play in Music',
+  folder: tr('Open'),
+  image: tr('Open in Image Viewer'),
+  video: tr('Play in Video Player'),
+  audio: tr('Play in Music Player'),
 }
 const openLabel = (entry: FileEntry) => OPEN_LABEL[entry.kind] ?? (isTextFile(entry.name) ? 'Open in Code' : 'Open')
 
-export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: Props) {
+export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, onConvert, onGetInfo }: Props) {
   const { root } = useAuth()
   const { favorites, locations } = usePlaces()
   const insideRoot = (p: string) => root === '/' || p === root || p.startsWith(`${root}/`)
@@ -176,6 +162,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
   const path = history[index]
   const scroller = useRef<HTMLDivElement>(null)
 
+  // The folder the entries belong to: until the new one arrives the old list isn't shown,
+  // so a slow folder (a cloud drive, a sleeping disk) never appears under another's name.
+  const [listed, setListed] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
     api
@@ -183,11 +172,13 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
       .then(list => {
         if (!alive) return
         setEntries(list)
+        setListed(path)
         setLoadError(null)
       })
       .catch((err: Error) => {
         if (!alive) return
         setEntries([])
+        setListed(path)
         setLoadError(err.message)
       })
     return () => {
@@ -196,7 +187,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
   }, [path, version])
 
   const refresh = () => setVersion(v => v + 1)
-  const sorted = sortEntries(entries, sort.key, sort.desc)
+  const loading = listed !== path
+  const sorted = loading ? [] : sortEntries(entries, sort.key, sort.desc)
   const fullPath = (name: string) => joinPath(path, name)
   const selectedEntries = sorted.filter(e => selected.has(e.name))
   const single = selectedEntries.length === 1 ? selectedEntries[0] : null
@@ -231,8 +223,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
     else uploads.upload(dir, itemsFromInput(e.dataTransfer.files))
   }
   const uploadItems: MenuItem[] = [
-    { label: 'Upload Files…', icon: Upload, onSelect: () => fileInput.current?.click() },
-    { label: 'Upload Folder…', icon: FolderPlus, onSelect: () => folderInput.current?.click() },
+    { label: tr('Upload Files…'), icon: Upload, onSelect: () => fileInput.current?.click() },
+    { label: tr('Upload Folder…'), icon: FolderPlus, onSelect: () => folderInput.current?.click() },
   ]
 
   // ----- Navigation and opening -----
@@ -253,6 +245,29 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
     if (entry.kind === 'folder') navigate(fullPath(entry.name))
     else if (isMedia(entry)) onOpenMedia(fullPath(entry.name), entry.kind)
     else if (isTextFile(entry.name)) onOpenFile(fullPath(entry.name))
+  }
+  // Open With ▸: every app that can show the file, the one double-click uses first. Code takes
+  // anything that isn't media, and SVG pictures (the server turns away binary and very large
+  // files). A .ts video is media here, though .ts is also TypeScript's extension.
+  const openWith = (entry: FileEntry): MenuItem[] => {
+    const p = fullPath(entry.name)
+    const apps: { label: string; icon: LucideIcon; open: () => void; isDefault: boolean }[] = []
+    if (entry.kind === 'image') apps.push({ label: tr('Image Viewer'), icon: Image, open: () => onOpenMedia(p, 'image'), isDefault: true })
+    if (entry.kind === 'video' || entry.kind === 'audio') {
+      apps.push({ label: tr('Video Player'), icon: Film, open: () => onOpenMedia(p, 'video'), isDefault: entry.kind === 'video' })
+      apps.push({ label: tr('Music Player'), icon: Music, open: () => onOpenMedia(p, 'audio'), isDefault: entry.kind === 'audio' })
+    }
+    if (!isMedia(entry) || (entry.kind === 'image' && isTextFile(entry.name)))
+      apps.push({ label: tr('Code'), icon: Braces, open: () => onOpenFile(p), isDefault: !isMedia(entry) && isTextFile(entry.name) })
+    if (entry.kind === 'video' || entry.kind === 'audio') apps.push({ label: tr('Remux'), icon: ArrowRightLeft, open: () => onConvert(p), isDefault: false })
+    const first = apps.filter(a => a.isDefault)
+    const rest = apps.filter(a => !a.isDefault)
+    const item = (a: (typeof apps)[number]): MenuItem => ({
+      label: a.isDefault ? tr('{0} (default)', a.label) : a.label,
+      icon: a.icon,
+      onSelect: a.open,
+    })
+    return [...first.map(item), ...(first.length && rest.length ? (['separator'] as MenuItem[]) : []), ...rest.map(item)]
   }
 
   // ----- Edits -----
@@ -309,10 +324,10 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
 
   // ----- Menus -----
   const editItems = (): MenuItem[] => [
-    { label: 'Cut', icon: Scissors, shortcut: `${MOD}X`, disabled: !selectedEntries.length, onSelect: () => copyItems(true) },
-    { label: 'Copy', icon: Copy, shortcut: `${MOD}C`, disabled: !selectedEntries.length, onSelect: () => copyItems(false) },
+    { label: tr('Cut'), icon: Scissors, shortcut: `${MOD}X`, disabled: !selectedEntries.length, onSelect: () => copyItems(true) },
+    { label: tr('Copy'), icon: Copy, shortcut: `${MOD}C`, disabled: !selectedEntries.length, onSelect: () => copyItems(false) },
     { label: pasteLabel, icon: ClipboardPaste, shortcut: `${MOD}V`, disabled: !clip, onSelect: () => void paste() },
-    { label: 'Duplicate', icon: CopyPlus, shortcut: `${MOD}D`, disabled: !selectedEntries.length, onSelect: () => void duplicate() },
+    { label: tr('Duplicate'), icon: CopyPlus, shortcut: `${MOD}D`, disabled: !selectedEntries.length, onSelect: () => void duplicate() },
   ]
 
   const entryMenu = (e: MouseEvent, entry: FileEntry) => {
@@ -327,20 +342,22 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
         : ([
             {
               label: openLabel(entry),
-              icon: isFolder ? FolderOpen : Braces,
+              icon: isFolder ? FolderOpen : entry.kind === 'image' ? Image : entry.kind === 'video' || entry.kind === 'audio' ? Play : Braces,
               disabled: !canOpen(entry),
               onSelect: () => openEntry(entry),
             },
+            ...(entry.kind !== 'folder' ? [{ label: tr('Open With'), icon: AppWindow, submenu: openWith(entry) }] : []),
+            { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(fullPath(entry.name)) },
             ...(isFolder
               ? [
-                  { label: 'Open in Code', icon: Braces, onSelect: () => onOpenFolder(fullPath(entry.name)) },
-                  { label: 'Share Folder…', icon: Share2, onSelect: () => onShareFolder(fullPath(entry.name)) },
+                  { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(fullPath(entry.name)) },
+                  { label: tr('Share Folder…'), icon: Share2, onSelect: () => onShareFolder(fullPath(entry.name)) },
                 ]
               : []),
             ...(entry.kind === 'image'
               ? [
                   {
-                    label: 'Set as Wallpaper',
+                    label: tr('Set as Wallpaper'),
                     icon: Image,
                     onSelect: async () => update({ customWallpaper: (await api.wallpaperFromFile(fullPath(entry.name))).url }),
                   },
@@ -349,26 +366,26 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
             'separator',
           ] as MenuItem[])),
       {
-        label: many ? `Cut ${items.length} Items` : 'Cut',
+        label: many ? tr('Cut {0} Items', items.length) : tr('Cut'),
         icon: Scissors,
         onSelect: () => setFileClipboard({ paths: items.map(i => fullPath(i.name)), cut: true }),
       },
       {
-        label: many ? `Copy ${items.length} Items` : 'Copy',
+        label: many ? tr('Copy {0} Items', items.length) : tr('Copy'),
         icon: Copy,
         onSelect: () => setFileClipboard({ paths: items.map(i => fullPath(i.name)), cut: false }),
       },
       ...(isFolder && clip
-        ? [{ label: `${pasteLabel} Into Folder`, icon: ClipboardPaste, onSelect: () => void paste(fullPath(entry.name)) }]
+        ? [{ label: tr('{0} Into Folder', pasteLabel), icon: ClipboardPaste, onSelect: () => void paste(fullPath(entry.name)) }]
         : []),
-      { label: 'Duplicate', icon: CopyPlus, onSelect: () => void duplicate() },
+      { label: tr('Duplicate'), icon: CopyPlus, onSelect: () => void duplicate() },
       'separator',
-      ...(many ? [] : [{ label: 'Rename', icon: Pencil, onSelect: () => setRenaming(entry.name) }]),
-      { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(items.map(i => fullPath(i.name)).join('\n')) },
+      ...(many ? [] : [{ label: tr('Rename'), icon: Pencil, onSelect: () => setRenaming(entry.name) }]),
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(items.map(i => fullPath(i.name)).join('\n')) },
       'separator',
       {
-        label: many ? `Delete ${items.length} Items…` : 'Delete…',
-        confirm: 'Click Again to Delete',
+        label: many ? tr('Delete {0} Items…', items.length) : tr('Delete…'),
+        confirm: tr('Click Again to Delete'),
         icon: Trash2,
         danger: true,
         onSelect: () => void remove(items.map(i => i.name)),
@@ -380,16 +397,17 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
     if (e.defaultPrevented) return
     select([])
     show(e, [
-      { label: 'New Folder', icon: FolderPlus, onSelect: () => void newFolder() },
+      { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void newFolder() },
       ...uploadItems,
       'separator',
       { label: pasteLabel, icon: ClipboardPaste, disabled: !clip, onSelect: () => void paste() },
       'separator',
       ...viewItems(),
       'separator',
-      { label: 'Open Folder in Code', icon: Braces, onSelect: () => onOpenFolder(path) },
-      { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(path) },
-      { label: 'Refresh', icon: RotateCw, onSelect: refresh },
+      { label: tr('Open Folder in Code'), icon: Braces, onSelect: () => onOpenFolder(path) },
+      { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(path) },
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(path) },
+      { label: tr('Refresh'), icon: RotateCw, onSelect: refresh },
     ])
   }
 
@@ -401,27 +419,28 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
   const sortItems = (): MenuItem[] => [
     ...SORTS.map(s => ({ label: s.label, checked: sort.key === s.key, onSelect: () => update({ filesSort: { ...sort, key: s.key } }) })),
     'separator',
-    { label: 'Ascending', checked: !sort.desc, onSelect: () => update({ filesSort: { ...sort, desc: false } }) },
-    { label: 'Descending', checked: sort.desc, onSelect: () => update({ filesSort: { ...sort, desc: true } }) },
+    { label: tr('Ascending'), checked: !sort.desc, onSelect: () => update({ filesSort: { ...sort, desc: false } }) },
+    { label: tr('Descending'), checked: sort.desc, onSelect: () => update({ filesSort: { ...sort, desc: true } }) },
   ]
 
   useAppMenus(() => [
     {
-      label: 'File',
+      label: tr('File'),
       items: [
-        { label: 'New Folder', icon: FolderPlus, onSelect: () => void newFolder() },
+        { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void newFolder() },
         ...uploadItems,
         'separator',
         {
-          label: single ? openLabel(single) : 'Open',
+          label: single ? openLabel(single) : tr('Open'),
           icon: FolderOpen,
           disabled: !single || !canOpen(single),
           onSelect: () => single && openEntry(single),
         },
-        { label: 'Rename', icon: Pencil, disabled: !single, onSelect: () => single && setRenaming(single.name) },
+        { label: tr('Get Info'), icon: Info, onSelect: () => onGetInfo(single ? fullPath(single.name) : path) },
+        { label: tr('Rename'), icon: Pencil, disabled: !single, onSelect: () => single && setRenaming(single.name) },
         {
-          label: selectedEntries.length > 1 ? `Delete ${selectedEntries.length} Items…` : 'Delete…',
-          confirm: 'Click Again to Delete',
+          label: selectedEntries.length > 1 ? tr('Delete {0} Items…', selectedEntries.length) : tr('Delete…'),
+          confirm: tr('Click Again to Delete'),
           icon: Trash2,
           danger: true,
           disabled: !selectedEntries.length,
@@ -429,40 +448,40 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
         },
         'separator',
         {
-          label: 'Copy Path',
+          label: tr('Copy Path'),
           icon: Copy,
           onSelect: () => void copyText(selectedEntries.length ? selectedEntries.map(e => fullPath(e.name)).join('\n') : path),
         },
       ],
     },
     {
-      label: 'Edit',
+      label: tr('Edit'),
       items: [
         ...editItems(),
         'separator',
-        { label: 'Select All', icon: SquareCheck, shortcut: `${MOD}A`, onSelect: () => select(sorted.map(e => e.name)) },
+        { label: tr('Select All'), icon: SquareCheck, shortcut: `${MOD}A`, onSelect: () => select(sorted.map(e => e.name)) },
       ],
     },
     {
-      label: 'View',
+      label: tr('View'),
       items: [
         ...viewItems(),
         'separator',
         ...sortItems(),
         'separator',
-        { label: 'Bigger Icons', disabled: view !== 'icons', onSelect: () => setIconSize(iconSize + 16) },
-        { label: 'Smaller Icons', disabled: view !== 'icons', onSelect: () => setIconSize(iconSize - 16) },
+        { label: tr('Bigger Icons'), disabled: view !== 'icons', onSelect: () => setIconSize(iconSize + 16) },
+        { label: tr('Smaller Icons'), disabled: view !== 'icons', onSelect: () => setIconSize(iconSize - 16) },
         'separator',
-        { label: 'Refresh', icon: RotateCw, onSelect: refresh },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: refresh },
       ],
     },
     {
-      label: 'Go',
+      label: tr('Go'),
       items: [
-        { label: 'Back', icon: ChevronLeft, disabled: index === 0, onSelect: () => step(-1) },
-        { label: 'Forward', icon: ChevronRight, disabled: index === history.length - 1, onSelect: () => step(1) },
+        { label: tr('Back'), icon: ChevronLeft, disabled: index === 0, onSelect: () => step(-1) },
+        { label: tr('Forward'), icon: ChevronRight, disabled: index === history.length - 1, onSelect: () => step(1) },
         {
-          label: 'Enclosing Folder',
+          label: tr('Enclosing Folder'),
           icon: FolderOpen,
           disabled: path === root,
           onSelect: () => navigate(parentOf(path)),
@@ -597,9 +616,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
       title={p}
       onContextMenu={e =>
         show(e, [
-          { label: 'Open', icon: FolderOpen, onSelect: () => navigate(p) },
-          { label: 'Open in Code', icon: Braces, onSelect: () => onOpenFolder(p) },
-          { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(p) },
+          { label: tr('Open'), icon: FolderOpen, onSelect: () => navigate(p) },
+          { label: tr('Open in Code'), icon: Braces, onSelect: () => onOpenFolder(p) },
+          { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(p) },
         ])
       }
     >
@@ -680,9 +699,9 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
   return (
     <div className="split">
       <aside className="sidebar">
-        {favorites.length > 0 && <div className="sidebar-group">Favorites</div>}
+        {favorites.length > 0 && <div className="sidebar-group">{tr('Favorites')}</div>}
         {favorites.map(placeButton)}
-        {locations.length > 0 && <div className="sidebar-group">Locations</div>}
+        {locations.length > 0 && <div className="sidebar-group">{tr('Locations')}</div>}
         {locations.map(placeButton)}
       </aside>
 
@@ -722,36 +741,36 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
         {dropTarget === '' && (
           <div className="files-drop" aria-hidden>
             <Upload size={28} />
-            <strong>Drop to copy into {displayName(path)}</strong>
+            <strong>{tr('Drop to copy into')} {displayName(path)}</strong>
           </div>
         )}
         <UploadsPanel jobs={uploads.jobs} busy={uploads.busy} onCancel={uploads.cancelAll} onClear={uploads.clear} />
 
         <WindowToolbar>
           <div className="tb-group">
-            <button className="tb-btn" onClick={() => step(-1)} disabled={index === 0} aria-label="Back" title="Back">
+            <button className="tb-btn" onClick={() => step(-1)} disabled={index === 0} aria-label={tr('Back')} title={tr('Back')}>
               <ChevronLeft size={18} />
             </button>
             <button
               className="tb-btn"
               onClick={() => step(1)}
               disabled={index === history.length - 1}
-              aria-label="Forward"
-              title="Forward"
+              aria-label={tr('Forward')}
+              title={tr('Forward')}
             >
               <ChevronRight size={18} />
             </button>
           </div>
           <ToolbarTitle title={displayName(path)} />
           <span className="tb-spacer" />
-          <div className="tb-segmented tb-icons" role="radiogroup" aria-label="View">
+          <div className="tb-segmented tb-icons" role="radiogroup" aria-label={tr('View')}>
             {VIEWS.map(v => (
               <button
                 key={v.id}
                 className={view === v.id ? 'is-active' : ''}
                 onClick={() => setView(v.id)}
-                aria-label={`View ${v.label}`}
-                title={`View ${v.label}`}
+                aria-label={tr('View {0}', v.label)}
+                title={tr('View {0}', v.label)}
               >
                 <v.icon size={15} />
               </button>
@@ -764,8 +783,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
                 const r = e.currentTarget.getBoundingClientRect()
                 show({ x: r.left, y: r.bottom + 6 }, sortItems())
               }}
-              aria-label="Sort by"
-              title="Sort By"
+              aria-label={tr('Sort by')}
+              title={tr('Sort By')}
             >
               <ArrowUpDown size={15} />
             </button>
@@ -775,12 +794,12 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
                 const r = e.currentTarget.getBoundingClientRect()
                 show({ x: r.left, y: r.bottom + 6 }, uploadItems)
               }}
-              aria-label="Upload"
-              title="Upload files or a folder"
+              aria-label={tr('Upload')}
+              title={tr('Upload files or a folder')}
             >
               <Upload size={16} />
             </button>
-            <button className="tb-btn" onClick={() => void newFolder()} aria-label="New folder" title="New Folder">
+            <button className="tb-btn" onClick={() => void newFolder()} aria-label={tr('New folder')} title={tr('New Folder')}>
               <FolderPlus size={17} />
             </button>
           </div>
@@ -795,10 +814,12 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
           onContextMenu={backgroundMenu}
         >
           {content()}
-          {loadError ? (
-            <p className="empty files-empty files-error">Can’t open this folder: {loadError}</p>
+          {loading ? (
+            <p className="empty files-empty files-loading">{tr('Loading…')}</p>
+          ) : loadError ? (
+            <p className="empty files-empty files-error">{tr('Can’t open this folder:')} {loadError}</p>
           ) : (
-            entries.length === 0 && <p className="empty files-empty">This folder is empty.</p>
+            entries.length === 0 && <p className="empty files-empty">{tr('This folder is empty.')}</p>
           )}
         </div>
 
@@ -819,8 +840,8 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
           <span>
             {working ??
               (selectedEntries.length > 1
-                ? `${selectedEntries.length} of ${entries.length} selected${totalSize ? ` · ${formatBytes(totalSize)}` : ''}`
-                : `${entries.length} items`)}
+                ? tr('{0} of {1} selected{2}', selectedEntries.length, entries.length, totalSize ? ` · ${formatBytes(totalSize)}` : '')
+                : tr('{0} items', entries.length))}
           </span>
           {view === 'icons' ? (
             <input
@@ -831,16 +852,16 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder }: 
               step={8}
               value={iconSize}
               onChange={e => setIconSize(Number(e.target.value))}
-              aria-label="Icon size"
-              title="Icon size"
+              aria-label={tr('Icon size')}
+              title={tr('Icon size')}
             />
           ) : (
             <span>
               {single
                 ? `${single.name}${single.size ? ` · ${formatBytes(single.size)}` : ''} · ${formatFileDate(single.modified)}`
                 : clip
-                  ? `${clip.paths.length} item${clip.paths.length > 1 ? 's' : ''} ${clip.cut ? 'to move' : 'copied'} · ${MOD}V to paste`
-                  : 'Right-click for more options'}
+                  ? tr('{0} item{1} {2} · {3}V to paste', clip.paths.length, clip.paths.length > 1 ? 's' : '', clip.cut ? tr('to move') : tr('copied'), MOD)
+                  : tr('Right-click for more options')}
             </span>
           )}
         </div>

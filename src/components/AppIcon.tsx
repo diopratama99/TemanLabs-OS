@@ -39,6 +39,7 @@ export function AppIcon({ icon, iconUrl, color, size = 56 }: Props) {
           width={size * 0.72}
           height={size * 0.72}
           draggable={false}
+          loading="lazy"
           style={loaded ? undefined : { position: 'absolute', opacity: 0 }}
           onLoad={() => {
             loadedIcons.add(image)

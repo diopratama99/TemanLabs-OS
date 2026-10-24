@@ -8,6 +8,7 @@ import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { formatBytes, formatUptime } from '../lib/format'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 2500
 /** Rendering hundreds of rows every poll isn't needed; search narrows the rest. */
@@ -16,12 +17,12 @@ const MAX_ROWS = 300
 type SortKey = 'name' | 'pid' | 'cpu' | 'memory' | 'threads' | 'user'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: 'name', label: 'Process' },
+  { key: 'name', label: tr('Process') },
   { key: 'pid', label: 'PID', numeric: true },
-  { key: 'user', label: 'User' },
-  { key: 'cpu', label: '% CPU', numeric: true },
-  { key: 'memory', label: 'Memory', numeric: true },
-  { key: 'threads', label: 'Threads', numeric: true },
+  { key: 'user', label: tr('User') },
+  { key: 'cpu', label: tr('% CPU'), numeric: true },
+  { key: 'memory', label: tr('Memory'), numeric: true },
+  { key: 'threads', label: tr('Threads'), numeric: true },
 ]
 
 const owner = (p: ProcessInfo) => (p.container ? `Container ${p.container}` : p.unit ? p.unit.replace(/\.service$/, '') : '')
@@ -57,36 +58,36 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
     const unsafe = !p || p.pid <= 2 || !!p.kernel
     return [
       {
-        label: p ? `End ${p.name}` : 'End Process',
+        label: p ? tr('End {0}', p.name) : tr('End Process'),
         icon: OctagonX,
         disabled: unsafe,
         danger: true,
-        confirm: 'Click Again to End',
+        confirm: tr('Click Again to End'),
         onSelect: () => p && void api.killProcess(p.pid).then(refresh),
       },
       {
-        label: 'Force Quit',
+        label: tr('Force Quit'),
         icon: Zap,
         disabled: unsafe,
         danger: true,
-        confirm: 'Click Again to Force Quit',
+        confirm: tr('Click Again to Force Quit'),
         onSelect: () => p && void api.killProcess(p.pid, true).then(refresh),
       },
       'separator',
-      { label: 'Copy Command Line', icon: Copy, disabled: !p?.command, onSelect: () => p?.command && void copyText(p.command) },
-      { label: 'Copy PID', icon: Copy, disabled: !p, onSelect: () => p && void copyText(String(p.pid)) },
+      { label: tr('Copy Command Line'), icon: Copy, disabled: !p?.command, onSelect: () => p?.command && void copyText(p.command) },
+      { label: tr('Copy PID'), icon: Copy, disabled: !p, onSelect: () => p && void copyText(String(p.pid)) },
     ]
   }
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
-        { label: 'Show Kernel Threads', checked: showKernel, onSelect: () => setShowKernel(v => !v) },
-        { label: 'Refresh', icon: RotateCw, onSelect: () => void refresh() },
+        { label: tr('Show Kernel Threads'), checked: showKernel, onSelect: () => setShowKernel(v => !v) },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: () => void refresh() },
       ],
     },
-    { label: 'Process', items: processItems(selectedProcess) },
+    { label: tr('Process'), items: processItems(selectedProcess) },
   ])
 
   const all = list ?? []
@@ -113,29 +114,29 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
   return (
     <div className="am">
       <WindowToolbar>
-        <ToolbarTitle title="System Monitor" subtitle="All Processes" />
+        <ToolbarTitle title={tr('System Monitor')} subtitle={tr('All Processes')} />
         <span className="tb-spacer" />
         {tabs}
         <span className="tb-spacer" />
           <label className="tb-search">
             <Search size={13} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Name, PID, user, service…" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Name, PID, user, service…')} />
           </label>
       </WindowToolbar>
       <div className="am-summary">
         <div>
-          <small>Processes</small>
+          <small>{tr('Processes')}</small>
           <strong>{list ? all.filter(p => !p.kernel).length : '—'}</strong>
         </div>
         <div>
-          <small>Threads</small>
+          <small>{tr('Threads')}</small>
           <strong>{list ? totalThreads : '—'}</strong>
         </div>
         <div>
-          <small>CPU (all processes)</small>
+          <small>{tr('CPU (all processes)')}</small>
           <strong>
             {list ? totalCpu.toFixed(0) : '—'}
-            <em>% of one core</em>
+            <em>{tr('% of one core')}</em>
           </strong>
         </div>
       </div>
@@ -155,12 +156,12 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
               {sort.key === col.key && <ChevronDown size={12} className={sort.desc ? '' : 'flip'} />}
             </button>
           ))}
-          <span>Service / Container</span>
+          <span>{tr('Service / Container')}</span>
         </div>
         <div className="am-body">
-          {loadError && <p className="am-empty form-error">Couldn’t read processes: {loadError}</p>}
-          {!list && !loadError && <p className="am-empty">Loading processes…</p>}
-          {list && visible.length === 0 && <p className="am-empty">No processes match.</p>}
+          {loadError && <p className="am-empty form-error">{tr('Couldn’t read processes:')} {loadError}</p>}
+          {!list && !loadError && <p className="am-empty">{tr('Loading processes…')}</p>}
+          {list && visible.length === 0 && <p className="am-empty">{tr('No processes match.')}</p>}
           {visible.map(p => (
             <div
               key={p.pid}
@@ -168,7 +169,7 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
               className={`ps-row ${p.pid === selected ? 'is-selected' : ''}`}
               onClick={() => setSelected(p.pid)}
               onContextMenu={e => rowMenu(e, p)}
-              title={`${p.command ?? p.name}\nRunning for ${formatUptime(Math.max(0, now - p.started))}`}
+              title={tr("{0}\nRunning for {1}", p.command ?? p.name, formatUptime(Math.max(0, now - p.started)))}
             >
               <span className="am-name">
                 <i className={`am-state ${p.state === 'R' ? 'state-running' : p.state === 'Z' ? 'state-dead' : ''}`} />
@@ -187,14 +188,14 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
           ))}
           {matching.length > MAX_ROWS && (
             <p className="am-empty">
-              Showing the top {MAX_ROWS} of {matching.length}. Search to find the others.
+              {tr('Showing the top')} {MAX_ROWS} of {matching.length}{tr('. Search to find the others.')}
             </p>
           )}
         </div>
       </div>
       <div className="pv-filters ps-foot">
         <label className="pv-toggle">
-          <input type="checkbox" checked={showKernel} onChange={e => setShowKernel(e.target.checked)} /> Show kernel threads
+          <input type="checkbox" checked={showKernel} onChange={e => setShowKernel(e.target.checked)} /> {tr('Show kernel threads')}
         </label>
       </div>
     </div>

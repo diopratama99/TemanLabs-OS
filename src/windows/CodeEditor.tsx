@@ -59,6 +59,7 @@ import { ALT, MOD, SHIFT } from '../lib/platform'
 import { useSettings } from '../lib/settings'
 import { CODE_APP } from '../lib/systemApps'
 import { Terminal } from './Terminal'
+import { tr } from '../lib/i18n'
 
 const MonacoView = lazy(() => import('../components/code/MonacoView'))
 
@@ -308,31 +309,31 @@ export function CodeEditor({ stats, request }: Props) {
     })
     return [
       {
-        label: 'File',
+        label: tr('File'),
         items: [
-          { label: 'New File', icon: FilePlus, onSelect: () => void newFile() },
+          { label: tr('New File'), icon: FilePlus, onSelect: () => void newFile() },
           'separator',
-          { label: 'Open File…', icon: FileInput, shortcut: `${MOD}O`, onSelect: () => setDialog('file') },
-          { label: 'Open Folder…', icon: FolderOpen, onSelect: () => setDialog('folder') },
-          { label: 'Go to File…', icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
-          { label: 'Upload from Computer…', icon: Upload, onSelect: () => uploadInput.current?.click() },
+          { label: tr('Open File…'), icon: FileInput, shortcut: `${MOD}O`, onSelect: () => setDialog('file') },
+          { label: tr('Open Folder…'), icon: FolderOpen, onSelect: () => setDialog('folder') },
+          { label: tr('Go to File…'), icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
+          { label: tr('Upload from Computer…'), icon: Upload, onSelect: () => uploadInput.current?.click() },
           'separator',
           {
-            label: 'Save',
+            label: tr('Save'),
             icon: Save,
             shortcut: `${MOD}S`,
             disabled: !activeTab || !isDirty(activeTab),
             onSelect: () => void save(),
           },
-          { label: 'Save All', disabled: dirtyCount === 0, onSelect: () => void saveAll() },
+          { label: tr('Save All'), disabled: dirtyCount === 0, onSelect: () => void saveAll() },
           'separator',
-          { label: 'Close Editor', icon: X, disabled: noEditor, onSelect: () => active && requestClose([active]) },
-          { label: 'Close All Editors', disabled: tabs.length === 0, onSelect: () => requestClose(tabs.map(t => t.path)) },
-          { label: 'Close Folder', icon: FolderX, disabled: !root, onSelect: closeFolder },
+          { label: tr('Close Editor'), icon: X, disabled: noEditor, onSelect: () => active && requestClose([active]) },
+          { label: tr('Close All Editors'), disabled: tabs.length === 0, onSelect: () => requestClose(tabs.map(t => t.path)) },
+          { label: tr('Close Folder'), icon: FolderX, disabled: !root, onSelect: closeFolder },
         ],
       },
       {
-        label: 'Edit',
+        label: tr('Edit'),
         items: [
           editorItem('Undo', 'undo', { icon: Undo2, shortcut: `${MOD}Z` }),
           editorItem('Redo', 'redo', { icon: Redo2, shortcut: `${MOD}${SHIFT}Z` }),
@@ -347,14 +348,14 @@ export function CodeEditor({ stats, request }: Props) {
           'separator',
           editorItem('Find', 'actions.find', { icon: Search, shortcut: `${MOD}F` }),
           editorItem('Replace', 'editor.action.startFindReplaceAction', { icon: Replace, shortcut: `${MOD}H` }),
-          { label: 'Find in Files', icon: FileSearch, shortcut: `${MOD}${SHIFT}F`, onSelect: () => setPanel('search') },
+          { label: tr('Find in Files'), icon: FileSearch, shortcut: `${MOD}${SHIFT}F`, onSelect: () => setPanel('search') },
           'separator',
           editorItem('Toggle Line Comment', 'editor.action.commentLine', { icon: Hash, shortcut: `${MOD}/` }),
           editorItem('Format Document', 'editor.action.formatDocument', { icon: WandSparkles, shortcut: `${SHIFT}${ALT}F` }),
         ],
       },
       {
-        label: 'Selection',
+        label: tr('Selection'),
         items: [
           editorItem('Select All', 'editor.action.selectAll', { shortcut: `${MOD}A` }),
           editorItem('Expand Selection', 'editor.action.smartSelect.expand', { shortcut: `${SHIFT}${ALT}→` }),
@@ -367,34 +368,34 @@ export function CodeEditor({ stats, request }: Props) {
         ],
       },
       {
-        label: 'View',
+        label: tr('View'),
         items: [
           editorItem('Command Palette…', 'editor.action.quickCommand', { icon: Command, shortcut: `${MOD}${SHIFT}P` }),
           'separator',
           {
-            label: 'Explorer',
+            label: tr('Explorer'),
             icon: FilesIcon,
             shortcut: `${MOD}B`,
             checked: panel === 'explorer',
             onSelect: () => togglePanel('explorer'),
           },
-          { label: 'Search', icon: Search, checked: panel === 'search', onSelect: () => togglePanel('search') },
+          { label: tr('Search'), icon: Search, checked: panel === 'search', onSelect: () => togglePanel('search') },
           {
-            label: 'Terminal',
+            label: tr('Terminal'),
             icon: SquareTerminal,
             shortcut: `${MOD}\``,
             checked: terminal,
             onSelect: () => setTerminal(t => !t),
           },
           'separator',
-          { label: 'Word Wrap', icon: WrapText, checked: wordWrap, onSelect: () => setWordWrap(w => !w) },
-          { label: 'Minimap', icon: MapIcon, checked: minimap, onSelect: () => setMinimap(m => !m) },
+          { label: tr('Word Wrap'), icon: WrapText, checked: wordWrap, onSelect: () => setWordWrap(w => !w) },
+          { label: tr('Minimap'), icon: MapIcon, checked: minimap, onSelect: () => setMinimap(m => !m) },
         ],
       },
       {
-        label: 'Go',
+        label: tr('Go'),
         items: [
-          { label: 'Go to File…', icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
+          { label: tr('Go to File…'), icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
           editorItem('Go to Line…', 'editor.action.gotoLine', { icon: ArrowDownToLine }),
           editorItem('Go to Symbol…', 'editor.action.quickOutline', { icon: AtSign }),
           editorItem('Go to Definition', 'editor.action.revealDefinition', { shortcut: 'F12' }),
@@ -404,10 +405,10 @@ export function CodeEditor({ stats, request }: Props) {
         ],
       },
       {
-        label: 'Terminal',
+        label: tr('Terminal'),
         items: [
           {
-            label: terminal ? 'Hide Terminal' : 'Show Terminal',
+            label: terminal ? tr('Hide Terminal') : tr('Show Terminal'),
             icon: SquareTerminal,
             shortcut: `${MOD}\``,
             onSelect: () => setTerminal(t => !t),
@@ -442,29 +443,29 @@ export function CodeEditor({ stats, request }: Props) {
       void editor.getAction(id)?.run()
     }
     show({ x: e.event.browserEvent.clientX, y: e.event.browserEvent.clientY }, [
-      { label: 'Cut', icon: Scissors, shortcut: `${MOD}X`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCutAction') },
-      { label: 'Copy', icon: Copy, shortcut: `${MOD}C`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCopyAction') },
+      { label: tr('Cut'), icon: Scissors, shortcut: `${MOD}X`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCutAction') },
+      { label: tr('Copy'), icon: Copy, shortcut: `${MOD}C`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCopyAction') },
       {
-        label: 'Paste',
+        label: tr('Paste'),
         icon: ClipboardPaste,
         shortcut: `${MOD}V`,
         disabled: !navigator.clipboard?.readText,
         onSelect: run('editor.action.clipboardPasteAction'),
       },
       'separator',
-      { label: 'Find', icon: Search, shortcut: `${MOD}F`, onSelect: run('actions.find') },
-      { label: 'Replace', icon: Replace, shortcut: `${MOD}H`, onSelect: run('editor.action.startFindReplaceAction') },
-      { label: 'Change All Occurrences', icon: TextCursorInput, onSelect: run('editor.action.changeAll') },
-      { label: 'Toggle Line Comment', icon: Hash, shortcut: `${MOD}/`, onSelect: run('editor.action.commentLine') },
+      { label: tr('Find'), icon: Search, shortcut: `${MOD}F`, onSelect: run('actions.find') },
+      { label: tr('Replace'), icon: Replace, shortcut: `${MOD}H`, onSelect: run('editor.action.startFindReplaceAction') },
+      { label: tr('Change All Occurrences'), icon: TextCursorInput, onSelect: run('editor.action.changeAll') },
+      { label: tr('Toggle Line Comment'), icon: Hash, shortcut: `${MOD}/`, onSelect: run('editor.action.commentLine') },
       {
-        label: 'Format Document',
+        label: tr('Format Document'),
         icon: WandSparkles,
         shortcut: `${SHIFT}${ALT}F`,
         disabled: !editor.getAction('editor.action.formatDocument')?.isSupported(),
         onSelect: run('editor.action.formatDocument'),
       },
       'separator',
-      { label: 'Command Palette…', icon: Command, shortcut: 'F1', onSelect: run('editor.action.quickCommand') },
+      { label: tr('Command Palette…'), icon: Command, shortcut: 'F1', onSelect: run('editor.action.quickCommand') },
     ])
   }
 
@@ -481,22 +482,22 @@ export function CodeEditor({ stats, request }: Props) {
   const tabMenu = (e: MouseEvent, tab: Tab) => {
     const index = tabs.findIndex(t => t.path === tab.path)
     show(e, [
-      { label: 'Close', icon: X, onSelect: () => requestClose([tab.path]) },
+      { label: tr('Close'), icon: X, onSelect: () => requestClose([tab.path]) },
       {
-        label: 'Close Others',
+        label: tr('Close Others'),
         disabled: tabs.length < 2,
         onSelect: () => requestClose(tabs.filter(t => t.path !== tab.path).map(t => t.path)),
       },
       {
-        label: 'Close to the Right',
+        label: tr('Close to the Right'),
         disabled: index === tabs.length - 1,
         onSelect: () => requestClose(tabs.slice(index + 1).map(t => t.path)),
       },
-      { label: 'Close Saved', onSelect: () => requestClose(tabs.filter(t => !isDirty(t)).map(t => t.path)) },
-      { label: 'Close All', onSelect: () => requestClose(tabs.map(t => t.path)) },
+      { label: tr('Close Saved'), onSelect: () => requestClose(tabs.filter(t => !isDirty(t)).map(t => t.path)) },
+      { label: tr('Close All'), onSelect: () => requestClose(tabs.map(t => t.path)) },
       'separator',
-      { label: 'Save', icon: Save, shortcut: `${MOD}S`, disabled: !isDirty(tab), onSelect: () => void save(tab.path) },
-      { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(tab.path) },
+      { label: tr('Save'), icon: Save, shortcut: `${MOD}S`, disabled: !isDirty(tab), onSelect: () => void save(tab.path) },
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(tab.path) },
     ])
   }
 
@@ -520,23 +521,23 @@ export function CodeEditor({ stats, request }: Props) {
         }}
       />
       <div className="ce-body">
-        <nav className="ce-activity" aria-label="Views">
+        <nav className="ce-activity" aria-label={tr('Views')}>
           <ActivityButton
             icon={FilesIcon}
-            label={`Explorer (${MOD}B)`}
+            label={tr('Explorer ({0}B)', MOD)}
             active={panel === 'explorer'}
             onClick={() => setPanel(p => (p === 'explorer' ? null : 'explorer'))}
           />
           <ActivityButton
             icon={Search}
-            label={`Search (${MOD}${SHIFT}F)`}
+            label={tr('Search ({0}{1}F)', MOD, SHIFT)}
             active={panel === 'search'}
             onClick={() => setPanel(p => (p === 'search' ? null : 'search'))}
           />
           <span className="ce-activity-spacer" />
           <ActivityButton
             icon={SquareTerminal}
-            label={`Terminal (${MOD}\`)`}
+            label={tr('Terminal ({0}`)', MOD)}
             active={terminal}
             onClick={() => setTerminal(t => !t)}
           />
@@ -561,14 +562,14 @@ export function CodeEditor({ stats, request }: Props) {
             )}
             {panel === 'explorer' && !root && (
               <>
-                <div className="ce-side-head">EXPLORER</div>
+                <div className="ce-side-head">{tr('EXPLORER')}</div>
                 <div className="ce-no-folder">
-                  <p>You have not yet opened a folder.</p>
+                  <p>{tr('You have not yet opened a folder.')}</p>
                   <button className="btn btn-primary" onClick={() => setDialog('folder')}>
-                    Open Folder
+                    {tr('Open Folder')}
                   </button>
                   <button className="btn" onClick={() => setDialog('file')}>
-                    Open File
+                    {tr('Open File')}
                   </button>
                 </div>
               </>
@@ -602,7 +603,7 @@ export function CodeEditor({ stats, request }: Props) {
                   <span className="ce-tab-name">{nameOf(tab.path)}</span>
                   <button
                     className="ce-tab-close"
-                    aria-label={`Close ${nameOf(tab.path)}`}
+                    aria-label={tr('Close {0}', nameOf(tab.path))}
                     onClick={e => {
                       e.stopPropagation()
                       requestClose([tab.path])
@@ -631,7 +632,7 @@ export function CodeEditor({ stats, request }: Props) {
                   ))}
               </div>
               <div className="ce-editor">
-                <Suspense fallback={<div className="ce-loading">Loading editor…</div>}>
+                <Suspense fallback={<div className="ce-loading">{tr('Loading editor…')}</div>}>
                   <MonacoView
                     path={activeTab.path}
                     language={language?.id ?? 'plaintext'}
@@ -662,8 +663,8 @@ export function CodeEditor({ stats, request }: Props) {
           {terminal && (
             <div className="ce-panel">
               <div className="ce-panel-head">
-                TERMINAL
-                <button onClick={() => setTerminal(false)} aria-label="Close terminal">
+                {tr('TERMINAL')}
+                <button onClick={() => setTerminal(false)} aria-label={tr('Close terminal')}>
                   <X size={14} />
                 </button>
               </div>
@@ -674,30 +675,30 @@ export function CodeEditor({ stats, request }: Props) {
       </div>
 
       <footer className="ce-status">
-        <span title="Connected server">
+        <span title={tr('Connected server')}>
           <Server size={12} /> {stats?.hostname ?? 'server'}
         </span>
         {root && (
-          <span title={`Workspace: ${root}`}>
+          <span title={tr('Workspace: {0}', root)}>
             <FolderOpen size={12} /> {nameOf(root)}
           </span>
         )}
-        {dirtyCount > 0 && <span>● {dirtyCount} unsaved</span>}
+        {dirtyCount > 0 && <span>● {dirtyCount} {tr('unsaved')}</span>}
         {notice && <span className="ce-notice">{notice}</span>}
         <span className="ce-status-grow" />
         {activeTab && language && (
           <>
             <span>
-              Ln {cursor.line}, Col {cursor.column}
+              {tr('Ln')} {cursor.line}{tr(', Col')} {cursor.column}
             </span>
-            <span>Spaces: 2</span>
-            <span>UTF-8</span>
+            <span>{tr('Spaces: 2')}</span>
+            <span>{tr('UTF-8')}</span>
             <span>LF</span>
             <span>{language.name}</span>
           </>
         )}
         <button onClick={() => setTerminal(t => !t)} aria-pressed={terminal}>
-          <SquareTerminal size={12} /> Terminal
+          <SquareTerminal size={12} /> {tr('Terminal')}
         </button>
       </footer>
 
@@ -732,7 +733,7 @@ export function CodeEditor({ stats, request }: Props) {
       {dragging && (
         <div className="ce-drop" aria-hidden>
           <Upload size={28} />
-          Drop to upload to {root ?? ROOT}
+          {tr('Drop to upload to')} {root ?? ROOT}
         </div>
       )}
     </div>
@@ -785,25 +786,25 @@ function Welcome({
   return (
     <div className="ce-welcome">
       <AppIcon icon={CODE_APP.icon} color={CODE_APP.color} size={72} />
-      <h2>Code</h2>
-      <p>Edit files on {host}, right from the browser.</p>
+      <h2>{tr('Code')}</h2>
+      <p>{tr('Edit files on')} {host}{tr(', right from the browser.')}</p>
       <div className="ce-welcome-cols">
         <div>
-          <h3>Start</h3>
+          <h3>{tr('Start')}</h3>
           <button className="ce-link" onClick={onNewFile}>
-            <FilePlus size={14} /> New File…
+            <FilePlus size={14} /> {tr('New File…')}
           </button>
           <button className="ce-link" onClick={onOpenFile}>
-            <FileInput size={14} /> Open File…
+            <FileInput size={14} /> {tr('Open File…')}
           </button>
           <button className="ce-link" onClick={onOpenFolder}>
-            <FolderOpen size={14} /> Open Folder…
+            <FolderOpen size={14} /> {tr('Open Folder…')}
           </button>
           <button className="ce-link" onClick={onGoToFile}>
-            <FileSearch size={14} /> Go to File…
+            <FileSearch size={14} /> {tr('Go to File…')}
           </button>
 
-          <h3 className="ce-welcome-gap">{hasRecent ? 'Recent' : 'Try opening'}</h3>
+          <h3 className="ce-welcome-gap">{hasRecent ? tr('Recent') : tr('Try opening')}</h3>
           {recentFolders.map(path => (
             <button key={path} className="ce-link" onClick={() => onOpenFolderPath(path)} title={path}>
               <FileTypeIcon name={nameOf(path)} folder size={14} />
@@ -820,30 +821,30 @@ function Welcome({
           ))}
         </div>
         <div>
-          <h3>Shortcuts</h3>
+          <h3>{tr('Shortcuts')}</h3>
           <dl className="ce-shortcuts">
-            <dt>Open File</dt>
+            <dt>{tr('Open File')}</dt>
             <dd>{MOD}O</dd>
-            <dt>Go to File</dt>
+            <dt>{tr('Go to File')}</dt>
             <dd>{MOD}P</dd>
-            <dt>Command Palette</dt>
+            <dt>{tr('Command Palette')}</dt>
             <dd>
               {MOD}
               {SHIFT}P
             </dd>
-            <dt>Save</dt>
+            <dt>{tr('Save')}</dt>
             <dd>{MOD}S</dd>
-            <dt>Toggle Sidebar</dt>
+            <dt>{tr('Toggle Sidebar')}</dt>
             <dd>{MOD}B</dd>
-            <dt>Toggle Terminal</dt>
+            <dt>{tr('Toggle Terminal')}</dt>
             <dd>{MOD}`</dd>
-            <dt>Search Files</dt>
+            <dt>{tr('Search Files')}</dt>
             <dd>
               {MOD}
               {SHIFT}F
             </dd>
           </dl>
-          <p className="ce-welcome-tip">Tip: drag files from your computer onto this window to upload and open them.</p>
+          <p className="ce-welcome-tip">{tr('Tip: drag files from your computer onto this window to upload and open them.')}</p>
         </div>
       </div>
     </div>
@@ -862,20 +863,20 @@ function SaveSheet({ files, onChoose }: { files: string[]; onChoose: (choice: Cl
         <AppIcon icon={CODE_APP.icon} color={CODE_APP.color} size={52} />
         <h3 id="ce-sheet-title">
           {one
-            ? `Do you want to save the changes you made to ${nameOf(files[0])}?`
-            : `Do you want to save the changes to ${files.length} files?`}
+            ? tr('Do you want to save the changes you made to {0}?', nameOf(files[0]))
+            : tr('Do you want to save the changes to {0} files?', files.length)}
         </h3>
-        <p>Your changes will be lost if you don't save them.</p>
+        <p>{tr("Your changes will be lost if you don't save them.")}</p>
         <div className="ce-sheet-actions">
           <button className="btn" onClick={() => onChoose('discard')}>
-            Don't Save
+            {tr("Don't Save")}
           </button>
           <span className="ce-status-grow" />
           <button className="btn" onClick={() => onChoose('cancel')}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button className="btn btn-primary" autoFocus onClick={() => onChoose('save')}>
-            {one ? 'Save' : 'Save All'}
+            {one ? tr('Save') : tr('Save All')}
           </button>
         </div>
       </div>

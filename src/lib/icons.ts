@@ -1,7 +1,10 @@
 import {
   Activity,
   ArrowDownToLine,
+  ArrowRightLeft,
+  BookMarked,
   Boxes,
+  MonitorSmartphone,
   Braces,
   CalendarClock,
   CircleFadingArrowUp,
@@ -31,6 +34,9 @@ import {
 // Generic glyphs only — real app logos are trademarks, so the catalog references these keys instead.
 export const appIcons: Record<string, LucideIcon> = {
   film: Film,
+  remux: ArrowRightLeft,
+  commands: BookMarked,
+  devices: MonitorSmartphone,
   cloud: Cloud,
   house: House,
   shield: ShieldCheck,

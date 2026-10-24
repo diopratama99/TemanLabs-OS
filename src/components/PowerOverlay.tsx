@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { LoaderCircle, Power } from 'lucide-react'
 import { api } from '../api'
 import { LogoTile } from './Logo'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 3000
 // The server answers for a moment after the command; only count it back after this.
@@ -34,16 +35,16 @@ export function PowerOverlay({ action }: { action: 'restart' | 'shutdown' }) {
       <LogoTile size={72} />
       {action === 'restart' ? (
         <>
-          <strong>Restarting the server…</strong>
+          <strong>{tr('Restarting the server…')}</strong>
           <span>
-            <LoaderCircle size={14} className="spin" /> This page comes back by itself when the server is up ({seconds}s).
+            <LoaderCircle size={14} className="spin" /> {tr('This page comes back by itself when the server is up (')}{seconds}s).
           </span>
         </>
       ) : (
         <>
-          <strong>The server is shutting down</strong>
+          <strong>{tr('The server is shutting down')}</strong>
           <span>
-            <Power size={14} /> Turn it on again with its power button. This page will work once it’s back.
+            <Power size={14} /> {tr('Turn it on again with its power button. This page will work once it’s back.')}
           </span>
         </>
       )}

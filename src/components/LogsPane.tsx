@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { copyText } from '../lib/clipboard'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 3000
 const LINES = 400
@@ -55,12 +56,12 @@ export function LogsPane({ title, source, load, emptyText, onClose }: Props) {
       <div className="am-logs-head">
         <strong>{title}</strong>
         <label className="am-follow">
-          <input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Live
+          <input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> {tr('Live')}
         </label>
-        <button className="icon-btn" onClick={() => void copyText(logs)} aria-label="Copy logs" title="Copy logs" disabled={!logs}>
+        <button className="icon-btn" onClick={() => void copyText(logs)} aria-label={tr('Copy logs')} title={tr('Copy logs')} disabled={!logs}>
           <Copy size={13} />
         </button>
-        <button className="icon-btn" onClick={onClose} aria-label="Close logs" title="Close">
+        <button className="icon-btn" onClick={onClose} aria-label={tr('Close logs')} title={tr('Close')}>
           ×
         </button>
       </div>

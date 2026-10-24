@@ -9,6 +9,7 @@ import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { formatBytes, formatUptime } from '../lib/format'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 3000
 
@@ -16,10 +17,10 @@ type Filter = 'running' | 'all' | 'failed' | 'stopped'
 type SortKey = 'name' | 'cpu' | 'memory' | 'since'
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'running', label: 'Running' },
-  { id: 'failed', label: 'Failed' },
-  { id: 'stopped', label: 'Stopped' },
-  { id: 'all', label: 'All' },
+  { id: 'running', label: tr('Running') },
+  { id: 'failed', label: tr('Failed') },
+  { id: 'stopped', label: tr('Stopped') },
+  { id: 'all', label: tr('All') },
 ]
 
 const isRunning = (s: ServiceInfo) => s.active === 'active' || s.active === 'activating' || s.active === 'reloading'
@@ -90,16 +91,16 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
     const disabled = !svc || busy.has(svc.unit)
     const app = svc ? appFor(svc) : undefined
     return [
-      { label: 'Start', icon: Play, disabled: disabled || running, onSelect: () => svc && void act(svc, 'start') },
+      { label: tr('Start'), icon: Play, disabled: disabled || running, onSelect: () => svc && void act(svc, 'start') },
       {
-        label: locked ? 'Stop (protected)' : 'Stop',
+        label: locked ? tr('Stop (protected)') : tr('Stop'),
         icon: locked ? Lock : Square,
         disabled: disabled || !running || locked,
-        confirm: 'Click Again to Stop',
+        confirm: tr('Click Again to Stop'),
         onSelect: () => svc && void act(svc, 'stop'),
       },
       {
-        label: 'Restart',
+        label: tr('Restart'),
         icon: RotateCw,
         disabled: disabled || svc?.unit === 'temanlabsos.service',
         onSelect: () => svc && void act(svc, 'restart'),
@@ -107,20 +108,20 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
       'separator',
       svc && enabledAtBoot(svc)
         ? {
-            label: 'Don’t Start at Boot',
+            label: tr('Don’t Start at Boot'),
             icon: PowerOff,
             disabled: disabled || locked,
             onSelect: () => svc && void act(svc, 'disable'),
           }
         : {
-            label: 'Start at Boot',
+            label: tr('Start at Boot'),
             icon: Power,
             disabled: disabled || svc?.enabled === 'static' || svc?.enabled === 'masked',
             onSelect: () => svc && void act(svc, 'enable'),
           },
       'separator',
       {
-        label: 'Show Logs',
+        label: tr('Show Logs'),
         icon: FileText,
         disabled: !svc,
         onSelect: () => {
@@ -128,22 +129,22 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
           setLogsOpen(true)
         },
       },
-      ...(app ? [{ label: `Open ${app.name}`, icon: AppWindow, onSelect: () => onOpenApp(app) }] : []),
-      { label: 'Copy Service Name', icon: Copy, disabled: !svc, onSelect: () => svc && void copyText(svc.unit) },
+      ...(app ? [{ label: tr('Open {0}', app.name), icon: AppWindow, onSelect: () => onOpenApp(app) }] : []),
+      { label: tr('Copy Service Name'), icon: Copy, disabled: !svc, onSelect: () => svc && void copyText(svc.unit) },
     ]
   }
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
-        ...FILTERS.map(f => ({ label: `${f.label} Services`, checked: filter === f.id, onSelect: () => setFilter(f.id) })),
+        ...FILTERS.map(f => ({ label: tr('{0} Services', f.label), checked: filter === f.id, onSelect: () => setFilter(f.id) })),
         'separator',
-        { label: 'Show Logs', checked: logsOpen, onSelect: () => setLogsOpen(o => !o) },
-        { label: 'Refresh', icon: RotateCw, onSelect: () => void refresh() },
+        { label: tr('Show Logs'), checked: logsOpen, onSelect: () => setLogsOpen(o => !o) },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: () => void refresh() },
       ],
     },
-    { label: 'Service', items: serviceItems(selectedService) },
+    { label: tr('Service'), items: serviceItems(selectedService) },
   ])
 
   const all = list ?? []
@@ -193,29 +194,29 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
   return (
     <div className="am">
       <WindowToolbar>
-        <ToolbarTitle title="System Monitor" subtitle="Services" />
+        <ToolbarTitle title={tr('System Monitor')} subtitle={tr('Services')} />
         <span className="tb-spacer" />
         {tabs}
         <span className="tb-spacer" />
           <label className="tb-search">
             <Search size={13} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search services" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Search services')} />
           </label>
       </WindowToolbar>
       <div className="am-summary">
         <div>
-          <small>Running</small>
+          <small>{tr('Running')}</small>
           <strong>
             {list ? all.filter(isRunning).length : '—'}
-            <em>/{all.length} services</em>
+            <em>/{all.length} {tr('services')}</em>
           </strong>
         </div>
         <button className={`sv-failed ${failed ? 'has-failed' : ''}`} onClick={() => setFilter('failed')} disabled={!failed}>
-          <small>Failed</small>
+          <small>{tr('Failed')}</small>
           <strong>{list ? failed : '—'}</strong>
         </button>
         <div>
-          <small>Start at boot</small>
+          <small>{tr('Start at boot')}</small>
           <strong>{list ? all.filter(enabledAtBoot).length : '—'}</strong>
         </div>
       </div>
@@ -233,16 +234,16 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
       <div className="am-table" role="table">
         <div className="sv-row am-head" role="row">
           {header('name', 'Service')}
-          <span>Status</span>
-          <span>At Boot</span>
+          <span>{tr('Status')}</span>
+          <span>{tr('At Boot')}</span>
           {header('cpu', '% CPU', true)}
           {header('memory', 'Memory', true)}
           {header('since', 'Running For', true)}
         </div>
         <div className="am-body">
-          {loadError && <p className="am-empty form-error">Couldn’t read services: {loadError}</p>}
-          {!list && !loadError && <p className="am-empty">Loading services…</p>}
-          {list && visible.length === 0 && <p className="am-empty">No services match.</p>}
+          {loadError && <p className="am-empty form-error">{tr('Couldn’t read services:')} {loadError}</p>}
+          {!list && !loadError && <p className="am-empty">{tr('Loading services…')}</p>}
+          {list && visible.length === 0 && <p className="am-empty">{tr('No services match.')}</p>}
           {visible.map(svc => {
             const app = appFor(svc)
             return (
@@ -261,7 +262,7 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
                 <span className="sv-name">
                   <strong className="am-name-text">
                     {svc.description || shortName(svc.unit)}
-                    {svc.protected && <Lock size={11} className="sv-lock" aria-label="Protected" />}
+                    {svc.protected && <Lock size={11} className="sv-lock" aria-label={tr('Protected')} />}
                   </strong>
                   <small className="am-name-text">
                     {shortName(svc.unit)}
@@ -273,7 +274,7 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
                     {busy.has(svc.unit) ? <RotateCw size={10} className="spin" /> : null} {statusLabel(svc)}
                   </i>
                 </span>
-                <span className="sv-boot">{enabledAtBoot(svc) ? 'Yes' : svc.enabled === 'static' ? 'Auto' : svc.enabled ? 'No' : '—'}</span>
+                <span className="sv-boot">{enabledAtBoot(svc) ? tr('Yes') : svc.enabled === 'static' ? tr('Auto') : svc.enabled ? tr('No') : '—'}</span>
                 <span className="am-num">{isRunning(svc) ? svc.cpu.toFixed(1) : '—'}</span>
                 <span className="am-num">{svc.memory ? formatBytes(svc.memory) : '—'}</span>
                 <span className="am-num">{svc.since && isRunning(svc) ? formatUptime(Math.max(0, now - svc.since)) : '—'}</span>
@@ -285,10 +286,10 @@ export function ServicesView({ apps, onOpenApp, tabs }: Props) {
 
       {logsOpen && (
         <LogsPane
-          title={selectedService ? `Logs — ${shortName(selectedService.unit)}` : 'Logs'}
+          title={selectedService ? tr('Logs — {0}', shortName(selectedService.unit)) : tr('Logs')}
           source={selectedService?.unit ?? null}
           load={api.serviceLogs}
-          emptyText="Select a service to see its logs."
+          emptyText={tr('Select a service to see its logs.')}
           onClose={() => setLogsOpen(false)}
         />
       )}

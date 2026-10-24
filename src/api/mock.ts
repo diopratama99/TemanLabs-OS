@@ -32,6 +32,7 @@ let cpu = 18
 let mem = 6.4 * GB
 let rx = 2.4e6
 let tx = 0.6e6
+let watts = 14
 
 const walk = (value: number, step: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value + (Math.random() - 0.5) * step))
@@ -41,6 +42,7 @@ export function nextStats(): SystemStats {
   mem = walk(mem, 0.4 * GB, 4 * GB, 13 * GB)
   rx = walk(rx, 2e6, 5e4, 12e6)
   tx = walk(tx, 6e5, 1e4, 4e6)
+  watts = walk(watts, 3, 6, 45)
   return {
     hostname: 'teman-server',
     os: 'Ubuntu 24.04.3 LTS',
@@ -57,6 +59,17 @@ export function nextStats(): SystemStats {
       lan: { interface: 'eth0', ipv4: '192.168.1.20' },
       tailscale: { ipv4: '100.101.102.103', dnsName: 'teman-server.tail1a2b3c.ts.net' },
     },
+    power: {
+      watts,
+      source: 'cpu',
+      parts: [
+        { name: 'package-0', watts: watts * 0.85 },
+        { name: 'core', watts: watts * 0.6 },
+        { name: 'uncore', watts: watts * 0.08 },
+        { name: 'dram', watts: watts * 0.15 },
+      ],
+    },
+    load: [(cpu / 100) * 8, (cpu / 120) * 8, (cpu / 140) * 8],
   }
 }
 

@@ -1,0 +1,49 @@
+# Builds TemanLabsOS for amd64 and arm64 when a version tag is pushed (git tag v1.0.0 && git push
+# origin v1.0.0) and publishes a GitHub release with the binaries, the installers and SHA256SUMS.
+# The one-line installer and Settings → About → Update download from these releases.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          TEMANLABS_VERSION: ${{ github.ref_name }}
+        run: |
+          node scripts/build-server.mjs amd64
+          node scripts/build-server.mjs arm64
+
+      - name: Collect files and checksums
+        run: |
+          mkdir release
+          cp server/bin/temanlabsos-linux-amd64 server/bin/temanlabsos-linux-arm64 release/
+          cp install.sh release/install.sh
+          cp deploy/install.sh release/install-service.sh
+          cd release && sha256sum temanlabsos-linux-* install.sh install-service.sh > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

@@ -3,16 +3,17 @@ import { KeyRound, Lock, Plus, Shield, Trash2, Unlock, X } from 'lucide-react'
 import { api } from '../../api'
 import type { SystemAccount, SystemGroup } from '../../api/types'
 import { Switch } from '../Switch'
+import { tr } from '../../lib/i18n'
 
 // Groups worth offering by name: what they let an account do.
 const GROUP_HINTS: Record<string, string> = {
-  docker: 'Run Docker without sudo',
-  sudo: 'Administrator',
-  video: 'Use the GPU (hardware transcoding)',
-  render: 'Use the GPU (hardware transcoding)',
-  plugdev: 'Use removable drives',
-  adm: 'Read system logs',
-  users: 'Shared files of all users',
+  docker: tr('Run Docker without sudo'),
+  sudo: tr('Administrator'),
+  video: tr('Use the GPU (hardware transcoding)'),
+  render: tr('Use the GPU (hardware transcoding)'),
+  plugdev: tr('Use removable drives'),
+  adm: tr('Read system logs'),
+  users: tr('Shared files of all users'),
 }
 
 /** Users & Groups: the server's login accounts, admin rights, groups and passwords. */
@@ -59,9 +60,9 @@ export function UsersSection() {
             <span className="ug-name">
               <strong>{u.fullName || u.name}</strong>
               <small>
-                {u.admin ? 'Admin' : 'Standard'}
-                {u.locked ? ' · locked' : ''}
-                {u.noLogin ? ' · sharing only' : ''}
+                {u.admin ? tr('Admin') : tr('Standard')}
+                {u.locked ? tr(' · locked') : ''}
+                {u.noLogin ? tr(' · sharing only') : ''}
               </small>
             </span>
           </button>
@@ -71,7 +72,7 @@ export function UsersSection() {
             <Plus size={16} />
           </span>
           <span className="ug-name">
-            <strong>Add User…</strong>
+            <strong>{tr('Add User…')}</strong>
           </span>
         </button>
       </div>
@@ -107,7 +108,7 @@ function UserDetail({
     <>
       <div className="group">
         <div className="row">
-          <span>Full name</span>
+          <span>{tr('Full name')}</span>
           <input
             className="ug-input"
             value={fullName}
@@ -116,70 +117,70 @@ function UserDetail({
           />
         </div>
         <div className="row">
-          <span>User name</span>
+          <span>{tr('User name')}</span>
           <span className="row-value">
-            {user.name} · UID {user.uid}
+            {user.name} {tr('· UID')} {user.uid}
           </span>
         </div>
         <div className="row">
-          <span>Home</span>
+          <span>{tr('Home')}</span>
           <span className="row-value">{user.home}</span>
         </div>
         <div className="row">
           <span>
-            <Shield size={13} /> Administrator (sudo)
+            <Shield size={13} /> {tr('Administrator (sudo)')}
           </span>
           <Switch
             checked={user.admin}
             disabled={user.protected || user.uid === 0}
             onChange={admin => void onChange({ action: 'admin', admin })}
-            label="Administrator"
+            label={tr('Administrator')}
           />
         </div>
         <div className="row">
-          <span>{user.locked ? <Lock size={13} /> : <Unlock size={13} />} Can sign in</span>
+          <span>{user.locked ? <Lock size={13} /> : <Unlock size={13} />} {tr('Can sign in')}</span>
           <Switch
             checked={!user.locked}
             disabled={user.protected}
             onChange={on => void onChange({ action: on ? 'unlock' : 'lock' })}
-            label="Can sign in"
+            label={tr('Can sign in')}
           />
         </div>
       </div>
 
-      <h4 className="du-heading">Password</h4>
+      <h4 className="du-heading">{tr('Password')}</h4>
       <form
         className="group ug-password"
         onSubmit={(e: FormEvent) => {
           e.preventDefault()
           void onChange({ action: 'password', password }).then(() => {
             setPassword('')
-            setMessage('Password changed.')
+            setMessage(tr('Password changed.'))
           })
         }}
       >
         <KeyRound size={14} />
-        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="New login password (6+ characters)" />
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={tr('New login password (6+ characters)')} />
         <button className="btn" disabled={password.length < 6}>
-          Change
+          {tr('Change')}
         </button>
         {message && <small className="form-ok">{message}</small>}
       </form>
 
-      <h4 className="du-heading">Groups</h4>
+      <h4 className="du-heading">{tr('Groups')}</h4>
       <div className="group ug-groups">
         {user.groups.map(g => (
           <span key={g} className="ug-chip" title={GROUP_HINTS[g]}>
             {g}
             {g !== user.name && !(g === 'sudo' && user.protected) && (
-              <button onClick={() => void onChange({ action: 'removeGroup', group: g })} aria-label={`Remove from ${g}`}>
+              <button onClick={() => void onChange({ action: 'removeGroup', group: g })} aria-label={tr('Remove from {0}', g)}>
                 <X size={11} />
               </button>
             )}
           </span>
         ))}
-        <select value={addGroup} onChange={e => setAddGroup(e.target.value)} aria-label="Add to group">
-          <option value="">Add to group…</option>
+        <select value={addGroup} onChange={e => setAddGroup(e.target.value)} aria-label={tr('Add to group')}>
+          <option value="">{tr('Add to group…')}</option>
           {suggested.map(g => (
             <option key={g.name} value={g.name}>
               {g.name} — {GROUP_HINTS[g.name]}
@@ -198,22 +199,22 @@ function UserDetail({
           disabled={!addGroup}
           onClick={() => void onChange({ action: 'addGroup', group: addGroup }).then(() => setAddGroup(''))}
         >
-          Add
+          {tr('Add')}
         </button>
       </div>
-      <p className="pane-note">Group changes apply the next time the user signs in.</p>
+      <p className="pane-note">{tr('Group changes apply the next time the user signs in.')}</p>
 
       {!user.protected && (
         <div className="du-actions">
           <label className="pv-toggle">
-            <input type="checkbox" checked={removeHome} onChange={e => setRemoveHome(e.target.checked)} /> Also delete {user.home}
+            <input type="checkbox" checked={removeHome} onChange={e => setRemoveHome(e.target.checked)} /> {tr('Also delete')} {user.home}
           </label>
           <button
             className={`btn ${confirmDelete ? 'btn-danger' : ''}`}
             onClick={() => (confirmDelete ? void api.deleteAccount(user.name, removeHome).then(onDeleted) : setConfirmDelete(true))}
             onBlur={() => setConfirmDelete(false)}
           >
-            <Trash2 size={13} /> {confirmDelete ? 'Click Again to Delete' : 'Delete User…'}
+            <Trash2 size={13} /> {confirmDelete ? tr('Click Again to Delete') : tr('Delete User…')}
           </button>
         </div>
       )}
@@ -234,11 +235,11 @@ function AddUser({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
       }}
     >
       <div className="row">
-        <span>Full name</span>
+        <span>{tr('Full name')}</span>
         <input className="ug-input" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} autoFocus />
       </div>
       <div className="row">
-        <span>User name</span>
+        <span>{tr('User name')}</span>
         <input
           className="ug-input"
           value={form.name}
@@ -247,21 +248,21 @@ function AddUser({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
         />
       </div>
       <div className="row">
-        <span>Password</span>
+        <span>{tr('Password')}</span>
         <input className="ug-input" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
       </div>
       <div className="row">
-        <span>Administrator (sudo)</span>
-        <Switch checked={form.admin} onChange={admin => setForm({ ...form, admin })} label="Administrator" />
+        <span>{tr('Administrator (sudo)')}</span>
+        <Switch checked={form.admin} onChange={admin => setForm({ ...form, admin })} label={tr('Administrator')} />
       </div>
       <div className="row ug-new-actions">
-        {error ? <span className="form-error">{error}</span> : <span className="form-hint">Creates a login with a home folder.</span>}
+        {error ? <span className="form-error">{error}</span> : <span className="form-hint">{tr('Creates a login with a home folder.')}</span>}
         <span>
           <button type="button" className="btn" onClick={onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>{' '}
           <button className="btn btn-primary" disabled={!form.name || form.password.length < 6}>
-            Create User
+            {tr('Create User')}
           </button>
         </span>
       </div>

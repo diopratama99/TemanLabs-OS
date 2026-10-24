@@ -13,8 +13,54 @@ export function displacementMap(width: number, height: number, radius: number, b
   const key = `${width}x${height}:${radius}:${bezel}`
   const hit = cache.get(key)
   if (hit) return hit
-
   const k = Math.min(1, MAX_MAP_SIZE / Math.max(width, height))
+  const url = drawMap(width, height, radius, bezel, k).toDataURL()
+  remember(key, url)
+  return url
+}
+
+const remember = (key: string, url: string) => {
+  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
+  cache.set(key, url)
+}
+
+const sliceCache = new Map<string, MapSlices>()
+
+export interface MapSlices {
+  /** Width of each end cap, in px. */
+  cap: number
+  left: string
+  /** A 1 px column, stretched across everything between the caps. */
+  middle: string
+  right: string
+}
+
+/**
+ * The same map cut into a left cap, a middle column and a right cap, for a surface whose width
+ * keeps changing (the Dock while it magnifies). Between the corners and side rims the map is the
+ * same all the way across, so any width is the caps at the ends and the column stretched in
+ * between: nothing is redrawn, and no new image has to load, as the surface grows.
+ */
+export function displacementSlices(height: number, radius: number, bezel: number): MapSlices {
+  const key = `${height}:${radius}:${bezel}`
+  const hit = sliceCache.get(key)
+  if (hit) return hit
+  const cap = Math.ceil(Math.max(radius, bezel)) + 2
+  const full = drawMap(cap * 2 + 1, height, radius, bezel, 1)
+  const piece = (x: number, w: number) => {
+    const c = document.createElement('canvas')
+    c.width = w
+    c.height = full.height
+    c.getContext('2d')!.drawImage(full, x, 0, w, full.height, 0, 0, w, full.height)
+    return c.toDataURL()
+  }
+  const slices = { cap, left: piece(0, cap), middle: piece(cap, 1), right: piece(cap + 1, cap) }
+  sliceCache.set(key, slices)
+  return slices
+}
+
+/** Draws the map at scale k (the map is smooth, so it may be drawn small). */
+function drawMap(width: number, height: number, radius: number, bezel: number, k: number) {
   const w = Math.max(1, Math.round(width * k))
   const h = Math.max(1, Math.round(height * k))
   const r = Math.min(radius * k, w / 2, h / 2)
@@ -66,8 +112,5 @@ export function displacementMap(width: number, height: number, radius: number, b
   }
 
   ctx.putImageData(img, 0, 0)
-  const url = canvas.toDataURL()
-  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
-  cache.set(key, url)
-  return url
+  return canvas
 }

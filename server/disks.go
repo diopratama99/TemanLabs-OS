@@ -38,6 +38,8 @@ type blockDevice struct {
 	Available   int64         `json:"fsavail,omitempty"`
 	Children    []blockDevice `json:"children,omitempty"`
 	Smart       *smartInfo    `json:"smart,omitempty"`
+	// Where /etc/fstab mounts it at startup, if it does.
+	Startup string `json:"startup,omitempty"`
 }
 
 type smartInfo struct {
@@ -203,6 +205,25 @@ func (s *server) handleDisks(w http.ResponseWriter, r *http.Request) {
 		}(&disks[i])
 	}
 	wg.Wait()
+	_, fstab := readFstab()
+	startup := map[string]string{}
+	for _, e := range fstab {
+		startup[e.Source] = e.Target
+	}
+	var mark func(d *blockDevice)
+	mark = func(d *blockDevice) {
+		for _, key := range []string{d.Path, "UUID=" + d.UUID, "/dev/disk/by-uuid/" + d.UUID} {
+			if t, ok := startup[key]; ok && (d.UUID != "" || key == d.Path) {
+				d.Startup = t
+			}
+		}
+		for i := range d.Children {
+			mark(&d.Children[i])
+		}
+	}
+	for i := range disks {
+		mark(&disks[i])
+	}
 	writeJSON(w, http.StatusOK, disks)
 }
 

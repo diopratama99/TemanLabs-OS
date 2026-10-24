@@ -15,12 +15,13 @@ import type { InstalledApp, SystemStats } from '../api/types'
 import type { StatsHistory } from '../hooks/useSystemStats'
 import { useWidgets } from '../hooks/useWidgets'
 import { useContextMenu } from '../lib/contextMenu'
-import { WIDGET_INFO, type WidgetConfig } from '../lib/widgets'
+import { NOTE_COLORS, WIDGET_INFO, type WidgetConfig } from '../lib/widgets'
 import type { MenuItem } from './ContextMenu'
 import { Glass } from './Glass'
 import { WidgetEditor } from './widgets/WidgetEditor'
 import { WidgetGallery } from './widgets/WidgetGallery'
 import { WidgetContent } from './widgets/WidgetViews'
+import { tr } from '../lib/i18n'
 
 // Read back on drop instead of from state, and ignores files or text dragged in from elsewhere.
 const DRAG_TYPE = 'application/x-temanlabs-widget'
@@ -66,37 +67,37 @@ export function DesktopWidgets({
     switch (w.type) {
       case 'clock':
         return [
-          { label: 'Analog', icon: Clock, checked: w.options.style === 'analog', onSelect: set({ style: 'analog' }) },
-          { label: 'Digital', checked: w.options.style === 'digital', onSelect: set({ style: 'digital' }) },
-          { label: 'Show Seconds', checked: w.options.seconds, onSelect: set({ seconds: !w.options.seconds }) },
+          { label: tr('Analog'), icon: Clock, checked: w.options.style === 'analog', onSelect: set({ style: 'analog' }) },
+          { label: tr('Digital'), checked: w.options.style === 'digital', onSelect: set({ style: 'digital' }) },
+          { label: tr('Show Seconds'), checked: w.options.seconds, onSelect: set({ seconds: !w.options.seconds }) },
         ]
       case 'cpu':
         return [
-          { label: 'Show Temperature', checked: w.options.temperature, onSelect: set({ temperature: !w.options.temperature }) },
-          { label: 'Show Usage Graph', checked: w.options.graph, onSelect: set({ graph: !w.options.graph }) },
+          { label: tr('Show Temperature'), checked: w.options.temperature, onSelect: set({ temperature: !w.options.temperature }) },
+          { label: tr('Show Usage Graph'), checked: w.options.graph, onSelect: set({ graph: !w.options.graph }) },
         ]
       case 'memory':
         return [
-          { label: 'Ring', checked: w.options.display === 'ring', onSelect: set({ display: 'ring' }) },
-          { label: 'Bar', checked: w.options.display === 'bar', onSelect: set({ display: 'bar' }) },
-          { label: 'Show Details', checked: w.options.details, onSelect: set({ details: !w.options.details }) },
+          { label: tr('Ring'), checked: w.options.display === 'ring', onSelect: set({ display: 'ring' }) },
+          { label: tr('Bar'), checked: w.options.display === 'bar', onSelect: set({ display: 'bar' }) },
+          { label: tr('Show Details'), checked: w.options.details, onSelect: set({ details: !w.options.details }) },
         ]
       case 'apps':
         return [
-          { label: 'Running Apps', checked: w.options.show === 'running', onSelect: set({ show: 'running' }) },
-          { label: 'All Apps', checked: w.options.show === 'all', onSelect: set({ show: 'all' }) },
-          { label: 'Show Icons', checked: w.options.icons, onSelect: set({ icons: !w.options.icons }) },
+          { label: tr('Running Apps'), checked: w.options.show === 'running', onSelect: set({ show: 'running' }) },
+          { label: tr('All Apps'), checked: w.options.show === 'all', onSelect: set({ show: 'all' }) },
+          { label: tr('Show Icons'), checked: w.options.icons, onSelect: set({ icons: !w.options.icons }) },
           'separator',
-          { label: 'Open Launcher', icon: LayoutGrid, onSelect: onLauncher },
-          { label: 'Manage Apps…', icon: ShoppingBag, onSelect: onManageApps },
+          { label: tr('Open Launcher'), icon: LayoutGrid, onSelect: onLauncher },
+          { label: tr('Manage Apps…'), icon: ShoppingBag, onSelect: onManageApps },
         ]
       case 'storage': {
         const hidden = w.options.hidden
         return [
-          { label: 'Show Used Space', checked: w.options.show === 'used', onSelect: set({ show: 'used' }) },
-          { label: 'Show Free Space', checked: w.options.show === 'free', onSelect: set({ show: 'free' }) },
+          { label: tr('Show Used Space'), checked: w.options.show === 'used', onSelect: set({ show: 'used' }) },
+          { label: tr('Show Free Space'), checked: w.options.show === 'free', onSelect: set({ show: 'free' }) },
           'separator',
-          ...stats.disks.map(disk => ({
+          ...stats.disks.filter(disk => !disk.cloud).map(disk => ({
             label: `${disk.name} (${disk.mount})`,
             checked: !hidden.includes(disk.mount),
             onSelect: set({
@@ -104,15 +105,38 @@ export function DesktopWidgets({
             }),
           })),
           'separator',
-          { label: 'Open DATA in Files', icon: FolderOpen, onSelect: onOpenFiles },
+          { label: tr('Open DATA in Files'), icon: FolderOpen, onSelect: onOpenFiles },
         ]
       }
       case 'network':
         return [
-          { label: 'Megabytes (MB/s)', checked: w.options.units === 'bytes', onSelect: set({ units: 'bytes' }) },
-          { label: 'Megabits (Mbps)', checked: w.options.units === 'bits', onSelect: set({ units: 'bits' }) },
-          { label: 'Show Traffic Graph', checked: w.options.graph, onSelect: set({ graph: !w.options.graph }) },
+          { label: tr('Megabytes (MB/s)'), checked: w.options.units === 'bytes', onSelect: set({ units: 'bytes' }) },
+          { label: tr('Megabits (Mbps)'), checked: w.options.units === 'bits', onSelect: set({ units: 'bits' }) },
+          { label: tr('Show Traffic Graph'), checked: w.options.graph, onSelect: set({ graph: !w.options.graph }) },
         ]
+      case 'note':
+        return NOTE_COLORS.map(c => ({ label: c.label, checked: w.options.color === c.id, onSelect: set({ color: c.id }) }))
+      case 'todo':
+        return [
+          { label: tr('Hide Finished Items'), checked: w.options.hideDone, onSelect: set({ hideDone: !w.options.hideDone }) },
+          {
+            label: tr('Clear Finished Items'),
+            disabled: !w.options.items.some(i => i.done),
+            onSelect: set({ items: w.options.items.filter(i => !i.done) }),
+          },
+        ]
+      case 'calendar':
+        return [
+          { label: tr('Week Starts on Monday'), checked: w.options.weekStart === 'monday', onSelect: set({ weekStart: 'monday' }) },
+          { label: tr('Week Starts on Sunday'), checked: w.options.weekStart === 'sunday', onSelect: set({ weekStart: 'sunday' }) },
+        ]
+      case 'power':
+        return [
+          { label: tr('Show Graph'), checked: w.options.graph, onSelect: set({ graph: !w.options.graph }) },
+          { label: tr('Show Breakdown'), checked: w.options.parts, onSelect: set({ parts: !w.options.parts }) },
+        ]
+      case 'server':
+        return [{ label: tr('Show Load'), checked: w.options.load, onSelect: set({ load: !w.options.load }) }]
     }
   }
 
@@ -120,15 +144,15 @@ export function DesktopWidgets({
     const box = e.currentTarget.getBoundingClientRect()
     const info = WIDGET_INFO[w.type]
     show(e, [
-      { label: `Edit "${info.name}"…`, icon: SlidersHorizontal, onSelect: () => setEditor({ id: w.id, anchor: box }) },
+      { label: tr('Edit "{0}"…', info.name), icon: SlidersHorizontal, onSelect: () => setEditor({ id: w.id, anchor: box }) },
       'separator',
-      { label: 'Small', icon: Square, checked: w.size === 'small', onSelect: () => setSize(w.id, 'small') },
-      { label: 'Medium', icon: RectangleHorizontal, checked: w.size === 'medium', onSelect: () => setSize(w.id, 'medium') },
+      { label: tr('Small'), icon: Square, checked: w.size === 'small', onSelect: () => setSize(w.id, 'small') },
+      { label: tr('Medium'), icon: RectangleHorizontal, checked: w.size === 'medium', onSelect: () => setSize(w.id, 'medium') },
       'separator',
       ...optionItems(w),
       'separator',
-      { label: 'Remove Widget', icon: Trash2, danger: true, onSelect: () => remove(w.id) },
-      { label: editing ? 'Done Editing Widgets' : 'Edit Widgets…', icon: LayoutDashboard, onSelect: () => onEditingChange(!editing) },
+      { label: tr('Remove Widget'), icon: Trash2, danger: true, onSelect: () => remove(w.id) },
+      { label: editing ? tr('Done Editing Widgets') : tr('Edit Widgets…'), icon: LayoutDashboard, onSelect: () => onEditingChange(!editing) },
     ])
   }
 
@@ -165,17 +189,19 @@ export function DesktopWidgets({
               blur={12}
               className={`widget widget-${w.size} widget-${w.type}`}
               data-widget={w.type}
+              data-color={w.type === 'note' ? w.options.color : undefined}
             >
-              <WidgetContent config={w} data={data} />
+              {/* While rearranging, widgets are pictures to drag, not things to type in. */}
+              <WidgetContent config={w} data={data} onOptions={editing ? undefined : patch => setOptions(w.id, patch)} />
             </Glass>
             {editing && (
-              <button className="widget-remove" onClick={() => remove(w.id)} aria-label={`Remove ${WIDGET_INFO[w.type].name} widget`}>
+              <button className="widget-remove" onClick={() => remove(w.id)} aria-label={tr('Remove {0} widget', WIDGET_INFO[w.type].name)}>
                 <Minus size={12} strokeWidth={3.5} />
               </button>
             )}
           </div>
         ))}
-        {editing && widgets.length === 0 && <div className="widget-placeholder">Add widgets from the gallery below.</div>}
+        {editing && widgets.length === 0 && <div className="widget-placeholder">{tr('Add widgets from the gallery below.')}</div>}
       </div>
 
       {editing && <WidgetGallery onDone={() => onEditingChange(false)} />}

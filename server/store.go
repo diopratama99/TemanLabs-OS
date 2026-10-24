@@ -220,6 +220,9 @@ type appStore struct {
 	custom map[string]*app
 	// Web apps running outside Docker.
 	native *nativeApps
+	// Ports of stopped containers, see stoppedPorts.
+	reserved   map[int]bool
+	reservedAt time.Time
 }
 
 func newAppCenter(cfg *Config, docker *dockerClient, o *owner) *appStore {
@@ -287,6 +290,55 @@ func (s *appStore) pendingApps(existing map[string]*app) []*app {
 	return pending
 }
 
+// stoppedPorts are host ports that stopped containers will publish when started again; like
+// CasaOS, TemanLabsOS doesn't hand them to another app. Cached briefly: inspecting every
+// container is cheap but not free.
+func (s *appStore) stoppedPorts() map[int]bool {
+	s.mu.Lock()
+	if time.Since(s.reservedAt) < 30*time.Second && s.reserved != nil {
+		r := s.reserved
+		s.mu.Unlock()
+		return r
+	}
+	s.mu.Unlock()
+	reserved := map[int]bool{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if list, err := s.docker.containers(ctx); err == nil {
+		for _, c := range list {
+			if c.State == "running" {
+				continue
+			}
+			var info struct {
+				HostConfig struct {
+					PortBindings map[string][]struct {
+						HostPort string `json:"HostPort"`
+					} `json:"PortBindings"`
+				} `json:"HostConfig"`
+			}
+			if s.docker.do(ctx, http.MethodGet, "/containers/"+c.ID+"/json", &info) != nil {
+				continue
+			}
+			for _, bindings := range info.HostConfig.PortBindings {
+				for _, b := range bindings {
+					if p, err := strconv.Atoi(b.HostPort); err == nil && p > 0 {
+						reserved[p] = true
+					}
+				}
+			}
+		}
+	}
+	s.mu.Lock()
+	s.reserved, s.reservedAt = reserved, time.Now()
+	s.mu.Unlock()
+	return reserved
+}
+
+// portTaken: something listens on the port, or a stopped container will.
+func (s *appStore) portTaken(port int) bool {
+	return !portFree(port) || s.stoppedPorts()[port]
+}
+
 // portFree reports whether nothing (including Docker's proxies) is listening on the port.
 func portFree(port int) bool {
 	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
@@ -297,9 +349,9 @@ func portFree(port int) bool {
 	return true
 }
 
-func freePortFrom(port int) (int, error) {
+func (s *appStore) freePortFrom(port int) (int, error) {
 	for p := port; p < port+200 && p < 65536; p++ {
-		if portFree(p) {
+		if !s.portTaken(p) {
 			return p, nil
 		}
 	}
@@ -328,7 +380,7 @@ func (s *appStore) install(id string) error {
 		return err
 	}
 
-	port, err := freePortFrom(item.Port)
+	port, err := s.freePortFrom(item.Port)
 	if err != nil {
 		return fail(err)
 	}
@@ -442,28 +494,4 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-}
-
-func (s *server) handleUninstall(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	a, err := s.findApp(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	if a != nil && !a.CanUninstall {
-		msg := "Only apps installed from the TemanLabsOS App Center can be uninstalled here."
-		if a.Source == "casaos" {
-			msg = "This app is managed by CasaOS. Uninstall it from CasaOS."
-		}
-		writeError(w, http.StatusForbidden, msg)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
-	defer cancel()
-	if err := s.store.uninstall(ctx, id); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

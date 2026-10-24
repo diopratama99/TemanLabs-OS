@@ -24,6 +24,13 @@ var (
 type wallpaperEntry struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+	// A small copy for the picker, so a long list doesn't load every full-size photo.
+	Thumb string `json:"thumb"`
+}
+
+func newWallpaperEntry(name string) wallpaperEntry {
+	url := "/api/wallpapers/" + name
+	return wallpaperEntry{Name: name, URL: url, Thumb: url + "?thumb=1"}
 }
 
 func (s *server) wallpaperDir() string { return filepath.Join(s.cfg.StateDir, "wallpapers") }
@@ -56,7 +63,8 @@ func (s *server) saveWallpaper(src io.Reader) (*wallpaperEntry, error) {
 		os.Remove(target)
 		return nil, err
 	}
-	return &wallpaperEntry{Name: name, URL: "/api/wallpapers/" + name}, nil
+	entry := newWallpaperEntry(name)
+	return &entry, nil
 }
 
 func (s *server) handleListWallpapers(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +82,7 @@ func (s *server) handleListWallpapers(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		items = append(items, item{wallpaperEntry{e.Name(), "/api/wallpapers/" + e.Name()}, info.ModTime().UnixNano()})
+		items = append(items, item{newWallpaperEntry(e.Name()), info.ModTime().UnixNano()})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].mod > items[j].mod })
 	list := make([]wallpaperEntry, len(items))
@@ -135,9 +143,23 @@ func (s *server) handleGetWallpaper(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	path := filepath.Join(s.wallpaperDir(), name)
+	if r.URL.Query().Get("thumb") == "1" {
+		info, err := os.Stat(path)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		thumb, err := s.thumbs.get(r.Context(), path, info)
+		if err == nil {
+			path = thumb
+			w.Header().Set("Content-Type", "image/jpeg")
+		}
+		// Otherwise (an image too large to decode) the photo itself stands in.
+	}
 	// Names are random and never reused, so the file can be cached for good.
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	http.ServeFile(w, r, filepath.Join(s.wallpaperDir(), name))
+	http.ServeFile(w, r, path)
 }
 
 func (s *server) handleDeleteWallpaper(w http.ResponseWriter, r *http.Request) {

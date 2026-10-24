@@ -28,6 +28,8 @@ type disk struct {
 	Mount string `json:"mount"`
 	Used  uint64 `json:"used"`
 	Total uint64 `json:"total"`
+	// A cloud drive (rclone): its size is whatever the provider reports, so widgets skip it.
+	Cloud bool `json:"cloud,omitempty"`
 }
 
 type lanAddress struct {
@@ -58,6 +60,9 @@ type systemStats struct {
 		LAN       *lanAddress       `json:"lan"`
 		Tailscale *tailscaleAddress `json:"tailscale"`
 	} `json:"addresses"`
+	// Watts, when something measures them (see power.go).
+	Power *powerStats `json:"power,omitempty"`
+	Load  [3]float64  `json:"load"`
 }
 
 // statsSampler reads /proc every couple of seconds; CPU usage and network speed need two
@@ -71,10 +76,11 @@ type statsSampler struct {
 	prevAt              time.Time
 	model               string
 	osName              string
+	power               *powerMeter
 }
 
 func newStatsSampler() *statsSampler {
-	s := &statsSampler{model: cpuModel(), osName: osPrettyName()}
+	s := &statsSampler{model: cpuModel(), osName: osPrettyName(), power: newPowerMeter()}
 	s.sample()
 	return s
 }
@@ -111,6 +117,8 @@ func (s *statsSampler) sample() {
 	st.CPU.Temp = cpuTemperature()
 
 	st.Memory.Total, st.Memory.Used = memoryUsage()
+	st.Power = s.power.read(time.Now())
+	st.Load = loadAverage()
 	st.Disks = diskUsage()
 
 	iface := defaultInterface()
@@ -233,7 +241,9 @@ func diskUsage() []disk {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
-		if len(fields) < 3 || !realFilesystems[fields[2]] || seen[fields[0]] {
+		// Merged storage (mergerfs) and cloud drives (rclone) are folders people use like drives.
+		fuse := fields[2] == "fuse.mergerfs" || fields[2] == "fuse.rclone"
+		if len(fields) < 3 || (!realFilesystems[fields[2]] && !fuse) || seen[fields[0]] {
 			continue
 		}
 		mount := unescapeMount(fields[1])
@@ -256,6 +266,7 @@ func diskUsage() []disk {
 			Mount: mount,
 			Total: fsStat.Blocks * bsize,
 			Used:  (fsStat.Blocks - fsStat.Bfree) * bsize,
+			Cloud: fields[2] == "fuse.rclone",
 		})
 	}
 	return disks

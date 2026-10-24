@@ -18,11 +18,13 @@ import (
 // Labels carrying a custom app's details, since it has no catalog entry. Every service of the
 // project gets them, so whichever container is listed first describes the app.
 const (
-	labelName   = "temanlabs.name"
-	labelIcon   = "temanlabs.icon"
-	labelPort   = "temanlabs.port"
-	labelScheme = "temanlabs.scheme"
-	labelPath   = "temanlabs.path"
+	// Which store app (e.g. "casaos.jellyfin") an install came from.
+	labelStoreApp = "temanlabs.store"
+	labelName     = "temanlabs.name"
+	labelIcon     = "temanlabs.icon"
+	labelPort     = "temanlabs.port"
+	labelScheme   = "temanlabs.scheme"
+	labelPath     = "temanlabs.path"
 )
 
 var (
@@ -164,27 +166,43 @@ func (spec *customSpec) meta() customMeta {
 // buildCompose turns the form into a compose file. Everything goes through yaml.Marshal, so no
 // field can inject extra YAML.
 func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]byte, error) {
+	svc, external, err := s.serviceFields(spec, nil)
+	if err != nil {
+		return nil, err
+	}
+	svc.ContainerName, svc.Labels = id, m.labels(id)
+	doc := map[string]any{"services": map[string]composeService{id: *svc}}
+	if external != "" {
+		doc["networks"] = map[string]any{external: map[string]bool{"external": true}}
+	}
+	return yaml.Marshal(doc)
+}
+
+// serviceFields validates the form and turns it into compose service fields. ownPorts is set
+// when an existing app is edited: its own host ports count as free, and volumes may use paths
+// relative to its project folder.
+func (s *appStore) serviceFields(spec *customSpec, ownPorts map[int]bool) (*composeService, string, error) {
 	image := strings.TrimSpace(spec.Image)
 	if !imageRef.MatchString(image) {
-		return nil, errors.New("Docker image must look like name or registry/name:tag (lowercase)")
+		return nil, "", errors.New("Docker image must look like name or registry/name:tag (lowercase)")
 	}
 	if tag := strings.TrimSpace(spec.Tag); tag != "" {
 		if !tagRef.MatchString(tag) {
-			return nil, fmt.Errorf("invalid tag %q", tag)
+			return nil, "", fmt.Errorf("invalid tag %q", tag)
 		}
 		if strings.Contains(image[strings.LastIndex(image, "/")+1:], ":") {
-			return nil, errors.New("give the tag either in the image or in the Tag field, not both")
+			return nil, "", errors.New("give the tag either in the image or in the Tag field, not both")
 		}
 		image += ":" + tag
 	}
 
-	svc := composeService{Image: image, ContainerName: id, Restart: "unless-stopped", Labels: m.labels(id)}
+	svc := composeService{Image: image, Restart: "unless-stopped"}
 	switch spec.Restart {
 	case "", "unless-stopped":
 	case "no", "always", "on-failure":
 		svc.Restart = spec.Restart
 	default:
-		return nil, fmt.Errorf("unknown restart policy %q", spec.Restart)
+		return nil, "", fmt.Errorf("unknown restart policy %q", spec.Restart)
 	}
 
 	var external string
@@ -195,7 +213,7 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 		svc.NetworkMode = "host"
 	default:
 		if !networkName.MatchString(net) {
-			return nil, fmt.Errorf("invalid network %q", net)
+			return nil, "", fmt.Errorf("invalid network %q", net)
 		}
 		svc.Networks, external = []string{net}, net
 	}
@@ -207,17 +225,17 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 				proto = "tcp"
 			}
 			if proto != "tcp" && proto != "udp" {
-				return nil, fmt.Errorf("port protocol must be tcp or udp, not %q", proto)
+				return nil, "", fmt.Errorf("port protocol must be tcp or udp, not %q", proto)
 			}
 			if p.Container < 1 || p.Container > 65535 || p.Host < 0 || p.Host > 65535 {
-				return nil, fmt.Errorf("port %d:%d is out of range", p.Host, p.Container)
+				return nil, "", fmt.Errorf("port %d:%d is out of range", p.Host, p.Container)
 			}
 			host := p.Host
 			if host == 0 {
 				host = p.Container
 			}
-			if proto == "tcp" && !portFree(host) {
-				return nil, fmt.Errorf("host port %d is already in use", host)
+			if proto == "tcp" && !ownPorts[host] && s.portTaken(host) {
+				return nil, "", fmt.Errorf("host port %d is already in use", host)
 			}
 			svc.Ports = append(svc.Ports, fmt.Sprintf("%d:%d/%s", host, p.Container, proto))
 		}
@@ -225,12 +243,16 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 
 	for _, v := range spec.Volumes {
 		host, ctr := strings.TrimSpace(v.Host), strings.TrimSpace(v.Container)
-		if !absPath(host) || !absPath(ctr) || strings.ContainsAny(host+ctr, ":\n") {
-			return nil, fmt.Errorf("volume paths must be absolute: %q → %q", host, ctr)
+		relative := ownPorts != nil && (strings.HasPrefix(host, "./") || strings.HasPrefix(host, "../"))
+		named := volumeName.MatchString(host)
+		if (!absPath(host) && !relative && !named) || !absPath(ctr) || strings.ContainsAny(host+ctr, ":\n") {
+			return nil, "", fmt.Errorf("volume host must be an absolute path or a volume name, and the container path absolute: %q → %q", host, ctr)
 		}
 		// Docker would create a missing host folder as root; create it as the owner, like CasaOS.
-		if err := s.mkdirOwned(host); err != nil {
-			return nil, err
+		if absPath(host) {
+			if err := s.mkdirOwned(host); err != nil {
+				return nil, "", err
+			}
 		}
 		entry := host + ":" + ctr
 		if v.ReadOnly {
@@ -245,7 +267,7 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 			continue
 		}
 		if !envKey.MatchString(key) {
-			return nil, fmt.Errorf("invalid environment variable name %q", key)
+			return nil, "", fmt.Errorf("invalid environment variable name %q", key)
 		}
 		if svc.Environment == nil {
 			svc.Environment = map[string]string{}
@@ -259,7 +281,7 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 			ctr = host
 		}
 		if !strings.HasPrefix(host, "/dev/") || !absPath(ctr) || strings.ContainsAny(host+ctr, ":\n") {
-			return nil, fmt.Errorf("devices must be under /dev: %q", host)
+			return nil, "", fmt.Errorf("devices must be under /dev: %q", host)
 		}
 		svc.Devices = append(svc.Devices, host+":"+ctr)
 	}
@@ -270,7 +292,7 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 			continue
 		}
 		if !capability.MatchString(c) {
-			return nil, fmt.Errorf("invalid capability %q", c)
+			return nil, "", fmt.Errorf("invalid capability %q", c)
 		}
 		svc.CapAdd = append(svc.CapAdd, c)
 	}
@@ -285,16 +307,12 @@ func (s *appStore) buildCompose(spec *customSpec, id string, m customMeta) ([]by
 	}
 	if h := strings.TrimSpace(spec.Hostname); h != "" {
 		if !containerRef.MatchString(h) {
-			return nil, fmt.Errorf("invalid hostname %q", h)
+			return nil, "", fmt.Errorf("invalid hostname %q", h)
 		}
 		svc.Hostname = h
 	}
 
-	doc := map[string]any{"services": map[string]composeService{id: svc}}
-	if external != "" {
-		doc["networks"] = map[string]any{external: map[string]bool{"external": true}}
-	}
-	return yaml.Marshal(doc)
+	return &svc, external, nil
 }
 
 // pastedCompose is a compose file from the Manual Install form, parsed but not yet labelled.
@@ -353,8 +371,11 @@ func parseCompose(text string, m customMeta) (*pastedCompose, customMeta, error)
 }
 
 // labelled adds the app's labels to every service and returns the compose file to install.
-func (c *pastedCompose) labelled(id string, m customMeta) ([]byte, error) {
+func (c *pastedCompose) labelled(id string, m customMeta, extra map[string]string) ([]byte, error) {
 	labels := m.labels(id)
+	for k, v := range extra {
+		labels[k] = v
+	}
 	for name, raw := range c.services {
 		svc, ok := raw.(map[string]any)
 		if !ok {
@@ -441,15 +462,46 @@ func (s *appStore) installCustom(ctx context.Context, spec *customSpec) (string,
 		return "", err
 	}
 
-	var compose []byte
 	if pasted != nil {
-		compose, err = pasted.labelled(id, m)
-	} else {
-		compose, err = s.buildCompose(spec, id, m)
+		return s.installPasted(id, pasted, m, nil)
 	}
+	compose, err := s.buildCompose(spec, id, m)
 	if err != nil {
 		return "", err
 	}
+	return s.startInstall(id, compose, m)
+}
+
+// installCompose installs a compose file (e.g. from an app store) under a chosen app ID.
+func (s *appStore) installCompose(ctx context.Context, id, text string, m customMeta, extra map[string]string) (string, error) {
+	pasted, m, err := parseCompose(text, m)
+	if err != nil {
+		return "", err
+	}
+	return s.installPasted(id, pasted, m, extra)
+}
+
+func (s *appStore) installPasted(id string, pasted *pastedCompose, m customMeta, extra map[string]string) (string, error) {
+	compose, err := pasted.labelled(id, m, extra)
+	if err != nil {
+		return "", err
+	}
+	// Folders under /DATA/AppData are created for the user, the way CasaOS does; Docker would
+	// make them as root.
+	if doc, err := parseComposeDoc(compose); err == nil {
+		for _, src := range doc.bindSources() {
+			if strings.HasPrefix(src, appDataRoot+"/AppData/") {
+				if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+					_ = s.mkdirOwned(src)
+				}
+			}
+		}
+	}
+	return s.startInstall(id, compose, m)
+}
+
+// startInstall writes the compose file and starts it in the background.
+func (s *appStore) startInstall(id string, compose []byte, m customMeta) (string, error) {
 
 	file := s.composeFile(id)
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
@@ -511,6 +563,25 @@ func (s *server) handleNetworks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, names)
+}
+
+// labelOverrides applies the title, icon and web UI saved in App Settings, where present.
+func labelOverrides(a *app, labels map[string]string) {
+	if name := labels[labelName]; name != "" {
+		a.Name = name
+	}
+	if icon := labels[labelIcon]; icon != "" {
+		a.IconURL = icon
+	}
+	if p, err := strconv.Atoi(labels[labelPort]); err == nil && p > 0 {
+		a.Port = &p
+		if sch := labels[labelScheme]; sch != "" {
+			a.Scheme = sch
+		}
+		if path := labels[labelPath]; path != "" {
+			a.Path = path
+		}
+	}
 }
 
 // describeCustom fills in a TemanLabsOS-installed app that isn't in the catalog from its labels.

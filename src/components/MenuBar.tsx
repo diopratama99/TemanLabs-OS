@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, type ButtonHTMLAttributes } from 'react'
+import { useCallback, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import {
   Copy,
   Cpu,
+  Zap,
   Droplets,
   EthernetPort,
   Globe,
@@ -20,8 +21,11 @@ import {
   Power,
   RotateCcw,
 } from 'lucide-react'
-import type { NetworkAddresses } from '../api/types'
+import type { NetworkAddresses, SystemStats } from '../api/types'
 import { useClock } from '../hooks/useClock'
+import type { StatsHistory } from '../hooks/useSystemStats'
+import type { SettingsSection } from '../windows/Settings'
+import { ClockPanel, CpuPanel, isWireless, NetworkPanel, PowerPanel } from './StatusPanels'
 import { useDismiss } from '../hooks/useDismiss'
 import type { AppMenu } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
@@ -32,6 +36,7 @@ import { Glass } from './Glass'
 import { WallpaperPicker } from './Wallpaper'
 import type { WindowId } from './Window'
 import { LogoGlyph } from './Logo'
+import { tr } from '../lib/i18n'
 
 export const QUICK_SEARCH_SHORTCUT = `${MOD}K`
 
@@ -54,11 +59,11 @@ function addressMenu(title: string, ip: string, dnsName?: string): MenuItem[] {
   return [
     { label: title, disabled: true, onSelect: () => {} },
     'separator',
-    { label: `Copy IP Address (${ip})`, icon: Copy, onSelect: () => void copyText(ip) },
+    { label: tr('Copy IP Address ({0})', ip), icon: Copy, onSelect: () => void copyText(ip) },
     ...(dnsName
-      ? ([{ label: `Copy MagicDNS Name (${dnsName})`, icon: Globe, onSelect: () => void copyText(dnsName) }] as MenuItem[])
+      ? ([{ label: tr('Copy MagicDNS Name ({0})', dnsName), icon: Globe, onSelect: () => void copyText(dnsName) }] as MenuItem[])
       : []),
-    { label: 'Copy Dashboard URL', icon: Link, onSelect: () => void copyText(dashboardUrl(ip)) },
+    { label: tr('Copy Dashboard URL'), icon: Link, onSelect: () => void copyText(dashboardUrl(ip)) },
   ]
 }
 
@@ -69,24 +74,48 @@ interface Props {
  */
   getContent: () => MenuBarContent
   cpu?: number
+  /** Watts, when the server measures them (see SystemStats.power). */
+  power?: SystemStats['power']
   addresses?: NetworkAddresses
+  /** For the status panels (processor, power, network): the latest reading and recent history. */
+  stats?: SystemStats | null
+  history?: StatsHistory
   onOpenWindow: (id: WindowId) => void
+  /** Opens Settings at a section (the clock's panel → Date & Time). */
+  onOpenSettings?: (section: SettingsSection) => void
   onQuickSearch: () => void
   onPower: (action: 'restart' | 'shutdown') => void
 }
 
-export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearch, onPower }: Props) {
+type StatusPanel = 'cpu' | 'power' | 'net' | 'cc' | 'clock'
+
+export function MenuBar({ getContent, cpu, power, addresses, stats, history, onOpenWindow, onOpenSettings, onQuickSearch, onPower }: Props) {
   const now = useClock()
   const [menu, setMenu] = useState<{ key: MenuKey; anchor: MenuAnchor } | null>(null)
-  const [ccOpen, setCcOpen] = useState(false)
-  const ccRef = useRef<HTMLDivElement>(null)
-  const closeCc = useCallback(() => setCcOpen(false), [])
+  // The status items' panels (Quick Settings among them); one at a time.
+  const [panel, setPanel] = useState<StatusPanel | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const closePanel = useCallback(() => setPanel(null), [])
   const closeMenu = useCallback(() => setMenu(null), [])
-  useDismiss(ccRef, ccOpen, closeCc)
+  useDismiss(panelRef, !!panel, closePanel)
+  const togglePanel = (key: StatusPanel) => {
+    setMenu(null)
+    setPanel(p => (p === key ? null : key))
+  }
+  // A status item and the panel under it.
+  const status = (key: StatusPanel, label: string, className: string, content: ReactNode, body: ReactNode) => (
+    <div className="cc-anchor" ref={panel === key ? panelRef : undefined}>
+      <button className={`${className} ${panel === key ? 'is-active' : ''}`} onClick={() => togglePanel(key)} aria-label={label} aria-expanded={panel === key}>
+        {content}
+      </button>
+      {panel === key && body}
+    </div>
+  )
 
   const { appName, appMenu, menus } = getContent()
 
   const openMenu = (key: MenuKey, el: HTMLElement) => {
+    setPanel(null)
     const rect = el.getBoundingClientRect()
     setMenu({ key, anchor: { x: rect.left, y: rect.bottom + 6 } })
   }
@@ -103,14 +132,14 @@ export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearc
   })
 
   const logoMenu: MenuItem[] = [
-    { label: 'About This Server', icon: Info, onSelect: () => onOpenWindow('settings') },
-    { label: 'Settings…', icon: Settings, onSelect: () => onOpenWindow('settings') },
-    { label: 'App Center…', icon: ShoppingBag, onSelect: () => onOpenWindow('store') },
+    { label: tr('About This Server'), icon: Info, onSelect: () => onOpenWindow('settings') },
+    { label: tr('Settings…'), icon: Settings, onSelect: () => onOpenWindow('settings') },
+    { label: tr('App Center…'), icon: ShoppingBag, onSelect: () => onOpenWindow('store') },
     'separator',
-    { label: 'Quick Search', icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: onQuickSearch },
+    { label: tr('Quick Search'), icon: Search, shortcut: QUICK_SEARCH_SHORTCUT, onSelect: onQuickSearch },
     'separator',
-    { label: 'Restart Server…', icon: RotateCcw, confirm: 'Click Again to Restart', onSelect: () => onPower('restart') },
-    { label: 'Shut Down Server…', icon: Power, danger: true, confirm: 'Click Again to Shut Down', onSelect: () => onPower('shutdown') },
+    { label: tr('Restart Server…'), icon: RotateCcw, confirm: tr('Click Again to Restart'), onSelect: () => onPower('restart') },
+    { label: tr('Shut Down Server…'), icon: Power, danger: true, confirm: tr('Click Again to Shut Down'), onSelect: () => onPower('shutdown') },
   ]
 
   // Resolved on each render so an open menu follows the app's latest state; if the frontmost app
@@ -134,10 +163,10 @@ export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearc
   return (
     <header className="menubar">
       <div className="menubar-left">
-        <button {...trigger('logo')} aria-label="TemanLabsOS menu">
+        <button {...trigger('logo')} aria-label={tr('TemanLabsOS menu')}>
           <LogoGlyph className="logo-mark" size={16} mono />
         </button>
-        <button {...trigger('app', 'menubar-app')} aria-label={`${appName} menu`}>
+        <button {...trigger('app', 'menubar-app')} aria-label={tr('{0} menu', appName)}>
           {appName}
         </button>
         {menus.map(m => (
@@ -148,7 +177,7 @@ export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearc
       </div>
       <div className="menubar-right">
         {lan && (
-          <button {...trigger('ip:lan', 'menubar-ip')} aria-label={`Local IP ${lan.ipv4}`} title={`Local network (${lan.interface})`}>
+          <button {...trigger('ip:lan', 'menubar-ip')} aria-label={tr('Local IP {0}', lan.ipv4)} title={tr('Local network ({0})', lan.interface)}>
             <EthernetPort size={14} />
             <span className="menubar-ip-text">{lan.ipv4}</span>
           </button>
@@ -156,37 +185,89 @@ export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearc
         {tailscale && (
           <button
             {...trigger('ip:tailscale', 'menubar-ip')}
-            aria-label={`Tailscale IP ${tailscale.ipv4}`}
-            title={tailscale.dnsName ? `Tailscale · ${tailscale.dnsName}` : 'Tailscale'}
+            aria-label={tr('Tailscale IP {0}', tailscale.ipv4)}
+            title={tailscale.dnsName ? tr('Tailscale · {0}', tailscale.dnsName) : tr('Tailscale')}
           >
             <Waypoints size={14} />
             <span className="menubar-ip-text">{tailscale.ipv4}</span>
           </button>
         )}
-        <span className="menubar-stat" title="CPU usage">
-          <Cpu size={14} /> {cpu === undefined ? '–' : `${Math.round(cpu)}%`}
-        </span>
-        <span className="menubar-icon" title="Network connected">
-          <Wifi size={15} />
-        </span>
-        <button className="menubar-icon" onClick={onQuickSearch} aria-label="Quick Search">
+        {status(
+          'cpu',
+          tr('CPU usage'),
+          'menubar-stat',
+          <>
+            <Cpu size={14} /> {cpu === undefined ? '–' : `${Math.round(cpu)}%`}
+          </>,
+          stats && history && (
+            <CpuPanel
+              stats={stats}
+              history={history}
+              onOpen={() => {
+                setPanel(null)
+                onOpenWindow('activity')
+              }}
+            />
+          ),
+        )}
+        {power &&
+          status(
+            'power',
+            tr('Power draw {0} watts', power.watts.toFixed(1)),
+            'menubar-stat',
+            <>
+              <Zap size={13} /> {power.watts < 10 ? power.watts.toFixed(1) : Math.round(power.watts)} W
+            </>,
+            history && <PowerPanel power={power} history={history} />,
+          )}
+        {status(
+          'net',
+          lan ? tr('Network: {0}', lan.ipv4) : tr('Network'),
+          'menubar-icon',
+          isWireless(lan?.interface) ? <Wifi size={15} /> : <EthernetPort size={15} />,
+          stats && history && (
+            <NetworkPanel
+              stats={stats}
+              history={history}
+              onOpen={() => {
+                setPanel(null)
+                onOpenWindow('network')
+              }}
+            />
+          ),
+        )}
+        <button className="menubar-icon" onClick={onQuickSearch} aria-label={tr('Quick Search')}>
           <Search size={15} />
         </button>
-        <div className="cc-anchor" ref={ccRef}>
-          <button
-            className={`menubar-icon ${ccOpen ? 'is-active' : ''}`}
-            onClick={() => setCcOpen(o => !o)}
-            aria-label="Quick Settings"
-            aria-expanded={ccOpen}
-          >
-            <SlidersHorizontal size={15} />
-          </button>
-          {ccOpen && <ControlCenter />}
-        </div>
-        <span className="menubar-clock">
-          <span className="menubar-date">{date}&nbsp;&nbsp;</span>
-          {time}
-        </span>
+        {status('cc', tr('Quick Settings'), 'menubar-icon', <SlidersHorizontal size={15} />,
+          <ControlCenter
+            onWallpapers={() => {
+              setPanel(null)
+              if (onOpenSettings) onOpenSettings('appearance')
+              else onOpenWindow('settings')
+            }}
+          />,
+        )}
+        {status(
+          'clock',
+          tr('Date and time'),
+          'menubar-clock',
+          <>
+            <span className="menubar-date">
+              {date}
+              {tr('  ')}
+            </span>
+            {time}
+          </>,
+          <ClockPanel
+            now={now}
+            onSettings={() => {
+              setPanel(null)
+              if (onOpenSettings) onOpenSettings('datetime')
+              else onOpenWindow('settings')
+            }}
+          />,
+        )}
       </div>
       {menu && openItems && (
         <ContextMenu key={menu.key} items={openItems} anchor={menu.anchor} onClose={closeMenu} />
@@ -195,7 +276,7 @@ export function MenuBar({ getContent, cpu, addresses, onOpenWindow, onQuickSearc
   )
 }
 
-function ControlCenter() {
+function ControlCenter({ onWallpapers }: { onWallpapers: () => void }) {
   const { settings, update } = useSettings()
   const dark = settings.theme === 'dark'
   const refraction = settings.refraction && supportsRefraction
@@ -207,33 +288,33 @@ function ControlCenter() {
       blur={18}
       className="control-center tint-panel"
       role="dialog"
-      aria-label="Quick Settings"
+      aria-label={tr('Quick Settings')}
     >
       <CcToggle
         icon={dark ? Moon : Sun}
-        label="Dark Mode"
-        sub={dark ? 'On' : 'Off'}
+        label={tr('Dark Mode')}
+        sub={dark ? tr('Turned on') : tr('Turned off')}
         on={dark}
         onClick={() => update({ theme: dark ? 'light' : 'dark' })}
       />
       <CcToggle
         icon={Sparkles}
-        label="Glass Effect"
-        sub={supportsRefraction ? (refraction ? 'Refraction on' : 'Refraction off') : 'Chromium browsers only'}
+        label={tr('Glass Effect')}
+        sub={supportsRefraction ? (refraction ? tr('Refraction on') : tr('Refraction off')) : tr('Chromium browsers only')}
         on={refraction}
         disabled={!supportsRefraction}
         onClick={() => update({ refraction: !settings.refraction })}
       />
       <CcToggle
         icon={Droplets}
-        label="Reduce Transparency"
-        sub={settings.reduceTransparency ? 'On' : 'Off'}
+        label={tr('Reduce Transparency')}
+        sub={settings.reduceTransparency ? tr('Turned on') : tr('Turned off')}
         on={settings.reduceTransparency}
         onClick={() => update({ reduceTransparency: !settings.reduceTransparency })}
       />
       <div>
-        <span className="cc-label">Wallpaper</span>
-        <WallpaperPicker />
+        <span className="cc-label">{tr('Wallpaper')}</span>
+        <WallpaperPicker compact onMore={onWallpapers} />
       </div>
     </Glass>
   )

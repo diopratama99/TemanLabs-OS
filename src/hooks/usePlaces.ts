@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { HardDrive, House, Server } from 'lucide-react'
+import { Cloud, HardDrive, House, Server } from 'lucide-react'
 import { api } from '../api'
 import type { Disk } from '../api/types'
 import { useAuth } from '../lib/auth'
 import { nameOf } from '../lib/paths'
 import { DATA_ROOT, PLACES, type Place } from '../lib/places'
+import { tr } from '../lib/i18n'
 
 /**
  * Sidebar places for Files and the Open dialog: CasaOS's /DATA folders as favorites, plus the
@@ -37,11 +38,11 @@ export function usePlaces(): { favorites: Place[]; locations: Place[] } {
 
   const inside = (path: string) => root === '/' || path === root || path.startsWith(`${root}/`)
   const locations: Place[] = [
-    ...(root === '/' ? [{ path: '/', label: 'Root', icon: Server }] : []),
-    ...(home && inside(home) ? [{ path: home, label: 'Home', icon: House }] : []),
+    ...(root === '/' ? [{ path: '/', label: tr('Root'), icon: Server }] : []),
+    ...(home && inside(home) ? [{ path: home, label: tr('Home'), icon: House }] : []),
     ...disks
       .filter(d => d.mount !== '/' && inside(d.mount))
-      .map(d => ({ path: d.mount, label: d.name, icon: HardDrive })),
+      .map(d => ({ path: d.mount, label: d.name, icon: d.cloud ? Cloud : HardDrive })),
   ]
   return { favorites: PLACES.filter(p => inside(p.path) && exists(p.path)), locations }
 }

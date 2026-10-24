@@ -23,6 +23,7 @@ import { RenameField } from '../RenameField'
 import { FileTypeIcon } from './FileTypeIcon'
 
 import { displayName, joinPath, nameOf, parentOf } from '../../lib/paths'
+import { tr } from '../../lib/i18n'
 
 interface Props {
   root: string
@@ -120,23 +121,23 @@ export function Explorer({
     const folder = entry.kind === 'folder'
     const head: MenuItem[] = folder
       ? [
-          { label: 'New File', icon: FilePlus, onSelect: () => void create('file', path) },
-          { label: 'New Folder', icon: FolderPlus, onSelect: () => void create('folder', path) },
+          { label: tr('New File'), icon: FilePlus, onSelect: () => void create('file', path) },
+          { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void create('folder', path) },
         ]
-      : [{ label: 'Open', icon: FilePen, disabled: !isTextFile(entry.name), onSelect: () => onOpenFile(path) }]
+      : [{ label: tr('Open'), icon: FilePen, disabled: !isTextFile(entry.name), onSelect: () => onOpenFile(path) }]
     show(e, [
       ...head,
       'separator',
-      { label: 'Rename', icon: Pencil, shortcut: 'F2', onSelect: () => setRenaming({ path, isNew: false }) },
+      { label: tr('Rename'), icon: Pencil, shortcut: 'F2', onSelect: () => setRenaming({ path, isNew: false }) },
       {
-        label: 'Delete',
-        confirm: 'Click Again to Delete',
+        label: tr('Delete'),
+        confirm: tr('Click Again to Delete'),
         icon: Trash2,
         danger: true,
         onSelect: () => void remove(path),
       },
       'separator',
-      { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(path) },
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(path) },
     ])
   }
 
@@ -144,15 +145,15 @@ export function Explorer({
     if (e.defaultPrevented) return
     setSelected(null)
     show(e, [
-      { label: 'New File', icon: FilePlus, onSelect: () => void create('file', root) },
-      { label: 'New Folder', icon: FolderPlus, onSelect: () => void create('folder', root) },
+      { label: tr('New File'), icon: FilePlus, onSelect: () => void create('file', root) },
+      { label: tr('New Folder'), icon: FolderPlus, onSelect: () => void create('folder', root) },
       'separator',
-      { label: 'Refresh', icon: RefreshCw, onSelect: refresh },
-      { label: 'Collapse All', icon: ChevronsDownUp, onSelect: () => onExpandedChange(new Set([root])) },
+      { label: tr('Refresh'), icon: RefreshCw, onSelect: refresh },
+      { label: tr('Collapse All'), icon: ChevronsDownUp, onSelect: () => onExpandedChange(new Set([root])) },
       'separator',
-      { label: 'Open Folder…', icon: FolderOpen, onSelect: onOpenFolder },
-      { label: 'Close Folder', icon: FolderX, onSelect: onCloseFolder },
-      { label: 'Copy Path', icon: Copy, onSelect: () => void copyText(root) },
+      { label: tr('Open Folder…'), icon: FolderOpen, onSelect: onOpenFolder },
+      { label: tr('Close Folder'), icon: FolderX, onSelect: onCloseFolder },
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(root) },
     ])
   }
 
@@ -177,18 +178,18 @@ export function Explorer({
   return (
     <>
       <div className="ce-side-head">
-        EXPLORER
+        {tr('EXPLORER')}
         <div className="ce-side-actions">
-          <button onClick={() => void create('file')} aria-label="New file" title="New File">
+          <button onClick={() => void create('file')} aria-label={tr('New file')} title={tr('New File')}>
             <FilePlus size={15} />
           </button>
-          <button onClick={() => void create('folder')} aria-label="New folder" title="New Folder">
+          <button onClick={() => void create('folder')} aria-label={tr('New folder')} title={tr('New Folder')}>
             <FolderPlus size={15} />
           </button>
-          <button onClick={refresh} aria-label="Refresh" title="Refresh">
+          <button onClick={refresh} aria-label={tr('Refresh')} title={tr('Refresh')}>
             <RefreshCw size={14} />
           </button>
-          <button onClick={() => onExpandedChange(new Set([root]))} aria-label="Collapse all" title="Collapse All">
+          <button onClick={() => onExpandedChange(new Set([root]))} aria-label={tr('Collapse all')} title={tr('Collapse All')}>
             <ChevronsDownUp size={15} />
           </button>
         </div>

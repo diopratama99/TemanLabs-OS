@@ -6,16 +6,17 @@ import { useAppMenus } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
 import { formatBytes, formatSpeed } from '../lib/format'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 type Tab = 'info' | 'ping' | 'trace' | 'lookup' | 'connections' | 'firewall'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'info', label: 'Info' },
-  { id: 'ping', label: 'Ping' },
-  { id: 'trace', label: 'Traceroute' },
-  { id: 'lookup', label: 'Lookup' },
-  { id: 'connections', label: 'Connections' },
-  { id: 'firewall', label: 'Firewall' },
+  { id: 'info', label: tr('Info') },
+  { id: 'ping', label: tr('Ping') },
+  { id: 'trace', label: tr('Traceroute') },
+  { id: 'lookup', label: tr('Lookup') },
+  { id: 'connections', label: tr('Connections') },
+  { id: 'firewall', label: tr('Firewall') },
 ]
 
 const INFO_POLL_MS = 2000
@@ -24,12 +25,12 @@ const INFO_POLL_MS = 2000
 export function NetworkTools() {
   const [tab, setTab] = useState<Tab>('info')
   useAppMenus(() => [
-    { label: 'View', items: TABS.map(t => ({ label: t.label, checked: tab === t.id, onSelect: () => setTab(t.id) })) },
+    { label: tr('View'), items: TABS.map(t => ({ label: t.label, checked: tab === t.id, onSelect: () => setTab(t.id) })) },
   ])
   return (
     <div className="pane nu">
       <WindowToolbar>
-        <ToolbarTitle title="Network Tools" />
+        <ToolbarTitle title={tr('Network Tools')} />
         <span className="tb-spacer" />
         <div className="tb-segmented">
           {TABS.map(t => (
@@ -86,11 +87,11 @@ function InfoTab() {
           <div key={n.name} className="group nu-card">
             <div className="nu-card-head">
               <i className={`nu-dot ${n.state === 'up' || n.state === 'unknown' ? 'is-up' : ''}`} />
-              <strong>{n.name === 'tailscale0' ? 'Tailscale' : n.name}</strong>
-              <small>{n.name === 'tailscale0' ? n.name : n.virtual ? 'Virtual (Docker)' : n.speedMbps ? `${n.speedMbps >= 1000 ? `${n.speedMbps / 1000} Gb/s` : `${n.speedMbps} Mb/s`}` : n.state}</small>
+              <strong>{n.name === 'tailscale0' ? tr('Tailscale') : n.name}</strong>
+              <small>{n.name === 'tailscale0' ? n.name : n.virtual ? tr('Virtual (Docker)') : n.speedMbps ? `${n.speedMbps >= 1000 ? `${n.speedMbps / 1000} Gb/s` : `${n.speedMbps} Mb/s`}` : n.state}</small>
             </div>
             {n.addresses.map(a => (
-              <button key={a} className="nu-addr" onClick={() => void copyText(a.split('/')[0])} title="Copy">
+              <button key={a} className="nu-addr" onClick={() => void copyText(a.split('/')[0])} title={tr('Copy')}>
                 {a} <Copy size={11} />
               </button>
             ))}
@@ -103,14 +104,14 @@ function InfoTab() {
                 <ArrowUp size={12} /> {formatSpeed(rates[n.name]?.tx ?? 0)}
               </span>
               <small>
-                Total ↓ {formatBytes(n.rxBytes)} ↑ {formatBytes(n.txBytes)}
+                {tr('Total ↓')} {formatBytes(n.rxBytes)} ↑ {formatBytes(n.txBytes)}
               </small>
             </div>
           </div>
         ))}
       </div>
       <label className="pv-toggle nu-virtual">
-        <input type="checkbox" checked={showVirtual} onChange={e => setShowVirtual(e.target.checked)} /> Show Docker’s virtual interfaces (
+        <input type="checkbox" checked={showVirtual} onChange={e => setShowVirtual(e.target.checked)} /> {tr('Show Docker’s virtual interfaces (')}
         {list.filter(n => n.virtual).length})
       </label>
     </>
@@ -138,9 +139,9 @@ function ToolTab({ tool }: { tool: 'ping' | 'traceroute' }) {
   return (
     <>
       <form className="nu-form" onSubmit={e => void run(e)}>
-        <input value={host} onChange={e => setHost(e.target.value)} placeholder="Host name or IP address" spellCheck={false} />
+        <input value={host} onChange={e => setHost(e.target.value)} placeholder={tr('Host name or IP address')} spellCheck={false} />
         {tool === 'ping' && (
-          <select value={count} onChange={e => setCount(Number(e.target.value))} aria-label="Number of pings">
+          <select value={count} onChange={e => setCount(Number(e.target.value))} aria-label={tr('Number of pings')}>
             {[1, 4, 10, 20].map(n => (
               <option key={n} value={n}>
                 {n} ping{n > 1 ? 's' : ''}
@@ -149,10 +150,10 @@ function ToolTab({ tool }: { tool: 'ping' | 'traceroute' }) {
           </select>
         )}
         <button className="btn btn-primary" disabled={running || !host.trim()}>
-          {running ? <LoaderCircle size={13} className="spin" /> : null} {tool === 'ping' ? 'Ping' : 'Trace'}
+          {running ? <LoaderCircle size={13} className="spin" /> : null} {tool === 'ping' ? tr('Ping') : tr('Trace')}
         </button>
       </form>
-      <p className="pane-note">From the server: shows whether it can reach the host, and how fast.</p>
+      <p className="pane-note">{tr('From the server: shows whether it can reach the host, and how fast.')}</p>
       <pre className="nu-output">{output || ' '}</pre>
     </>
   )
@@ -178,15 +179,15 @@ function LookupTab() {
   return (
     <>
       <form className="nu-form" onSubmit={e => void run(e)}>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="Domain name or IP address" spellCheck={false} />
+        <input value={name} onChange={e => setName(e.target.value)} placeholder={tr('Domain name or IP address')} spellCheck={false} />
         <button className="btn btn-primary" disabled={running || !name.trim()}>
-          {running ? <LoaderCircle size={13} className="spin" /> : null} Lookup
+          {running ? <LoaderCircle size={13} className="spin" /> : null} {tr('Lookup')}
         </button>
       </form>
       {error && <p className="form-error">{error}</p>}
       {result && (
         <div className="group">
-          {Object.keys(result.records).length === 0 && <p className="sh-empty">No records found.</p>}
+          {Object.keys(result.records).length === 0 && <p className="sh-empty">{tr('No records found.')}</p>}
           {Object.entries(result.records).map(([kind, values]) => (
             <div key={kind} className="row nu-record">
               <span className="nu-kind">{kind}</span>
@@ -198,8 +199,8 @@ function LookupTab() {
             </div>
           ))}
           <div className="row">
-            <span>Resolver</span>
-            <span className="row-value">{result.resolvers.join(', ') || 'system default'}</span>
+            <span>{tr('Resolver')}</span>
+            <span className="row-value">{result.resolvers.join(', ') || tr('system default')}</span>
           </div>
         </div>
       )}
@@ -222,17 +223,17 @@ function ConnectionsTab() {
   return (
     <>
       <label className="pv-toggle">
-        <input type="checkbox" checked={onlyEstablished} onChange={e => setOnlyEstablished(e.target.checked)} /> Only open connections
+        <input type="checkbox" checked={onlyEstablished} onChange={e => setOnlyEstablished(e.target.checked)} /> {tr('Only open connections')}
       </label>
       <div className="group nu-conns">
         <div className="nu-conn is-head">
-          <span>Process</span>
-          <span>Remote</span>
-          <span>Local</span>
-          <span>State</span>
+          <span>{tr('Process')}</span>
+          <span>{tr('Remote')}</span>
+          <span>{tr('Local')}</span>
+          <span>{tr('State')}</span>
         </div>
-        {!list && <p className="sh-empty">Loading…</p>}
-        {list && outside.length === 0 && <p className="sh-empty">No connections from other machines.</p>}
+        {!list && <p className="sh-empty">{tr('Loading…')}</p>}
+        {list && outside.length === 0 && <p className="sh-empty">{tr('No connections from other machines.')}</p>}
         {outside.map((c, i) => (
           <div key={`${c.local}-${c.peer}-${i}`} className="nu-conn">
             <span>
@@ -281,11 +282,11 @@ function FirewallTab() {
       <div className={`group fw-status ${state?.enabled ? 'is-on' : ''}`}>
         {state?.enabled ? <Shield size={26} /> : <ShieldOff size={26} />}
         <span>
-          <strong>{state ? (state.enabled ? 'Firewall is on' : 'Firewall is off') : '…'}</strong>
+          <strong>{state ? (state.enabled ? tr('Firewall is on') : tr('Firewall is off')) : '…'}</strong>
           <small>
             {state?.enabled
-              ? 'Only ports allowed below accept connections. SSH and TemanLabsOS stay open.'
-              : 'Every port is reachable from the network. Turning it on keeps SSH (22) and TemanLabsOS open.'}
+              ? tr('Only ports allowed below accept connections. SSH and TemanLabsOS stay open.')
+              : tr('Every port is reachable from the network. Turning it on keeps SSH (22) and TemanLabsOS open.')}
           </small>
         </span>
         {state &&
@@ -295,16 +296,16 @@ function FirewallTab() {
               onClick={() => (confirmOff ? void change({ op: 'disable' }).then(() => setConfirmOff(false)) : setConfirmOff(true))}
               onBlur={() => setConfirmOff(false)}
             >
-              {confirmOff ? 'Click Again to Turn Off' : 'Turn Off'}
+              {confirmOff ? tr('Click Again to Turn Off') : tr('Turn Off')}
             </button>
           ) : (
             <button className="btn btn-primary" onClick={() => void change({ op: 'enable' })}>
-              Turn On
+              {tr('Turn On')}
             </button>
           ))}
       </div>
       <p className="pane-note">
-        Note: ports published by Docker containers bypass this firewall (Docker adds its own rules).
+        {tr('Note: ports published by Docker containers bypass this firewall (Docker adds its own rules).')}
       </p>
       {error && <p className="form-error">{error}</p>}
       <form
@@ -314,33 +315,33 @@ function FirewallTab() {
           void change({ op: 'add', ...form }).then(() => setForm(f => ({ ...f, port: '', from: '' })))
         }}
       >
-        <select value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} aria-label="Action">
-          <option value="allow">Allow</option>
-          <option value="deny">Block</option>
-          <option value="limit">Limit (anti brute force)</option>
+        <select value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} aria-label={tr('Action')}>
+          <option value="allow">{tr('Allow')}</option>
+          <option value="deny">{tr('Block')}</option>
+          <option value="limit">{tr('Limit (anti brute force)')}</option>
         </select>
-        <input value={form.port} onChange={e => setForm({ ...form, port: e.target.value })} placeholder="Port, e.g. 8080" />
-        <select value={form.protocol} onChange={e => setForm({ ...form, protocol: e.target.value })} aria-label="Protocol">
+        <input value={form.port} onChange={e => setForm({ ...form, port: e.target.value })} placeholder={tr('Port, e.g. 8080')} />
+        <select value={form.protocol} onChange={e => setForm({ ...form, protocol: e.target.value })} aria-label={tr('Protocol')}>
           <option value="tcp">TCP</option>
           <option value="udp">UDP</option>
-          <option value="">TCP & UDP</option>
+          <option value="">{tr('TCP & UDP')}</option>
         </select>
-        <input value={form.from} onChange={e => setForm({ ...form, from: e.target.value })} placeholder="From (any, IP, 192.168.1.0/24)" />
+        <input value={form.from} onChange={e => setForm({ ...form, from: e.target.value })} placeholder={tr('From (any, IP, 192.168.1.0/24)')} />
         <button className="btn" disabled={!form.port}>
-          <Plus size={13} /> Add Rule
+          <Plus size={13} /> {tr('Add Rule')}
         </button>
       </form>
       <div className="group">
-        {state && state.rules.length === 0 && <p className="sh-empty">No rules yet.</p>}
+        {state && state.rules.length === 0 && <p className="sh-empty">{tr('No rules yet.')}</p>}
         {state?.rules.map(r => (
           <div key={r.number} className="row fw-rule">
             <span className={`fw-action is-${r.action.toLowerCase()}`}>{r.action}</span>
             <span className="fw-to">
               {r.to}
-              {r.v6 && <small> IPv6</small>}
+              {r.v6 && <small> {tr('IPv6')}</small>}
             </span>
-            <span className="fw-from">from {r.from}</span>
-            <button className="icon-btn" onClick={() => void change({ op: 'delete', number: r.number })} aria-label="Delete rule" title="Delete rule">
+            <span className="fw-from">{tr('from')} {r.from}</span>
+            <button className="icon-btn" onClick={() => void change({ op: 'delete', number: r.number })} aria-label={tr('Delete rule')} title={tr('Delete rule')}>
               <Trash2 size={13} />
             </button>
           </div>

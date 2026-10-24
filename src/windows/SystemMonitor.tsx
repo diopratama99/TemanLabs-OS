@@ -26,6 +26,7 @@ import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { PortsView } from './PortsView'
 import { ProcessesView } from './ProcessesView'
 import { ServicesView } from './ServicesView'
+import { tr } from '../lib/i18n'
 
 const POLL_MS = 2500
 
@@ -33,13 +34,13 @@ type SortKey = 'name' | 'cpu' | 'mem' | 'netRx' | 'netTx' | 'block' | 'pids'
 type Action = 'start' | 'stop' | 'restart'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'cpu', label: '% CPU', numeric: true },
-  { key: 'mem', label: 'Memory', numeric: true },
-  { key: 'netRx', label: 'Net ↓', numeric: true },
-  { key: 'netTx', label: 'Net ↑', numeric: true },
-  { key: 'block', label: 'Disk R / W', numeric: true },
-  { key: 'pids', label: 'PIDs', numeric: true },
+  { key: 'name', label: tr('Name') },
+  { key: 'cpu', label: tr('% CPU'), numeric: true },
+  { key: 'mem', label: tr('Memory'), numeric: true },
+  { key: 'netRx', label: tr('Net ↓'), numeric: true },
+  { key: 'netTx', label: tr('Net ↑'), numeric: true },
+  { key: 'block', label: tr('Disk R / W'), numeric: true },
+  { key: 'pids', label: tr('PIDs'), numeric: true },
 ]
 
 const sortValue = (c: { name: string; stats: ContainerSample | null }, key: SortKey): number | string => {
@@ -87,10 +88,10 @@ interface Props {
 type Tab = 'containers' | 'services' | 'processes' | 'ports'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'containers', label: 'Containers' },
-  { id: 'services', label: 'Services' },
-  { id: 'processes', label: 'Processes' },
-  { id: 'ports', label: 'Ports' },
+  { id: 'containers', label: tr('Containers') },
+  { id: 'services', label: tr('Services') },
+  { id: 'processes', label: tr('Processes') },
+  { id: 'ports', label: tr('Ports') },
 ]
 
 /** System Monitor: Docker containers (live resource use, logs, controls) and listening ports. */
@@ -167,12 +168,12 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
     const app = c ? appsById.get(c.appId) : undefined
     const disabled = !c || busy.has(c.id)
     return [
-      { label: 'Start', icon: Play, disabled: disabled || running, onSelect: () => c && void act(c, 'start') },
-      { label: 'Stop', icon: Square, disabled: disabled || !running, onSelect: () => c && void act(c, 'stop') },
-      { label: 'Restart', icon: RotateCw, disabled: disabled || !running, onSelect: () => c && void act(c, 'restart') },
+      { label: tr('Start'), icon: Play, disabled: disabled || running, onSelect: () => c && void act(c, 'start') },
+      { label: tr('Stop'), icon: Square, disabled: disabled || !running, onSelect: () => c && void act(c, 'stop') },
+      { label: tr('Restart'), icon: RotateCw, disabled: disabled || !running, onSelect: () => c && void act(c, 'restart') },
       'separator',
       {
-        label: 'Show Logs',
+        label: tr('Show Logs'),
         icon: FileText,
         disabled: !c,
         onSelect: () => {
@@ -181,12 +182,12 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
         },
       },
       {
-        label: 'Open Web UI',
+        label: tr('Open Web UI'),
         icon: ExternalLink,
         disabled: !app || !hasWebUI(app),
         onSelect: () => app && onOpenApp(app),
       },
-      { label: 'Copy Container ID', icon: Copy, disabled: !c, onSelect: () => c && void copyText(c.id) },
+      { label: tr('Copy Container ID'), icon: Copy, disabled: !c, onSelect: () => c && void copyText(c.id) },
     ]
   }
 
@@ -197,16 +198,16 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
 
   useAppMenus(() => [
     {
-      label: 'View',
+      label: tr('View'),
       items: [
-        { label: 'Group by App', checked: grouped, onSelect: () => setGrouped(g => !g) },
-        { label: 'Show Stopped Containers', checked: showStopped, onSelect: () => setShowStopped(s => !s) },
-        { label: 'Show Logs', checked: logsOpen, onSelect: () => setLogsOpen(o => !o) },
+        { label: tr('Group by App'), checked: grouped, onSelect: () => setGrouped(g => !g) },
+        { label: tr('Show Stopped Containers'), checked: showStopped, onSelect: () => setShowStopped(s => !s) },
+        { label: tr('Show Logs'), checked: logsOpen, onSelect: () => setLogsOpen(o => !o) },
         'separator',
-        { label: 'Refresh', icon: RotateCw, onSelect: () => void refresh() },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: () => void refresh() },
       ],
     },
-    { label: 'Container', items: containerItems(selectedContainer) },
+    { label: tr('Container'), items: containerItems(selectedContainer) },
   ])
 
   // ----- Rows -----
@@ -293,39 +294,39 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
   return (
     <div className="am">
       <WindowToolbar>
-        <ToolbarTitle title="System Monitor" subtitle="Containers" />
+        <ToolbarTitle title={tr('System Monitor')} subtitle={tr('Containers')} />
         <span className="tb-spacer" />
         {tabs}
         <span className="tb-spacer" />
           <label className="tb-search">
             <Search size={13} />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search containers" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Search containers')} />
           </label>
       </WindowToolbar>
       <div className="am-summary">
         <div>
-          <small>Containers</small>
+          <small>{tr('Containers')}</small>
           <strong>
             {running.length}
-            <em>/{containers?.length ?? 0} running</em>
+            <em>/{containers?.length ?? 0} {tr('running')}</em>
           </strong>
         </div>
         <div>
           <small>CPU</small>
           <strong>
             {totals ? (totals.cpu / cores).toFixed(1) : '—'}
-            <em>% of {cores} cores</em>
+            <em>{tr('% of')} {cores} {tr('cores')}</em>
           </strong>
         </div>
         <div>
-          <small>Memory</small>
+          <small>{tr('Memory')}</small>
           <strong>
             {totals ? formatBytes(totals.memUsed) : '—'}
-            <em>{hostMemory ? ` of ${formatBytes(hostMemory, 0)}` : ''}</em>
+            <em>{hostMemory ? tr(' of {0}', formatBytes(hostMemory, 0)) : ''}</em>
           </strong>
         </div>
         <div>
-          <small>Network</small>
+          <small>{tr('Network')}</small>
           <strong className="am-net">
             <ArrowDown size={12} /> {totals ? formatSpeed(totals.netRx) : '—'}
             <ArrowUp size={12} /> {totals ? formatSpeed(totals.netTx) : '—'}
@@ -349,9 +350,9 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
           ))}
         </div>
         <div className="am-body">
-          {loadError && <p className="am-empty form-error">Couldn’t read containers: {loadError}</p>}
-          {!containers && !loadError && <p className="am-empty">Loading containers…</p>}
-          {containers && visible.length === 0 && <p className="am-empty">No containers match.</p>}
+          {loadError && <p className="am-empty form-error">{tr('Couldn’t read containers:')} {loadError}</p>}
+          {!containers && !loadError && <p className="am-empty">{tr('Loading containers…')}</p>}
+          {containers && visible.length === 0 && <p className="am-empty">{tr('No containers match.')}</p>}
           {grouped
             ? [...groups]
                 .sort((a, b) => compare({ name: a.name, stats: a.stats }, { name: b.name, stats: b.stats }))
@@ -390,10 +391,10 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
 
       {logsOpen && (
         <LogsPane
-          title={selectedContainer ? `Logs — ${selectedContainer.name}` : 'Logs'}
+          title={selectedContainer ? tr('Logs — {0}', selectedContainer.name) : tr('Logs')}
           source={selectedContainer?.id ?? null}
           load={api.containerLogs}
-          emptyText="Select a container to see its logs."
+          emptyText={tr('Select a container to see its logs.')}
           onClose={() => setLogsOpen(false)}
         />
       )}

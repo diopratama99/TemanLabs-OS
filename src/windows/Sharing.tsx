@@ -25,13 +25,14 @@ import { usePresence } from '../hooks/usePresence'
 import { displayName, joinPath, parentOf } from '../lib/paths'
 import { DATA_ROOT } from '../lib/places'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
+import { tr } from '../lib/i18n'
 
 type Section = 'shares' | 'users' | 'connections'
 
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: 'shares', label: 'Shared Folders', icon: Share2 },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'connections', label: 'Connections', icon: Monitor },
+  { id: 'shares', label: tr('Shared Folders'), icon: Share2 },
+  { id: 'users', label: tr('Users'), icon: Users },
+  { id: 'connections', label: tr('Connections'), icon: Monitor },
 ]
 
 const STATUS_POLL_MS = 5000
@@ -112,26 +113,26 @@ export function Sharing({ stats, request }: Props) {
   const lan = stats?.addresses.lan?.ipv4
   const tailscale = stats?.addresses.tailscale?.ipv4
   const networks = [
-    { label: 'Local network', ip: lan },
-    { label: 'Tailscale', ip: tailscale },
+    { label: tr('Local network'), ip: lan },
+    { label: tr('Tailscale'), ip: tailscale },
   ].filter((n): n is { label: string; ip: string } => !!n.ip)
   const host = networks[0]?.ip ?? location.hostname
 
   const shareItems = (s: SmbShare) => [
-    { label: `Copy \\\\${host}\\${s.name}`, icon: Copy, onSelect: () => void copyText(`\\\\${host}\\${s.name}`) },
-    { label: `Copy smb://${host}/${s.name}`, icon: Copy, onSelect: () => void copyText(`smb://${host}/${encodeURI(s.name)}`) },
+    { label: tr('Copy \\\\{0}\\{1}', host, s.name), icon: Copy, onSelect: () => void copyText(`\\\\${host}\\${s.name}`) },
+    { label: tr('Copy smb://{0}/{1}', host, s.name), icon: Copy, onSelect: () => void copyText(`smb://${host}/${encodeURI(s.name)}`) },
     'separator' as const,
     {
-      label: 'Edit…',
+      label: tr('Edit…'),
       icon: Pencil,
       disabled: s.source !== 'temanlabs',
       onSelect: () => setEditing({ share: { ...s }, original: s.name }),
     },
     {
-      label: 'Stop Sharing',
+      label: tr('Stop Sharing'),
       icon: Trash2,
       danger: true,
-      confirm: 'Click Again to Stop Sharing',
+      confirm: tr('Click Again to Stop Sharing'),
       disabled: s.source !== 'temanlabs',
       onSelect: () => void api.deleteShare(s.name).then(refresh),
     },
@@ -139,18 +140,18 @@ export function Sharing({ stats, request }: Props) {
 
   useAppMenus(() => [
     {
-      label: 'File',
+      label: tr('File'),
       items: [
-        { label: 'New Shared Folder…', icon: Plus, onSelect: () => setEditing({ share: newShare() }) },
-        { label: 'New User…', icon: Users, onSelect: () => setUserSheet({}) },
+        { label: tr('New Shared Folder…'), icon: Plus, onSelect: () => setEditing({ share: newShare() }) },
+        { label: tr('New User…'), icon: Users, onSelect: () => setUserSheet({}) },
       ],
     },
     {
-      label: 'View',
+      label: tr('View'),
       items: [
         ...SECTIONS.map(s => ({ label: s.label, icon: s.icon, checked: section === s.id, onSelect: () => setSection(s.id) })),
         'separator',
-        { label: 'Refresh', icon: RotateCw, onSelect: () => void refresh() },
+        { label: tr('Refresh'), icon: RotateCw, onSelect: () => void refresh() },
       ],
     },
   ])
@@ -173,16 +174,16 @@ export function Sharing({ stats, request }: Props) {
         <small>{s.path}</small>
       </span>
       <span className="sh-access">{accessLabel(s)}</span>
-      <button className="pill-btn" onClick={() => void copyText(`\\\\${host}\\${s.name}`)} title={`Copy \\\\${host}\\${s.name}`}>
-        <Copy size={12} /> Address
+      <button className="pill-btn" onClick={() => void copyText(`\\\\${host}\\${s.name}`)} title={tr('Copy \\\\{0}\\{1}', host, s.name)}>
+        <Copy size={12} /> {tr('Address')}
       </button>
       {s.source === 'temanlabs' ? (
-        <button className="icon-btn" onClick={() => setEditing({ share: { ...s }, original: s.name })} aria-label={`Edit ${s.name}`} title="Edit">
+        <button className="icon-btn" onClick={() => setEditing({ share: { ...s }, original: s.name })} aria-label={tr('Edit {0}', s.name)} title={tr('Edit')}>
           <Pencil size={14} />
         </button>
       ) : (
-        <span className="sh-source" title="CasaOS rewrites its own shares; change them in CasaOS.">
-          {s.source === 'casaos' ? 'CasaOS' : 'smb.conf'}
+        <span className="sh-source" title={tr('CasaOS rewrites its own shares; change them in CasaOS.')}>
+          {s.source === 'casaos' ? tr('CasaOS') : 'smb.conf'}
         </span>
       )}
     </div>
@@ -200,10 +201,10 @@ export function Sharing({ stats, request }: Props) {
         <div className="sh-service">
           <i className={info?.running ? 'is-on' : ''} />
           <span>
-            {info ? (info.running ? 'Sharing is on' : info.installed ? 'Samba is stopped' : 'Samba isn’t installed') : '…'}
-            {info?.version && <small>Samba {info.version.replace('-Ubuntu', '')}</small>}
+            {info ? (info.running ? tr('Sharing is on') : info.installed ? tr('Samba is stopped') : tr('Samba isn’t installed')) : '…'}
+            {info?.version && <small>{tr('Samba')} {info.version.replace('-Ubuntu', '')}</small>}
           </span>
-          <button className="icon-btn" onClick={() => void api.restartSmb().then(refresh)} title="Restart Samba" aria-label="Restart Samba">
+          <button className="icon-btn" onClick={() => void api.restartSmb().then(refresh)} title={tr('Restart Samba')} aria-label={tr('Restart Samba')}>
             <RotateCw size={13} />
           </button>
         </div>
@@ -211,15 +212,15 @@ export function Sharing({ stats, request }: Props) {
 
       <div className="pane sh-pane">
         <WindowToolbar>
-          <ToolbarTitle title={current.label} subtitle={section === 'shares' ? `${shares.length} shared folders` : undefined} />
+          <ToolbarTitle title={current.label} subtitle={section === 'shares' ? tr('{0} shared folders', shares.length) : undefined} />
           <span className="tb-spacer" />
           {section !== 'connections' && (
             <div className="tb-group">
               <button
                 className="tb-btn"
                 onClick={() => (section === 'users' ? setUserSheet({}) : setEditing({ share: newShare() }))}
-                aria-label={section === 'users' ? 'New user' : 'New shared folder'}
-                title={section === 'users' ? 'New User' : 'New Shared Folder'}
+                aria-label={section === 'users' ? tr('New user') : tr('New shared folder')}
+                title={section === 'users' ? tr('New User') : tr('New Shared Folder')}
               >
                 <Plus size={17} />
               </button>
@@ -227,13 +228,13 @@ export function Sharing({ stats, request }: Props) {
           )}
         </WindowToolbar>
 
-        {loadError && <p className="form-error">Couldn’t read the Samba setup: {loadError}</p>}
+        {loadError && <p className="form-error">{tr('Couldn’t read the Samba setup:')} {loadError}</p>}
 
         {section === 'shares' && (
           <>
             <div className="sh-connect">
-              <strong>Connect from another computer</strong>
-              <span>Windows: type the address in File Explorer. Mac: Finder → Go → Connect to Server.</span>
+              <strong>{tr('Connect from another computer')}</strong>
+              <span>{tr('Windows: type the address in File Explorer. Mac: Finder → Go → Connect to Server.')}</span>
               {networks.map(n => (
                 <span key={n.ip}>
                   {n.label}: <code>\\{n.ip}</code> or <code>smb://{n.ip}</code>
@@ -243,15 +244,15 @@ export function Sharing({ stats, request }: Props) {
             <div className="group sh-list">
               {own.length === 0 && (
                 <p className="sh-empty">
-                  No folders shared from TemanLabsOS yet. Click + or right-click a folder in Files → Share Folder….
+                  {tr('No folders shared from TemanLabsOS yet. Click + or right-click a folder in Files → Share Folder….')}
                 </p>
               )}
               {own.map(shareRow)}
             </div>
             {others.length > 0 && (
               <>
-                <h4 className="sh-heading">Shared by CasaOS</h4>
-                <p className="pane-note">CasaOS writes these itself; change or remove them in CasaOS.</p>
+                <h4 className="sh-heading">{tr('Shared by CasaOS')}</h4>
+                <p className="pane-note">{tr('CasaOS writes these itself; change or remove them in CasaOS.')}</p>
                 <div className="group sh-list">{others.map(shareRow)}</div>
               </>
             )}
@@ -261,7 +262,7 @@ export function Sharing({ stats, request }: Props) {
         {section === 'users' && (
           <>
             <p className="pane-note">
-              People who can open protected shared folders. Their Samba password is separate from their login password.
+              {tr('People who can open protected shared folders. Their Samba password is separate from their login password.')}
             </p>
             <div className="group sh-list">
               {(info?.users ?? []).map(u => (
@@ -271,13 +272,13 @@ export function Sharing({ stats, request }: Props) {
                     <strong>{u.fullName || u.name}</strong>
                     <small>{u.name}</small>
                   </span>
-                  <span className="sh-access">{u.disabled ? 'Can’t connect' : 'Can connect'}</span>
+                  <span className="sh-access">{u.disabled ? tr('Can’t connect') : tr('Can connect')}</span>
                   <Switch
                     checked={!u.disabled}
                     onChange={on => void api.smbUserAction(u.name, on ? 'enable' : 'disable').then(refresh)}
-                    label={`Allow ${u.name}`}
+                    label={tr('Allow {0}', u.name)}
                   />
-                  <button className="icon-btn" onClick={() => setUserSheet({ name: u.name })} title="Change password" aria-label={`Change password of ${u.name}`}>
+                  <button className="icon-btn" onClick={() => setUserSheet({ name: u.name })} title={tr('Change password')} aria-label={tr('Change password of {0}', u.name)}>
                     <KeyRound size={14} />
                   </button>
                   <button
@@ -285,22 +286,22 @@ export function Sharing({ stats, request }: Props) {
                     onClick={e =>
                       show(e, [
                         {
-                          label: `Remove ${u.name} from Samba`,
+                          label: tr('Remove {0} from Samba', u.name),
                           icon: Trash2,
                           danger: true,
-                          confirm: 'Click Again to Remove',
+                          confirm: tr('Click Again to Remove'),
                           onSelect: () => void api.smbUserAction(u.name, 'remove').then(refresh),
                         },
                       ])
                     }
-                    title="Remove"
-                    aria-label={`Remove ${u.name}`}
+                    title={tr('Remove')}
+                    aria-label={tr('Remove {0}', u.name)}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-              {info && info.users.length === 0 && <p className="sh-empty">No Samba users yet. Guest shares work without one.</p>}
+              {info && info.users.length === 0 && <p className="sh-empty">{tr('No Samba users yet. Guest shares work without one.')}</p>}
             </div>
           </>
         )}
@@ -308,10 +309,10 @@ export function Sharing({ stats, request }: Props) {
         {section === 'connections' && (
           <>
             <p className="pane-note">
-              Computers using shared folders right now{openFiles ? ` · ${openFiles} open file${openFiles > 1 ? 's' : ''}` : ''}.
+              {tr('Computers using shared folders right now')}{openFiles ? tr(' · {0} open file{1}', openFiles, openFiles > 1 ? 's' : '') : ''}.
             </p>
             <div className="group sh-list">
-              {sessions.length === 0 && <p className="sh-empty">Nobody is connected.</p>}
+              {sessions.length === 0 && <p className="sh-empty">{tr('Nobody is connected.')}</p>}
               {sessions.map(se => (
                 <div key={`${se.machine}-${se.user}-${se.since}`} className="sh-row">
                   <span className="sh-icon">
@@ -323,7 +324,7 @@ export function Sharing({ stats, request }: Props) {
                       {se.user} · {se.protocol.replace('_', '.')}
                     </small>
                   </span>
-                  <span className="sh-access">{se.shares.join(', ') || 'No folder open'}</span>
+                  <span className="sh-access">{se.shares.join(', ') || tr('No folder open')}</span>
                   <span className="sh-since">{se.since ? new Date(se.since).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : ''}</span>
                 </div>
               ))}
@@ -407,15 +408,15 @@ function ShareForm({
     <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onPointerDown={e => e.target === e.currentTarget && onClose()}>
       <form className="sheet sh-sheet ci" onSubmit={e => void submit(e)}>
         <header className="ci-head">
-          <strong>{initial.original ? `Edit “${initial.original}”` : 'New Shared Folder'}</strong>
+          <strong>{initial.original ? tr('Edit “{0}”', initial.original) : tr('New Shared Folder')}</strong>
         </header>
         <div className="ci-body">
           <label className="ci-field">
-            <span className="ci-label">Folder</span>
+            <span className="ci-label">{tr('Folder')}</span>
             <div className="sh-path">
               <input value={form.path} onChange={e => set({ path: e.target.value })} spellCheck={false} />
               <button type="button" className="btn" onClick={() => setPicking(p => !p)}>
-                <FolderOpen size={13} /> Choose…
+                <FolderOpen size={13} /> {tr('Choose…')}
               </button>
             </div>
           </label>
@@ -429,29 +430,29 @@ function ShareForm({
             />
           )}
           <label className="ci-field">
-            <span className="ci-label">Share name</span>
-            <input value={form.name} onChange={e => set({ name: e.target.value })} placeholder="e.g. Photos" />
-            <small>What other computers see, as in \\server\{form.name || 'Name'}</small>
+            <span className="ci-label">{tr('Share name')}</span>
+            <input value={form.name} onChange={e => set({ name: e.target.value })} placeholder={tr('e.g. Photos')} />
+            <small>{tr('What other computers see, as in \\\\server\\')}{form.name || tr('Name')}</small>
           </label>
           <label className="ci-field">
-            <span className="ci-label">Description</span>
-            <input value={form.comment ?? ''} onChange={e => set({ comment: e.target.value })} placeholder="Optional" />
+            <span className="ci-label">{tr('Description')}</span>
+            <input value={form.comment ?? ''} onChange={e => set({ comment: e.target.value })} placeholder={tr('Optional')} />
           </label>
 
           <div className="ci-field">
-            <span className="ci-label">Who can connect</span>
+            <span className="ci-label">{tr('Who can connect')}</span>
             <div className="segmented sh-who">
               <button type="button" className={form.guest ? 'is-active' : ''} onClick={() => set({ guest: true })}>
-                Everyone (no password)
+                {tr('Everyone (no password)')}
               </button>
               <button type="button" className={!form.guest ? 'is-active' : ''} onClick={() => set({ guest: false })}>
-                Only these users
+                {tr('Only these users')}
               </button>
             </div>
           </div>
           {!form.guest && (
             <div className="sh-users">
-              {users.length === 0 && <small>Add a user in Users first.</small>}
+              {users.length === 0 && <small>{tr('Add a user in Users first.')}</small>}
               {users.map(u => (
                 <label key={u} className="sh-user">
                   <input
@@ -471,26 +472,26 @@ function ShareForm({
           )}
           <div className="ci-toggle">
             <span>
-              Read only
-              <small>People can open and copy files, but not change or delete them.</small>
+              {tr('Read only')}
+              <small>{tr('People can open and copy files, but not change or delete them.')}</small>
             </span>
-            <Switch checked={form.readOnly} onChange={readOnly => set({ readOnly })} label="Read only" />
+            <Switch checked={form.readOnly} onChange={readOnly => set({ readOnly })} label={tr('Read only')} />
           </div>
           <div className="ci-toggle">
             <span>
-              Show in network browsing
-              <small>Off hides it from the list; people can still connect by name.</small>
+              {tr('Show in network browsing')}
+              <small>{tr('Off hides it from the list; people can still connect by name.')}</small>
             </span>
-            <Switch checked={form.browseable} onChange={browseable => set({ browseable })} label="Browseable" />
+            <Switch checked={form.browseable} onChange={browseable => set({ browseable })} label={tr('Browseable')} />
           </div>
         </div>
         <footer className="ci-foot">
-          {error ? <p className="form-error">{error}</p> : <p className="form-hint">Checked with Samba before it’s applied.</p>}
+          {error ? <p className="form-error">{error}</p> : <p className="form-hint">{tr('Checked with Samba before it’s applied.')}</p>}
           <button type="button" className="btn" onClick={onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {initial.original ? 'Save' : 'Share'}
+            {initial.original ? tr('Save') : tr('Share')}
           </button>
         </footer>
       </form>
@@ -520,12 +521,12 @@ function FolderPicker({ start, onPick }: { start: string; onPick: (path: string)
   return (
     <div className="sh-picker">
       <div className="sh-picker-head">
-        <button type="button" className="icon-btn" onClick={() => setDir(parentOf(dir))} disabled={dir === '/'} aria-label="Up">
+        <button type="button" className="icon-btn" onClick={() => setDir(parentOf(dir))} disabled={dir === '/'} aria-label={tr('Up')}>
           <ArrowUp size={14} />
         </button>
         <span>{dir}</span>
         <button type="button" className="btn btn-primary" onClick={() => onPick(dir)}>
-          Use This Folder
+          {tr('Use This Folder')}
         </button>
       </div>
       <div className="sh-picker-list">
@@ -535,7 +536,7 @@ function FolderPicker({ start, onPick }: { start: string; onPick: (path: string)
             <Folder size={14} /> {name}
           </button>
         ))}
-        {!error && folders.length === 0 && <small>No folders inside.</small>}
+        {!error && folders.length === 0 && <small>{tr('No folders inside.')}</small>}
       </div>
     </div>
   )
@@ -577,7 +578,7 @@ function UserForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (password !== confirm) {
-      setError('The passwords don’t match.')
+      setError(tr('The passwords don’t match.'))
       return
     }
     try {
@@ -590,32 +591,32 @@ function UserForm({
     <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onPointerDown={e => e.target === e.currentTarget && onClose()}>
       <form className="sheet sh-sheet sh-user-sheet ci" onSubmit={e => void submit(e)}>
         <header className="ci-head">
-          <strong>{name ? `Password for ${name}` : 'New User'}</strong>
+          <strong>{name ? tr('Password for {0}', name) : tr('New User')}</strong>
         </header>
         <div className="ci-body">
           {!name && (
             <label className="ci-field">
-              <span className="ci-label">User name</span>
-              <input value={user} onChange={e => setUser(e.target.value.toLowerCase())} placeholder="e.g. family" autoFocus spellCheck={false} />
-              <small>Lowercase letters and numbers. A new name gets a sharing-only account (no shell login).</small>
+              <span className="ci-label">{tr('User name')}</span>
+              <input value={user} onChange={e => setUser(e.target.value.toLowerCase())} placeholder={tr('e.g. family')} autoFocus spellCheck={false} />
+              <small>{tr('Lowercase letters and numbers. A new name gets a sharing-only account (no shell login).')}</small>
             </label>
           )}
           <label className="ci-field">
-            <span className="ci-label">Password</span>
+            <span className="ci-label">{tr('Password')}</span>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} autoFocus={!!name} />
           </label>
           <label className="ci-field">
-            <span className="ci-label">Confirm password</span>
+            <span className="ci-label">{tr('Confirm password')}</span>
             <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} />
           </label>
         </div>
         <footer className="ci-foot">
-          {error ? <p className="form-error">{error}</p> : <p className="form-hint">Used when connecting to protected shares.</p>}
+          {error ? <p className="form-error">{error}</p> : <p className="form-hint">{tr('Used when connecting to protected shares.')}</p>}
           <button type="button" className="btn" onClick={onClose}>
-            Cancel
+            {tr('Cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={!user || !password}>
-            {name ? 'Change Password' : 'Add User'}
+            {name ? tr('Change Password') : tr('Add User')}
           </button>
         </footer>
       </form>

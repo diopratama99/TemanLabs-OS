@@ -8,6 +8,7 @@ import JsonWorker from 'monaco-editor/language/json/json.worker?worker'
 import CssWorker from 'monaco-editor/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
+import { tr } from '../../lib/i18n'
 
 // Use the bundled copy instead of @monaco-editor/react's default CDN, so the editor works on a
 // home server without internet access.
@@ -132,7 +133,7 @@ export default function MonacoView({
       options={options}
       // Models (and their undo history) outlive the window; CodeEditor disposes them when tabs close.
       keepCurrentModel
-      loading={<div className="ce-loading">Loading editor…</div>}
+      loading={<div className="ce-loading">{tr('Loading editor…')}</div>}
       onChange={value => onChange(value ?? '')}
       onMount={onMount}
     />

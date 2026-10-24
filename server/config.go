@@ -16,8 +16,12 @@ import (
 )
 
 type Config struct {
-	// Address to listen on. CasaOS uses :80, so the default stays out of its way.
+	// Address to listen on. The default stays out of the way of CasaOS (which uses :80); without
+	// it, ":80" opens TemanLabsOS without a port in the address.
 	Addr string `json:"addr"`
+	// Earlier addresses (say ":7700" after moving to ":80") that send browsers on to Addr, so
+	// old bookmarks keep working.
+	RedirectFrom []string `json:"redirectFrom,omitempty"`
 	// Root of the file manager and code editor. "/" is the whole filesystem, like CasaOS's file
 	// manager; set e.g. "/DATA" to keep it to user data.
 	Root string `json:"root"`
@@ -26,6 +30,8 @@ type Config struct {
 	// Where TemanLabsOS keeps compose files for apps it installs.
 	StateDir     string `json:"stateDir"`
 	PasswordHash string `json:"passwordHash"`
+	// GitHub repository ("owner/name") whose releases self-update installs; empty means the default.
+	UpdateRepo string `json:"updateRepo,omitempty"`
 
 	path string
 }

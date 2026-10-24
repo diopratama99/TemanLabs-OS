@@ -8,11 +8,13 @@ export interface StatsHistory {
   cpu: number[]
   rx: number[]
   tx: number[]
+  /** Watts (empty when nothing measures power). */
+  power: number[]
 }
 
 export function useSystemStats(intervalMs = 2000) {
   const [stats, setStats] = useState<SystemStats | null>(null)
-  const [history, setHistory] = useState<StatsHistory>({ cpu: [], rx: [], tx: [] })
+  const [history, setHistory] = useState<StatsHistory>({ cpu: [], rx: [], tx: [], power: [] })
 
   useEffect(() => {
     let alive = true
@@ -29,6 +31,7 @@ export function useSystemStats(intervalMs = 2000) {
         cpu: [...h.cpu, next.cpu.usage].slice(-HISTORY_LENGTH),
         rx: [...h.rx, next.network.rx].slice(-HISTORY_LENGTH),
         tx: [...h.tx, next.network.tx].slice(-HISTORY_LENGTH),
+        power: next.power ? [...h.power, next.power.watts].slice(-HISTORY_LENGTH) : h.power,
       }))
     }
     void tick()

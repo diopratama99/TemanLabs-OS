@@ -21,6 +21,7 @@ import { useAppMenus } from '../lib/appMenus'
 import { DATA_ROOT } from '../lib/places'
 import { folderOf, formatTime, trackTitle, type MediaRequest } from '../lib/media'
 import { displayName, joinPath, nameOf, parentOf } from '../lib/paths'
+import { tr } from '../lib/i18n'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -211,17 +212,17 @@ export function MusicPlayer({ request, onTitle }: Props) {
   const repeatNext: Record<RepeatMode, RepeatMode> = { off: 'all', all: 'one', one: 'off' }
   useAppMenus(() => [
     {
-      label: 'Controls',
+      label: tr('Controls'),
       items: [
-        { label: playing ? 'Pause' : 'Play', icon: playing ? Pause : Play, disabled: !track, onSelect: () => setPlaying(p => !p) },
-        { label: 'Next', icon: SkipForward, disabled: !track, onSelect: () => next() },
-        { label: 'Previous', icon: SkipBack, disabled: !track, onSelect: previous },
+        { label: playing ? tr('Pause') : tr('Play'), icon: playing ? Pause : Play, disabled: !track, onSelect: () => setPlaying(p => !p) },
+        { label: tr('Next'), icon: SkipForward, disabled: !track, onSelect: () => next() },
+        { label: tr('Previous'), icon: SkipBack, disabled: !track, onSelect: previous },
         'separator',
-        { label: 'Shuffle', icon: Shuffle, checked: shuffle, onSelect: () => setShuffle(s => !s) },
-        { label: 'Repeat All', checked: repeat === 'all', onSelect: () => setRepeat(r => (r === 'all' ? 'off' : 'all')) },
-        { label: 'Repeat One', checked: repeat === 'one', onSelect: () => setRepeat(r => (r === 'one' ? 'off' : 'one')) },
+        { label: tr('Shuffle'), icon: Shuffle, checked: shuffle, onSelect: () => setShuffle(s => !s) },
+        { label: tr('Repeat All'), checked: repeat === 'all', onSelect: () => setRepeat(r => (r === 'all' ? 'off' : 'all')) },
+        { label: tr('Repeat One'), checked: repeat === 'one', onSelect: () => setRepeat(r => (r === 'one' ? 'off' : 'one')) },
         'separator',
-        { label: muted ? 'Unmute' : 'Mute', icon: VolumeX, onSelect: () => setMuted(m => !m) },
+        { label: muted ? tr('Unmute') : tr('Mute'), icon: VolumeX, onSelect: () => setMuted(m => !m) },
       ],
     },
   ])
@@ -239,7 +240,7 @@ export function MusicPlayer({ request, onTitle }: Props) {
         onTimeUpdate={e => setTime({ current: e.currentTarget.currentTime, duration: e.currentTarget.duration || 0 })}
         onLoadedMetadata={e => setTime({ current: 0, duration: e.currentTarget.duration || 0 })}
         onEnded={() => next(true)}
-        onError={() => track && setError(`Can’t play ${nameOf(track)} in this browser.`)}
+        onError={() => track && setError(tr('Can’t play {0} in this browser.', nameOf(track)))}
         onPause={() => setPlaying(false)}
         onPlay={() => setPlaying(true)}
       />
@@ -249,8 +250,8 @@ export function MusicPlayer({ request, onTitle }: Props) {
           {cover ? <img src={api.rawFileUrl(cover)} alt="" /> : <Music size={42} />}
         </div>
         <div className="mp-info">
-          <strong>{track ? trackTitle(track) : 'Not Playing'}</strong>
-          <span>{track ? displayName(folderOf(track)) : 'Choose a song below'}</span>
+          <strong>{track ? trackTitle(track) : tr('Not Playing')}</strong>
+          <span>{track ? displayName(folderOf(track)) : tr('Choose a song below')}</span>
           {error && <span className="form-error">{error}</span>}
           <div className="mp-progress">
             <small>{formatTime(time.current)}</small>
@@ -262,34 +263,34 @@ export function MusicPlayer({ request, onTitle }: Props) {
               value={Math.min(time.current, time.duration || 0)}
               onChange={e => seek(Number(e.target.value))}
               disabled={!track}
-              aria-label="Position"
+              aria-label={tr('Position')}
               style={{ '--fill': `${time.duration ? (time.current / time.duration) * 100 : 0}%` } as CSSProperties}
             />
             <small>-{formatTime(Math.max(0, time.duration - time.current))}</small>
           </div>
           <div className="mp-controls">
-            <button className={`icon-btn ${shuffle ? 'is-on' : ''}`} onClick={() => setShuffle(s => !s)} aria-label="Shuffle" title="Shuffle">
+            <button className={`icon-btn ${shuffle ? 'is-on' : ''}`} onClick={() => setShuffle(s => !s)} aria-label={tr('Shuffle')} title={tr('Shuffle')}>
               <Shuffle size={15} />
             </button>
-            <button className="icon-btn" onClick={previous} disabled={!track} aria-label="Previous">
+            <button className="icon-btn" onClick={previous} disabled={!track} aria-label={tr('Previous')}>
               <SkipBack size={18} fill="currentColor" />
             </button>
-            <button className="mp-play" onClick={() => (track ? setPlaying(p => !p) : tracks.length && playQueue(tracks, 0))} aria-label={playing ? 'Pause' : 'Play'}>
+            <button className="mp-play" onClick={() => (track ? setPlaying(p => !p) : tracks.length && playQueue(tracks, 0))} aria-label={playing ? tr('Pause') : tr('Play')}>
               {playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
             </button>
-            <button className="icon-btn" onClick={() => next()} disabled={!track} aria-label="Next">
+            <button className="icon-btn" onClick={() => next()} disabled={!track} aria-label={tr('Next')}>
               <SkipForward size={18} fill="currentColor" />
             </button>
             <button
               className={`icon-btn ${repeat !== 'off' ? 'is-on' : ''}`}
               onClick={() => setRepeat(r => repeatNext[r])}
-              aria-label={`Repeat: ${repeat}`}
-              title={repeat === 'one' ? 'Repeat one' : repeat === 'all' ? 'Repeat all' : 'Repeat off'}
+              aria-label={tr('Repeat: {0}', repeat)}
+              title={repeat === 'one' ? tr('Repeat one') : repeat === 'all' ? tr('Repeat all') : tr('Repeat off')}
             >
               {repeat === 'one' ? <Repeat1 size={15} /> : <Repeat size={15} />}
             </button>
             <span className="mp-volume">
-              <button className="icon-btn" onClick={() => setMuted(m => !m)} aria-label={muted ? 'Unmute' : 'Mute'}>
+              <button className="icon-btn" onClick={() => setMuted(m => !m)} aria-label={muted ? tr('Unmute') : tr('Mute')}>
                 <VolumeIcon size={15} />
               </button>
               <input
@@ -302,7 +303,7 @@ export function MusicPlayer({ request, onTitle }: Props) {
                   setVolume(Number(e.target.value))
                   setMuted(false)
                 }}
-                aria-label="Volume"
+                aria-label={tr('Volume')}
                 style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as CSSProperties}
               />
             </span>
@@ -312,14 +313,14 @@ export function MusicPlayer({ request, onTitle }: Props) {
 
       <div className="mp-library">
         <div className="mp-lib-head">
-          <button className="icon-btn" onClick={() => dir && setDir(parentOf(dir))} disabled={!dir || dir === '/'} aria-label="Up one folder">
+          <button className="icon-btn" onClick={() => dir && setDir(parentOf(dir))} disabled={!dir || dir === '/'} aria-label={tr('Up one folder')}>
             <ArrowUp size={15} />
           </button>
-          <strong>{dir ? displayName(dir) : 'Library'}</strong>
+          <strong>{dir ? displayName(dir) : tr('Library')}</strong>
           <small>{dir}</small>
           <span className="media-spacer" />
           <button className="pill-btn" onClick={() => playQueue(tracks, 0)} disabled={!tracks.length}>
-            <Play size={12} fill="currentColor" /> Play All
+            <Play size={12} fill="currentColor" /> {tr('Play All')}
           </button>
           <button
             className="pill-btn"
@@ -329,14 +330,14 @@ export function MusicPlayer({ request, onTitle }: Props) {
             }}
             disabled={!tracks.length}
           >
-            <Shuffle size={12} /> Shuffle
+            <Shuffle size={12} /> {tr('Shuffle')}
           </button>
         </div>
         <div className="mp-list">
           {loadError && <p className="am-empty form-error">{loadError}</p>}
           {!loadError && folders.length === 0 && tracks.length === 0 && (
             <p className="am-empty">
-              <ListMusic size={18} /> No music in this folder. Put songs in {DATA_ROOT}/Media/Music.
+              <ListMusic size={18} /> {tr('No music in this folder. Put songs in')} {DATA_ROOT}/Media/Music.
             </p>
           )}
           {folders.map(f => (
@@ -349,7 +350,7 @@ export function MusicPlayer({ request, onTitle }: Props) {
             const isCurrent = path === track
             return (
               <button key={path} className={`mp-row ${isCurrent ? 'is-current' : ''}`} onDoubleClick={() => playQueue(tracks, i)} onClick={() => isCurrent || playQueue(tracks, i)}>
-                <span className="mp-num">{isCurrent && playing ? <i className="mp-eq" aria-label="Playing"><b /><b /><b /></i> : i + 1}</span>
+                <span className="mp-num">{isCurrent && playing ? <i className="mp-eq" aria-label={tr('Playing')}><b /><b /><b /></i> : i + 1}</span>
                 <span>{trackTitle(path)}</span>
                 <small>{nameOf(path).split('.').pop()?.toUpperCase()}</small>
               </button>

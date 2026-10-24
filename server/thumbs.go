@@ -40,7 +40,7 @@ const (
 
 var (
 	thumbImage = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true}
-	thumbVideo = map[string]bool{".mp4": true, ".m4v": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true}
+	thumbVideo = map[string]bool{".mp4": true, ".m4v": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true, ".ts": true, ".m2ts": true, ".mts": true}
 )
 
 type thumbnailer struct {
@@ -303,7 +303,7 @@ func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 		writeFSError(w, err)
 		return
 	}
-	if info.IsDir() {
+	if info.IsDir() || onCloudDrive(path) {
 		http.NotFound(w, r)
 		return
 	}
@@ -316,4 +316,24 @@ func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=604800")
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeFile(w, r, file)
+}
+
+// onCloudDrive reports whether path is on an rclone mount (see cloud.go).
+func onCloudDrive(path string) bool {
+	data, err := os.ReadFile("/proc/self/mounts")
+	if err != nil {
+		return false
+	}
+	best, cloud := "", false
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		mount := unescapeMount(f[1])
+		if (path == mount || strings.HasPrefix(path, strings.TrimSuffix(mount, "/")+"/")) && len(mount) > len(best) {
+			best, cloud = mount, f[2] == "fuse.rclone"
+		}
+	}
+	return cloud
 }

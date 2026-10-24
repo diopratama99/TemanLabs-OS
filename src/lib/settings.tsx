@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { defaultWidgets, normalizeWidgets, type WidgetConfig } from './widgets'
+import { browserLanguage, tr, type Language } from './i18n'
 
 export type Theme = 'light' | 'dark'
 
@@ -17,21 +18,31 @@ export const UTILITIES_FOLDER: LauncherFolder = { id: 'utilities', name: 'Utilit
 
 export interface Settings {
   theme: Theme
+  /** Interface language; read at startup by lib/i18n.ts. */
+  language: Language
   reduceTransparency: boolean
   refraction: boolean
   wallpaper: number
   /** URL of the user's own photo (see /api/wallpapers); shown instead of the built-in wallpaper. */
   customWallpaper: string | null
+  /** A tiny copy of that photo, shown blurred while the real one loads (after a hard refresh, on the lock screen). */
+  customWallpaperPreview: { url: string; data: string } | null
   showWidgets: boolean
   /** Desktop widgets in display order. */
   widgets: WidgetConfig[]
   /** App IDs kept in the Dock, in order; null until the user pins or unpins anything. */
   dockApps: string[] | null
+  /** Built-in apps kept in the Dock, in order; null keeps the default set (utilities stay out). */
+  dockSystem: string[] | null
   launchpadFolders: LauncherFolder[]
   /** Native apps the user took out of the Native Apps folder (so it doesn't pull them back). */
   launchpadLoose: string[]
   /** Launcher keys hidden from the Launcher. */
   hiddenApps: string[]
+  /** Launcher keys of the apps opened last, newest first ("Recently Used"). */
+  recentApps: string[]
+  /** Apps the user chose to show through the server's proxy (they didn't load directly). */
+  proxiedApps: string[]
   /** Files: view (Icons / List / Gallery), icon size and sort order. */
   filesView: FilesView
   filesIconSize: number
@@ -53,16 +64,21 @@ const STORAGE_KEY = 'temanlabs.settings'
 function loadSettings(): Settings {
   const defaults: Settings = {
     theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+    language: browserLanguage(),
     reduceTransparency: false,
     refraction: supportsRefraction,
     wallpaper: 0,
     customWallpaper: null,
+    customWallpaperPreview: null,
     showWidgets: true,
     widgets: defaultWidgets(),
     dockApps: null,
+    dockSystem: null,
     launchpadFolders: [UTILITIES_FOLDER, NATIVE_FOLDER],
     launchpadLoose: [],
     hiddenApps: [],
+    recentApps: [],
+    proxiedApps: [],
     filesView: 'icons',
     filesIconSize: 64,
     filesSort: { key: 'name', desc: false },
@@ -128,6 +144,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings() {
   const ctx = useContext(SettingsContext)
-  if (!ctx) throw new Error('useSettings must be used inside SettingsProvider')
+  if (!ctx) throw new Error(tr('useSettings must be used inside SettingsProvider'))
   return ctx
 }

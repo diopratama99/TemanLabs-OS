@@ -3,6 +3,7 @@ import { api } from '../../api'
 import type { SearchMatch } from '../../api/types'
 import { displayName, nameOf, parentOf } from '../../lib/paths'
 import { FileTypeIcon } from './FileTypeIcon'
+import { tr } from '../../lib/i18n'
 
 const DEBOUNCE_MS = 180
 const CONTEXT_CHARS = 24
@@ -49,21 +50,21 @@ export function SearchPanel({ root, onOpenMatch }: Props) {
 
   return (
     <>
-      <div className="ce-side-head">SEARCH</div>
+      <div className="ce-side-head">{tr('SEARCH')}</div>
       <div className="ce-search">
         <input
           autoFocus
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder={`Search in ${displayName(root)}`}
-          aria-label="Search files"
+          placeholder={tr('Search in {0}', displayName(root))}
+          aria-label={tr('Search files')}
           spellCheck={false}
         />
         {shown && (
           <p className="ce-search-summary">
             {shown.length === 0
-              ? 'No results found.'
-              : `${shown.length} result${shown.length === 1 ? '' : 's'} in ${groups.size} file${groups.size === 1 ? '' : 's'}`}
+              ? tr('No results found.')
+              : tr('{0} result{1} in {2} file{3}', shown.length, shown.length === 1 ? '' : 's', groups.size, groups.size === 1 ? '' : 's')}
           </p>
         )}
       </div>

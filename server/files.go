@@ -104,7 +104,7 @@ func (s *server) chown(path string) {
 
 var extKinds = map[string]string{
 	"jpg": "image", "jpeg": "image", "png": "image", "gif": "image", "webp": "image", "heic": "image", "svg": "image", "bmp": "image",
-	"mp4": "video", "mkv": "video", "mov": "video", "avi": "video", "webm": "video", "m4v": "video",
+	"mp4": "video", "mkv": "video", "mov": "video", "avi": "video", "webm": "video", "m4v": "video", "m2ts": "video", "mts": "video",
 	"mp3": "audio", "flac": "audio", "wav": "audio", "m4a": "audio", "ogg": "audio", "aac": "audio",
 	"zip": "archive", "tar": "archive", "gz": "archive", "tgz": "archive", "7z": "archive", "rar": "archive", "iso": "archive", "xz": "archive",
 	"pdf": "document", "doc": "document", "docx": "document", "xls": "document", "xlsx": "document", "md": "document", "txt": "document", "log": "document",
@@ -152,12 +152,39 @@ func entryFor(dir string, d fs.DirEntry) fileEntry {
 	e := fileEntry{Name: d.Name(), Kind: "document"}
 	if err == nil {
 		e.Kind = kindOf(d.Name(), info.IsDir())
+		if e.Kind == "code" && extOf(d.Name()) == "ts" && isMPEGTS(full, info.Size()) {
+			e.Kind = "video"
+		}
 		e.Modified = info.ModTime().Format(time.RFC3339)
 		if !info.IsDir() {
 			e.Size = info.Size()
 		}
 	}
 	return e
+}
+
+// isMPEGTS tells a .ts video (MPEG transport stream) from a TypeScript file: a transport stream
+// is 188-byte packets that each start with the sync byte 0x47 (192 bytes, after a 4-byte
+// timestamp, in Blu-ray style streams). Small files are code; nothing is read from them.
+func isMPEGTS(path string, size int64) bool {
+	if size < 64<<10 {
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 4+192*3)
+	if _, err := io.ReadFull(f, head); err != nil {
+		return false
+	}
+	for _, p := range []struct{ start, stride int }{{0, 188}, {4, 192}} {
+		if head[p.start] == 0x47 && head[p.start+p.stride] == 0x47 && head[p.start+2*p.stride] == 0x47 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *server) handleListFiles(w http.ResponseWriter, r *http.Request) {
