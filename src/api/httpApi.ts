@@ -18,6 +18,13 @@ import type {
   StartupApp,
   ShareLink,
   ShareLinks,
+  BrowseList,
+  DownloadItem,
+  DownloadMode,
+  Downloads,
+  MediaTools,
+  RecChannel,
+  Recorder,
   BackupApp,
   BackupDestination,
   BackupFile,
@@ -85,10 +92,13 @@ export const LOCKED_EVENT = 'temanlabs:locked'
 
 export class ApiError extends Error {
   readonly status: number
-  constructor(message: string, status: number) {
+  /** A fix the server knows for it, which the UI can offer (e.g. "galleryDev"). */
+  readonly fix?: string
+  constructor(message: string, status: number, fix?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.fix = fix
   }
 }
 
@@ -112,13 +122,15 @@ async function request<T>(method: string, path: string, options: RequestOptions 
   if (res.status === 423) window.dispatchEvent(new Event(LOCKED_EVENT))
   if (!res.ok) {
     let message = res.statusText || `Request failed (${res.status})`
+    let fix: string | undefined
     try {
-      const data = (await res.json()) as { error?: string }
+      const data = (await res.json()) as { error?: string; fix?: string }
       if (data.error) message = data.error
+      fix = data.fix
     } catch {
       // Not JSON; keep the status text.
     }
-    throw new ApiError(message, res.status)
+    throw new ApiError(message, res.status, fix)
   }
   if (res.status === 204) return undefined as T
   // 202 Accepted: a job started; some answers name it ({ job }), others say nothing.
@@ -390,6 +402,39 @@ export const httpApi = {
     request<BackupFile[]>('GET', `/api/backups/${id}/versions/${version}/files${query({ path })}`),
   /** Restores paths from a version; to = '' puts them back where they came from. */
   restoreBackup: (id: string, body: { version: string; paths: string[]; to: string }) => request<{ job: string }>('POST', `/api/backups/${id}/restore`, { json: body }),
+  mediaTools: () => request<MediaTools>('GET', '/api/media-tools'),
+  /** Installs or updates the tools; galleryDev switches gallery-dl to its development version or back. */
+  installMediaTools: (opts?: { galleryDev?: boolean }) => request<{ job: string }>('POST', '/api/media-tools/install', opts ? { json: opts } : {}),
+  downloads: () => request<Downloads>('GET', '/api/downloads'),
+  addDownloads: (body: { urls: string[]; mode: DownloadMode; quality: string; playlist: boolean; folder: string; device: boolean }) =>
+    request<DownloadItem[]>('POST', '/api/downloads', { json: body }),
+  /** Lists a profile, channel or playlist; with `list`, its next page too. */
+  browseDownloads: (body: { url: string; tab?: string; list?: string }) => request<BrowseList>('POST', '/api/downloads/browse', { json: body }),
+  /** An entry's thumbnail, or the profile's picture. */
+  browseThumbUrl: (list: string, index: number | 'avatar') => `/api/downloads/browse/${list}/thumb/${index}`,
+  pickDownloads: (list: string, body: { picks: number[]; mode: DownloadMode; quality: string; device: boolean }) =>
+    request<DownloadItem[]>('POST', `/api/downloads/browse/${list}/pick`, { json: body }),
+  /** A finished download's file, or a zip of its files, to save on this device. */
+  downloadFileUrl: (id: string) => `/api/downloads/${id}/file`,
+  downloadAction: (id: string, action: 'cancel' | 'retry') => request<void>('POST', `/api/downloads/${id}/${action}`),
+  removeDownload: (id: string, files = false) => request<void>('DELETE', `/api/downloads/${id}${files ? '?files=1' : ''}`),
+  clearDownloads: () => request<void>('DELETE', '/api/downloads'),
+  setDownloadFolder: (folder: string) => request<void>('PUT', '/api/downloads/settings', { json: { folder } }),
+  /** Adds a cookies.txt's cookies, only these sites' if given; says which sites it had. */
+  setDownloadCookies: (text: string, sites?: string[]) =>
+    request<{ sites: string[] }>('PUT', `/api/downloads/cookies${sites ? query({ site: sites.join(',') }) : ''}`, { body: text, headers: { 'Content-Type': 'text/plain' } }),
+  /** Asks the site who the saved cookies sign in as (Instagram only). */
+  checkDownloadCookies: (site: string) => request<{ ok: boolean; user?: string; message?: string }>('POST', `/api/downloads/cookies/check${query({ site })}`),
+  /** Removes these sites' cookies, or all of them. */
+  removeDownloadCookies: (sites?: string[]) => request<void>('DELETE', `/api/downloads/cookies${sites ? query({ site: sites.join(',') }) : ''}`),
+  recorder: () => request<Recorder>('GET', '/api/recorder'),
+  addChannel: (body: { url: string; name: string; quality: string; auto: boolean; keepDays: number }) => request<RecChannel>('POST', '/api/recorder/channels', { json: body }),
+  updateChannel: (id: string, body: { url: string; name: string; quality: string; auto: boolean; keepDays: number }) =>
+    request<void>('PUT', `/api/recorder/channels/${id}`, { json: body }),
+  deleteChannel: (id: string) => request<void>('DELETE', `/api/recorder/channels/${id}`),
+  channelAction: (id: string, action: 'record' | 'stop' | 'check') => request<void>('POST', `/api/recorder/channels/${id}/${action}`),
+  deleteRecording: (id: string, files = false) => request<void>('DELETE', `/api/recorder/recordings/${id}${files ? '?files=1' : ''}`),
+  setRecorderFolder: (folder: string) => request<void>('PUT', '/api/recorder/settings', { json: { folder } }),
   shareLinks: () => request<ShareLinks>('GET', '/api/links'),
   createShareLink: (body: { path: string; upload: boolean; hours: number; password: string }) => request<ShareLink>('POST', '/api/links', { json: body }),
   deleteShareLink: (id: string) => request<void>('DELETE', `/api/links/${encodeURIComponent(id)}`),

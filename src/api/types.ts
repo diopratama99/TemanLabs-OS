@@ -163,6 +163,133 @@ export interface MovedApp {
   moved: string
 }
 
+/** yt-dlp, gallery-dl, streamlink and deno, in TemanLabsOS's own Python environment. */
+export interface MediaTools {
+  installed: boolean
+  /** Installing or updating now. */
+  working: boolean
+  versions: Record<string, string>
+  /** gallery-dl comes from its development version, with fixes not released yet. */
+  galleryDev: boolean
+}
+
+export type DownloadMode = 'video' | 'audio' | 'photos'
+
+export interface DownloadItem {
+  id: string
+  url: string
+  /** files: chosen from a profile's list, fetched as they are. */
+  mode: DownloadMode | 'files'
+  quality: string
+  playlist: boolean
+  folder: string
+  /** For the device in front of the browser, not the server's folders; kept there a day. */
+  device?: boolean
+  /** Its files for the device were removed. */
+  expired?: boolean
+  status: 'queued' | 'running' | 'done' | 'failed' | 'canceled'
+  title?: string
+  site?: string
+  uploader?: string
+  percent: number
+  size?: string
+  speed?: string
+  eta?: string
+  /** Items in a playlist or album. */
+  count?: number
+  files: string[]
+  error?: string
+  added: string
+  finished?: string
+}
+
+/** One video or file in a profile, channel or playlist being chosen from. */
+export interface BrowseEntry {
+  index: number
+  kind: 'video' | 'image'
+  title?: string
+  thumb: boolean
+  /** Seconds. */
+  duration?: number
+  date?: string
+  /** The post it belongs to (a carousel's photos share one). */
+  group?: string
+  /** A video saved in the quality chosen (rather than a file as it is). */
+  page?: boolean
+}
+
+export interface BrowseList {
+  id: string
+  url: string
+  title: string
+  uploader?: string
+  site: string
+  /** Of the thumbnails: square posts, wide (16:9) videos, tall (9:16) reels and stories. */
+  shape: 'square' | 'wide' | 'tall'
+  entries: BrowseEntry[]
+  more: boolean
+  /** A profile's handle (@name), whether it has a picture, and its tabs (posts, reels…). */
+  handle?: string
+  avatar: boolean
+  followers?: number
+  tabs?: string[]
+  tab?: string
+}
+
+/** The saved cookies for one site. */
+export interface CookieSite {
+  site: string
+  count: number
+  /** Has a sign-in cookie, not just a visitor's. */
+  signedIn: boolean
+}
+
+export interface Downloads {
+  folder: string
+  /** A cookies.txt is saved, for posts that need signing in. */
+  cookies: boolean
+  cookieSites: CookieSite[]
+  cookiesAt?: string
+  items: DownloadItem[]
+}
+
+export interface RecChannel {
+  id: string
+  url: string
+  name: string
+  platform: string
+  quality: string
+  /** Record by itself when it goes live. */
+  auto: boolean
+  /** 0 = keep recordings forever. */
+  keepDays: number
+  added: string
+  live: boolean
+  title?: string
+  checked?: string
+  error?: string
+  /** The recording in progress. */
+  recording?: string
+}
+
+export interface Recording {
+  id: string
+  channel: string
+  title: string
+  file: string
+  status: 'recording' | 'converting' | 'done' | 'failed'
+  started: string
+  ended?: string
+  bytes: number
+  error?: string
+}
+
+export interface Recorder {
+  folder: string
+  channels: RecChannel[]
+  recordings: Recording[]
+}
+
 export type BackupSchedule = 'manual' | 'daily' | 'weekly'
 
 /** What a backup plan is set to; also the body for creating or changing one. */

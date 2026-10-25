@@ -29,6 +29,8 @@ export type SystemWindowId =
   | 'devices'
   | 'settings'
   | 'about'
+  | 'downloader'
+  | 'recorder'
 export type WindowId = SystemWindowId | `app:${string}` | `info:${string}` | `remote:${string}`
 
 export interface Frame {

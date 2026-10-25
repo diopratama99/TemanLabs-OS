@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { ArrowUp, ChevronRight, Search, Upload } from 'lucide-react'
+import { ArrowUp, ChevronRight, FolderPlus, Search, Upload } from 'lucide-react'
 import { api } from '../../api'
 import type { FileEntry } from '../../api/types'
 import { usePlaces } from '../../hooks/usePlaces'
@@ -21,10 +21,16 @@ interface Props {
   /** Which files can be chosen (file mode); text files by default. */
   accept?: (entry: FileEntry) => boolean
   title?: string
+  /** The confirm button's label (Open by default). */
+  confirmLabel?: string
+  /** Folder mode: the line beside the buttons, given the folder that would be chosen. */
+  hint?: (name: string) => string
+  /** Folder mode: a button that makes a new folder here. */
+  canCreate?: boolean
 }
 
 /** Open File / Open Folder panel, as a sheet, browsing the server's files. */
-export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept = e => isTextFile(e.name), title: heading }: Props) {
+export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept = e => isTextFile(e.name), title: heading, confirmLabel, hint, canCreate }: Props) {
   const { root } = useAuth()
   const { favorites, locations } = usePlaces()
   const [dir, setDir] = useState(startDir)
@@ -34,6 +40,8 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
   const [filter, setFilter] = useState('')
   const uploadRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const [naming, setNaming] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -52,7 +60,7 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
     return () => {
       alive = false
     }
-  }, [dir])
+  }, [dir, reload])
 
   useEffect(() => {
     listRef.current?.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' })
@@ -62,6 +70,21 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
     setDir(next)
     setSelected(null)
     setFilter('')
+    setNaming(null)
+  }
+
+  const makeFolder = async (name: string) => {
+    setNaming(null)
+    name = name.trim()
+    if (!name || name.includes('/')) return
+    try {
+      const made = await api.createFolder(dir)
+      if (made !== name) await api.renameEntry(dir, made, name)
+      setSelected(name)
+      setReload(n => n + 1)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const usable = (entry: FileEntry) => entry.kind === 'folder' || (mode === 'file' && accept(entry))
@@ -80,6 +103,7 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
   const canConfirm = mode === 'folder' || (!!selectedEntry && usable(selectedEntry))
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (naming !== null) return
     if (e.key === 'Escape') {
       e.preventDefault()
       onCancel()
@@ -158,6 +182,23 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
           </div>
 
           <div className="ce-open-list" role="listbox" ref={listRef}>
+            {naming !== null && (
+              <div className="ce-open-row is-selected">
+                <FileTypeIcon name="" folder size={16} />
+                <input
+                  className="ce-open-new"
+                  autoFocus
+                  value={naming}
+                  onChange={e => setNaming(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void makeFolder(naming)
+                    else if (e.key === 'Escape') setNaming(null)
+                  }}
+                  onBlur={() => void makeFolder(naming)}
+                  aria-label={tr('Folder name')}
+                />
+              </div>
+            )}
             {visible.map(entry => (
               <div
                 key={entry.name}
@@ -174,7 +215,7 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
                 <span className="ce-open-meta">{entry.modified}</span>
               </div>
             ))}
-            {visible.length === 0 && (
+            {visible.length === 0 && naming === null && (
               <p className="ce-open-empty">
                 {loadError ? tr('Can’t open this folder: {0}', loadError) : q ? tr('No matches.') : tr('This folder is empty.')}
               </p>
@@ -202,16 +243,25 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
                 </>
               )
             ) : (
-              <span className="ce-open-hint">
-                {tr('Opens')} {selectedEntry?.kind === 'folder' ? selectedEntry.name : displayName(dir)} {tr('as the workspace')}
-              </span>
+              <>
+                {canCreate && (
+                  <button className="btn" onClick={() => setNaming(tr('New Folder'))} disabled={naming !== null}>
+                    <FolderPlus size={13} /> {tr('New Folder')}
+                  </button>
+                )}
+                <span className="ce-open-hint">
+                  {hint
+                    ? hint(selectedEntry?.kind === 'folder' ? selectedEntry.name : displayName(dir))
+                    : `${tr('Opens')} ${selectedEntry?.kind === 'folder' ? selectedEntry.name : displayName(dir)} ${tr('as the workspace')}`}
+                </span>
+              </>
             )}
             <span className="ce-status-grow" />
             <button className="btn" onClick={onCancel}>
               {tr('Cancel')}
             </button>
             <button className="btn btn-primary" onClick={confirm} disabled={!canConfirm}>
-              {tr('Open')}
+              {confirmLabel ?? tr('Open')}
             </button>
           </div>
         </div>

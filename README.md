@@ -144,6 +144,8 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 | **Code** | A Monaco-based editor (the editor inside VS Code) with an explorer, search, tabs and a terminal. |
 | **Image Viewer · Video Player · Music Player** | Open media straight from Files and step through it with the arrow keys. The Video Player has its own controls (10-second skips, speed, full screen) and **continues where you left off**, on any device. |
 | **Remux** | Change video and sound formats on the server with ffmpeg: remux to MP4, MKV or TS in seconds without losing quality, convert to H.264, H.265, VP9 or AV1, resize, or keep just the sound (MP3, M4A, FLAC), with a queue and progress. |
+| **Downloader** | Paste links from YouTube, Instagram, X, TikTok, Facebook, Reddit and hundreds of other sites to save the video (up to the quality you pick), just the sound as MP3, or the photos of a post, straight onto the server, with a queue and progress. Whole playlists and profiles work too, or **Choose Items…** shows what's on a profile, channel or playlist as thumbnails to pick from. Save to a folder on the server or **straight to the device you're using**, and a **cookies.txt** opens posts that need an account. Built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl), installed with one click and updated from the app. |
+| **Live Recorder** | Add channels from Twitch, YouTube, Kick, TikTok and the other sites [streamlink](https://streamlink.github.io/) knows. They're checked every couple of minutes and **recorded from the moment they go live** until the stream ends, then saved as MP4 in a folder per channel. Pick the quality and the folder, record by hand, and keep recordings for a set number of days. Recordings carry on through a restart or update of TemanLabsOS. |
 | **File Sharing** | Share folders over SMB (Samba) and manage its users from the web. |
 
 ### Backup & the network
@@ -261,9 +263,13 @@ How it works, and every API endpoint, is in **[docs/architecture.md](docs/archit
 
 ## Credits
 
-Built with [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [restic](https://restic.net/), [rclone](https://rclone.org/), [AdGuard Home](https://adguard.com/adguard-home/overview.html), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty) and [k3s](https://k3s.io/). App icons from [selfh.st/icons](https://selfh.st/icons/). Block lists by [HaGeZi](https://github.com/hagezi/dns-blocklists) and [ABPindo](https://github.com/ABPindo/indonesianadblockrules).
+Built with [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [restic](https://restic.net/), [rclone](https://rclone.org/), [AdGuard Home](https://adguard.com/adguard-home/overview.html), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty), [k3s](https://k3s.io/), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://codeberg.org/mikf/gallery-dl), [streamlink](https://streamlink.github.io/) and [Simple Icons](https://simpleicons.org/). App icons from [selfh.st/icons](https://selfh.st/icons/). Block lists by [HaGeZi](https://github.com/hagezi/dns-blocklists) and [ABPindo](https://github.com/ABPindo/indonesianadblockrules).
 
 TemanLabsOS is an independent project and isn't affiliated with any operating system vendor. Third-party app names and logos in the App Center belong to their owners.
+
+## License
+
+TemanLabsOS is released under the [MIT License](LICENSE). The tools and apps it installs keep their own licenses. Settings → Privacy & Terms on the server says what TemanLabsOS keeps, where it connects, and the terms of use.
 
 <div align="center">
 <br />

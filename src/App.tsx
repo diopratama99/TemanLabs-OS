@@ -94,6 +94,8 @@ import { CodeEditor, type OpenRequest } from './windows/CodeEditor'
 import { Files } from './windows/Files'
 import { Settings, type SettingsSection } from './windows/Settings'
 import { AboutServer } from './windows/AboutServer'
+import { Downloader } from './windows/Downloader'
+import { LiveRecorder } from './windows/LiveRecorder'
 import { WindowErrorBoundary } from './components/WindowErrorBoundary'
 import { Terminal } from './windows/Terminal'
 
@@ -134,6 +136,8 @@ const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: number; hei
   commands: { title: tr('Commands'), width: 1040, height: 680 },
   devices: { title: tr('Devices'), width: 900, height: 600 },
   about: { title: tr('About This Server'), width: 300, height: 430 },
+  downloader: { title: tr('Downloader'), width: 820, height: 600 },
+  recorder: { title: tr('Live Recorder'), width: 900, height: 640 },
 }
 
 // Windows with a source-list sidebar run it full height; Terminal gets a slim title bar.
@@ -856,6 +860,10 @@ export default function App() {
         )
       case 'devices':
         return <Devices onConnect={openRemote} />
+      case 'downloader':
+        return <Downloader onOpenMedia={openMedia} onShowInFiles={openFilesAt} />
+      case 'recorder':
+        return <LiveRecorder onOpenMedia={openMedia} onShowInFiles={openFilesAt} />
       case 'about':
         return <AboutServer stats={stats} onMoreInfo={() => openSettings('about')} />
       case 'commands':

@@ -1,6 +1,7 @@
 {
   "name": "temanlabsos-web",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -19,7 +20,8 @@
     "lucide-react": "^1.61.0",
     "monaco-editor": "^0.57.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "simple-icons": "^16.35.0"
   },
   "devDependencies": {
     "@types/guacamole-common-js": "^1.5.5",

@@ -22,6 +22,9 @@ export const SYSTEM_APPS: SystemApp[] = [
   { id: 'activity', label: tr('System Monitor'), icon: 'activity', color: ['#5be37d', '#14883a'], utility: true },
   { id: 'kubernetes', label: tr('Kubernetes'), icon: 'helm', color: ['#6a9bff', '#2349c9'] },
   { id: 'music', label: tr('Music Player'), icon: 'music', color: ['#ff7a93', '#f5203e'] },
+  // Saving from the web: links to files, and live streams as they happen.
+  { id: 'downloader', label: tr('Downloader'), icon: 'downloader', color: ['#ffd36b', '#ff8a00'], dock: false },
+  { id: 'recorder', label: tr('Live Recorder'), icon: 'radio', color: ['#ff8a8a', '#e0245e'], dock: false },
   { id: 'settings', label: tr('Settings'), icon: 'settings', color: ['#a1a1a8', '#55555b'] },
   // The other computers: wake them, and use their screens in a window.
   { id: 'devices', label: tr('Devices'), icon: 'devices', color: ['#7cc8ff', '#3b5bfd'], dock: false },

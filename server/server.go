@@ -41,6 +41,8 @@ type server struct {
 	backups  *backupStore
 	history  *history
 	health   *healthStore
+	dl       *downloader
+	recorder *recorderStore
 	owner    *owner
 }
 
@@ -114,12 +116,16 @@ func newServer(cfg *Config) (*server, error) {
 	s.backups = newBackupStore(cfg.StateDir)
 	s.history = newHistory(cfg.StateDir)
 	s.health = newHealthStore(cfg.StateDir)
+	s.dl = newDownloader(cfg.StateDir)
+	s.recorder = newRecorder(cfg.StateDir)
 	s.frames = newFrameProxies(s)
 	go s.stats.run()
 	go s.pruneTrash()
 	go s.runSchedule()
 	go s.runHistory()
 	go s.runHealth()
+	go s.runDownloads()
+	go s.runRecorder()
 	return s, nil
 }
 
@@ -306,6 +312,28 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/backups/{id}/versions", s.handleBackupVersions)
 	api.HandleFunc("GET /api/backups/{id}/versions/{version}/files", s.handleVersionFiles)
 	api.HandleFunc("POST /api/backups/{id}/restore", s.handleRestore)
+	api.HandleFunc("GET /api/media-tools", s.handleMediaTools)
+	api.HandleFunc("POST /api/media-tools/install", s.handleInstallMediaTools)
+	api.HandleFunc("GET /api/downloads", s.handleDownloads)
+	api.HandleFunc("POST /api/downloads", s.handleAddDownloads)
+	api.HandleFunc("DELETE /api/downloads", s.handleClearDownloads)
+	api.HandleFunc("PUT /api/downloads/settings", s.handleDownloadSettings)
+	api.HandleFunc("PUT /api/downloads/cookies", s.handleDownloadCookies)
+	api.HandleFunc("DELETE /api/downloads/cookies", s.handleDownloadCookies)
+	api.HandleFunc("POST /api/downloads/cookies/check", s.handleCheckCookies)
+	api.HandleFunc("POST /api/downloads/browse", s.handleBrowse)
+	api.HandleFunc("GET /api/downloads/browse/{list}/thumb/{index}", s.handleBrowseThumb)
+	api.HandleFunc("POST /api/downloads/browse/{list}/pick", s.handleBrowsePick)
+	api.HandleFunc("GET /api/downloads/{id}/file", s.handleDownloadFile)
+	api.HandleFunc("POST /api/downloads/{id}/{action}", s.handleDownloadAction)
+	api.HandleFunc("DELETE /api/downloads/{id}", s.handleRemoveDownload)
+	api.HandleFunc("GET /api/recorder", s.handleRecorder)
+	api.HandleFunc("PUT /api/recorder/settings", s.handleRecorderSettings)
+	api.HandleFunc("POST /api/recorder/channels", s.handleAddChannel)
+	api.HandleFunc("PUT /api/recorder/channels/{id}", s.handleUpdateChannel)
+	api.HandleFunc("DELETE /api/recorder/channels/{id}", s.handleDeleteChannel)
+	api.HandleFunc("POST /api/recorder/channels/{id}/{action}", s.handleChannelAction)
+	api.HandleFunc("DELETE /api/recorder/recordings/{id}", s.handleDeleteRecording)
 	api.HandleFunc("GET /api/links", s.handleListLinks)
 	api.HandleFunc("POST /api/links", s.handleCreateLink)
 	api.HandleFunc("PUT /api/links/settings", s.handleLinkSettings)

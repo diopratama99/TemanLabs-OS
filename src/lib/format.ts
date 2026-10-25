@@ -1,3 +1,5 @@
+import { tr } from './i18n'
+
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
 export function formatBytes(bytes: number, digits = 1) {
@@ -36,11 +38,10 @@ export function formatFileDate(modified: string) {
   const d = new Date(modified)
   if (Number.isNaN(d.getTime())) return modified
   // Date-only values (mock data) have no meaningful time.
-  const time = /T\d/.test(modified) ? ` at ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''
+  const time = /T\d/.test(modified) ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''
   const now = new Date()
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
-  if (sameDay(d, now)) return `Today${time}`
-  if (sameDay(d, yesterday)) return `Yesterday${time}`
-  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}${time}`
+  const day = sameDay(d, now) ? tr('Today') : sameDay(d, yesterday) ? tr('Yesterday') : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return time ? tr('{0} at {1}', day, time) : day
 }

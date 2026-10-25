@@ -1,4 +1,6 @@
 import {
+  CloudDownload,
+  Radio,
   Trash2,
   Activity,
   ArrowDownToLine,
@@ -53,6 +55,8 @@ export const appIcons: Record<string, LucideIcon> = {
   wrench: Wrench,
   launchpad: LayoutGrid,
   trash: Trash2,
+  downloader: CloudDownload,
+  radio: Radio,
   braces: Braces,
   drive: HardDrive,
   folder: Folder,

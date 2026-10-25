@@ -178,7 +178,9 @@ export function ProcessesView({ tabs }: { tabs: ReactNode }) {
               <span className="am-num">{p.pid}</span>
               <span className="am-name-text pv-user">{p.user}</span>
               <span className="am-num">
-                <i className="am-bar" style={{ width: `${Math.min(100, p.cpu)}%` }} />
+                <i className="am-meter">
+                  <i className="am-bar" style={{ width: `${Math.min(100, p.cpu)}%` }} />
+                </i>
                 {p.cpu.toFixed(1)}
               </span>
               <span className="am-num">{formatBytes(p.memory)}</span>

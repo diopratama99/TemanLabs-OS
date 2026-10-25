@@ -248,7 +248,9 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
       <span className="am-num">
         {s ? (
           <>
-            <i className="am-bar" style={{ width: `${Math.min(100, s.cpu / cores)}%` }} />
+            <i className="am-meter">
+              <i className="am-bar" style={{ width: `${Math.min(100, s.cpu / cores)}%` }} />
+            </i>
             {s.cpu.toFixed(1)}
           </>
         ) : (
@@ -258,7 +260,9 @@ function ContainersView({ apps, stats, onOpenApp, tabs }: Props & { tabs: ReactN
       <span className="am-num">
         {s ? (
           <>
-            <i className="am-bar am-bar-mem" style={{ width: `${hostMemory ? Math.min(100, (s.memUsed / hostMemory) * 100) : 0}%` }} />
+            <i className="am-meter">
+              <i className="am-bar am-bar-mem" style={{ width: `${hostMemory ? Math.min(100, (s.memUsed / hostMemory) * 100) : 0}%` }} />
+            </i>
             {formatBytes(s.memUsed)}
           </>
         ) : (

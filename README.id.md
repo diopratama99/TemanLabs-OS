@@ -144,6 +144,8 @@ Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting)
 | **Code** | Editor berbasis Monaco (mesin editor VS Code) dengan explorer, search, tab, dan terminal. |
 | **Image Viewer · Video Player · Music Player** | Buka media langsung dari Files, navigasi pakai tombol panah. Video Player punya kontrol sendiri (maju/mundur 10 detik, kecepatan, layar penuh) dan **melanjutkan dari menit terakhir** di perangkat mana pun. |
 | **Remux** | Ubah format video dan suara di server dengan ffmpeg: remux ke MP4, MKV, atau TS dalam hitungan detik tanpa kehilangan kualitas, konversi ke H.264, H.265, VP9, atau AV1, ubah ukuran, atau ambil suaranya saja (MP3, M4A, FLAC), dengan antrean dan progres. |
+| **Pengunduh** | Tempel tautan dari YouTube, Instagram, X, TikTok, Facebook, Reddit dan ratusan situs lainnya untuk menyimpan videonya (sampai kualitas pilihanmu), suaranya saja sebagai MP3, atau foto-foto sebuah postingan, langsung ke server, dengan antrean dan progres. Seluruh playlist dan profil juga bisa, atau **Pilih Item…** menampilkan isi profil, channel atau playlist sebagai thumbnail untuk dipilih. Simpan ke folder di server atau **langsung ke perangkat yang kamu pakai**, dan **cookies.txt** membuka postingan yang butuh akun. Dibuat di atas [yt-dlp](https://github.com/yt-dlp/yt-dlp) dan [gallery-dl](https://github.com/mikf/gallery-dl), dipasang sekali klik dan diperbarui dari aplikasinya. |
+| **Perekam Live** | Tambahkan channel dari Twitch, YouTube, Kick, TikTok dan situs lain yang dikenal [streamlink](https://streamlink.github.io/). Dicek tiap beberapa menit dan **direkam sejak mulai live** sampai siarannya selesai, lalu disimpan sebagai MP4 di folder per channel. Pilih kualitas dan foldernya, rekam manual, dan simpan rekaman selama jumlah hari tertentu. Rekaman tetap berjalan walau TemanLabsOS di-restart atau diperbarui. |
 | **File Sharing** | Share folder via SMB (Samba) dan kelola user-nya dari web. |
 
 ### Backup & jaringan
@@ -261,9 +263,13 @@ Detail cara kerja dan daftar endpoint API ada di **[docs/architecture.id.md](doc
 
 ## Kredit
 
-Dibangun dengan [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [restic](https://restic.net/), [rclone](https://rclone.org/), [AdGuard Home](https://adguard.com/adguard-home/overview.html), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty), dan [k3s](https://k3s.io/). Ikon app dari [selfh.st/icons](https://selfh.st/icons/). Daftar blokir dari [HaGeZi](https://github.com/hagezi/dns-blocklists) dan [ABPindo](https://github.com/ABPindo/indonesianadblockrules).
+Dibangun dengan [React](https://react.dev/), [Vite](https://vite.dev/), [Lucide](https://lucide.dev/), [Inter](https://rsms.me/inter/), [Monaco Editor](https://microsoft.github.io/monaco-editor/), [xterm.js](https://xtermjs.org/), [Apache Guacamole](https://guacamole.apache.org/), [restic](https://restic.net/), [rclone](https://rclone.org/), [AdGuard Home](https://adguard.com/adguard-home/overview.html), [coder/websocket](https://github.com/coder/websocket), [creack/pty](https://github.com/creack/pty), [k3s](https://k3s.io/), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://codeberg.org/mikf/gallery-dl), [streamlink](https://streamlink.github.io/), dan [Simple Icons](https://simpleicons.org/). Ikon app dari [selfh.st/icons](https://selfh.st/icons/). Daftar blokir dari [HaGeZi](https://github.com/hagezi/dns-blocklists) dan [ABPindo](https://github.com/ABPindo/indonesianadblockrules).
 
 TemanLabsOS adalah proyek independen dan tidak berafiliasi dengan vendor sistem operasi mana pun. Nama dan logo app pihak ketiga di App Center adalah milik pemiliknya masing-masing.
+
+## Lisensi
+
+TemanLabsOS dirilis dengan [Lisensi MIT](LICENSE). Alat dan app yang dipasangnya tetap memakai lisensinya masing-masing. Pengaturan → Privasi & Ketentuan di server menjelaskan apa yang disimpan TemanLabsOS, ke mana ia terhubung, dan ketentuan penggunaannya.
 
 <div align="center">
 <br />

@@ -1,13 +1,22 @@
 // In-memory stand-in for the server, used only by `npm run dev:mock` (VITE_MOCK=1) to work on
 // the UI without a backend. Production builds talk to the real server through httpApi.
 import { fileKind, isTextFile } from '../lib/fileTypes'
-import type { Api, UploadOptions } from './httpApi'
+import { ApiError, type Api, type UploadOptions } from './httpApi'
 import { catalog, contents, files, initialInstalled, nextStats } from './mock'
 import { mockK8s, mockSystem } from './mockSystem'
 import type {
   AppStatus,
   CustomAppSpec,
   FileEntry,
+  BrowseList,
+  CookieSite,
+  DownloadItem,
+  DownloadMode,
+  Downloads,
+  MediaTools,
+  RecChannel,
+  Recorder,
+  Recording,
   BackupApp,
   BackupDestination,
   BackupFile,
@@ -140,6 +149,40 @@ function moveTree(from: string, to?: string) {
 }
 
 let mockLinks: ShareLink[] = []
+const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
+const mockMedia: { tools: boolean; galleryDev: boolean; items: DownloadItem[]; channels: RecChannel[]; recordings: Recording[] } = {
+  tools: false,
+  galleryDev: false,
+  items: [
+    { id: 'd1', url: 'https://www.youtube.com/watch?v=abc', mode: 'video', quality: '1080', playlist: false, folder: '/DATA/Downloads', status: 'done', title: 'Building a home server in 2026', site: 'Youtube', uploader: 'Tech Lab', percent: 100, size: '412.6MiB', files: ['/DATA/Downloads/Building a home server in 2026 [abc].mp4'], added: ago(3600e3), finished: ago(3500e3) },
+    { id: 'd2', url: 'https://www.instagram.com/p/xyz/', mode: 'video', quality: 'best', playlist: false, folder: '/DATA/Downloads', status: 'done', title: 'xyz_1.jpg', site: 'instagram.com', percent: 100, count: 4, files: ['/DATA/Downloads/xyz_1.jpg', '/DATA/Downloads/xyz_2.jpg', '/DATA/Downloads/xyz_3.jpg', '/DATA/Downloads/xyz_4.jpg'], added: ago(1800e3), finished: ago(1790e3) },
+    { id: 'd3', url: 'https://x.com/someone/status/1', mode: 'video', quality: 'best', playlist: false, folder: '/DATA/Downloads', status: 'failed', site: 'x.com', percent: 0, files: [], error: 'This post is from a suspended account', added: ago(600e3) },
+  ],
+  channels: [
+    { id: 'c1', url: 'https://www.twitch.tv/teman_live', name: 'teman_live', platform: 'twitch', quality: '1080', auto: true, keepDays: 30, added: ago(9 * 86400e3), live: true, title: 'Building the homelab rack, part 3', checked: ago(40e3), recording: 'r1' },
+    { id: 'c2', url: 'https://www.youtube.com/@LofiGirl/live', name: 'LofiGirl', platform: 'youtube', quality: '720', auto: false, keepDays: 0, added: ago(4 * 86400e3), live: true, title: 'lofi hip hop radio 📚 beats to relax/study to', checked: ago(70e3) },
+    { id: 'c3', url: 'https://kick.com/someone', name: 'someone', platform: 'kick', quality: 'best', auto: true, keepDays: 7, added: ago(2 * 86400e3), live: false, checked: ago(30e3) },
+    { id: 'c4', url: 'https://www.tiktok.com/@creator/live', name: 'creator', platform: 'tiktok', quality: 'best', auto: true, keepDays: 30, added: ago(86400e3), live: false, checked: ago(90e3) },
+  ],
+  recordings: [
+    { id: 'r0', channel: 'c3', title: 'Late night chat', file: '/DATA/Media/Recordings/someone/2026-10-24 22.10 Late night chat.mp4', status: 'done', started: ago(20 * 3600e3), ended: ago(17.5 * 3600e3), bytes: 3.9e9 },
+    { id: 'r1', channel: 'c1', title: 'Building the homelab rack, part 3', file: '/DATA/Media/Recordings/teman_live/2026-10-25 01.05 Building the homelab rack, part 3.ts', status: 'recording', started: ago(47 * 60e3), bytes: 1.31e9 },
+  ],
+}
+// Made-up pictures for the mock profile and channel lists.
+const mockThumb = (i: number, wide: boolean) => {
+  const [w, h] = wide ? [320, 180] : [300, 300]
+  const a = (i * 47) % 360
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${a},70%,68%)'/><stop offset='1' stop-color='hsl(${(a + 70) % 360},65%,38%)'/></linearGradient></defs><rect width='${w}' height='${h}' fill='url(#g)'/><circle cx='${60 + ((i * 37) % (w - 120))}' cy='${50 + ((i * 53) % (h - 100))}' r='${24 + ((i * 11) % 36)}' fill='rgba(255,255,255,.35)'/><path d='M0 ${h} L${w * 0.35} ${h * 0.55} L${w * 0.6} ${h * 0.8} L${w * 0.8} ${h * 0.6} L${w} ${h} Z' fill='rgba(0,0,0,.25)'/></svg>`,
+  )}`
+}
+const mockLists: Record<string, BrowseList> = {}
+let mockCookies: CookieSite[] = [
+  { site: 'instagram.com', count: 10, signedIn: true },
+  { site: 'pinterest.com', count: 4, signedIn: false },
+]
+
 const mockBackup: { installed: boolean; plans: BackupPlan[]; versions: BackupVersion[] } = {
   installed: false,
   plans: [],
@@ -671,6 +714,165 @@ export const mockApi: Api = {
   async restoreBackup(id: string) {
     return { job: `restore-${id}` }
   },
+  async mediaTools(): Promise<MediaTools> {
+    return { installed: mockMedia.tools, working: false, galleryDev: mockMedia.galleryDev, versions: mockMedia.tools ? { 'yt-dlp': '2026.10.21', 'gallery-dl': mockMedia.galleryDev ? '1.33.0-dev' : '1.32.17', streamlink: '8.6.2', deno: '2.9.8' } : {} }
+  },
+  async installMediaTools(opts?: { galleryDev?: boolean }) {
+    mockMedia.tools = true
+    if (opts?.galleryDev !== undefined) mockMedia.galleryDev = opts.galleryDev
+    return { job: 'media-tools' }
+  },
+  async downloads(): Promise<Downloads> {
+    return { folder: '/DATA/Downloads', cookies: mockCookies.length > 0, cookieSites: mockCookies, cookiesAt: mockCookies.length ? ago(3600e3) : undefined, items: [...mockMedia.items].reverse() }
+  },
+  async addDownloads(body: { urls: string[]; mode: DownloadMode; quality: string; playlist: boolean; folder: string }) {
+    const items: DownloadItem[] = body.urls.map(url => ({
+      id: Math.random().toString(16).slice(2, 14), url, mode: body.mode, quality: body.quality, playlist: body.playlist, folder: body.folder || '/DATA/Downloads',
+      status: 'running', percent: 0, files: [], added: new Date().toISOString(), site: new URL(url).hostname.replace('www.', ''), title: 'Fetching…',
+    }))
+    mockMedia.items.push(...items)
+    for (const it of items) {
+      const timer = setInterval(() => {
+        it.percent = Math.min(100, it.percent + 17)
+        it.title = 'A trip to the mountains'
+        it.size = '84.2MiB'
+        it.speed = '6.1MiB/s'
+        it.eta = '00:09'
+        if (it.percent >= 100) {
+          clearInterval(timer)
+          it.status = 'done'
+          it.files = [`${it.folder}/A trip to the mountains [x1].mp4`]
+          it.finished = new Date().toISOString()
+        }
+      }, 700)
+    }
+    return items
+  },
+  async downloadAction(id: string, action: 'cancel' | 'retry') {
+    const it = mockMedia.items.find(x => x.id === id)
+    if (it) it.status = action === 'cancel' ? 'canceled' : 'queued'
+  },
+  async removeDownload(id: string) {
+    mockMedia.items = mockMedia.items.filter(x => x.id !== id)
+  },
+  async clearDownloads() {
+    mockMedia.items = mockMedia.items.filter(x => x.status === 'queued' || x.status === 'running')
+  },
+  async browseDownloads(body: { url: string; tab?: string; list?: string }): Promise<BrowseList> {
+    await new Promise(r => setTimeout(r, 600))
+    const prev = body.list ? mockLists[body.list] : undefined
+    // A profile the release can't read: the fix is offered.
+    if (body.url.includes('raon_lee') && !mockMedia.galleryDev) throw new ApiError("Instagram changed how profiles load, and this version of gallery-dl hasn't caught up yet (Requested user could not be found). Its development version has the fix.", 502, 'galleryDev')
+    const yt = /youtube|youtu\.be/.test(body.url)
+    const tabs = yt ? ['videos', 'shorts', 'streams'] : ['posts', 'reels', 'stories', 'highlights', 'tagged']
+    const tab = prev?.tab ?? (body.tab && tabs.includes(body.tab) ? body.tab : tabs[0])
+    const shape: BrowseList['shape'] = ['reels', 'stories', 'shorts'].includes(tab) ? 'tall' : yt ? 'wide' : 'square'
+    const wide = shape === 'wide'
+    const l: BrowseList = prev ?? {
+      id: Math.random().toString(16).slice(2, 10),
+      url: body.url,
+      title: yt ? 'Tech Lab' : 'Teman Travels',
+      uploader: yt ? 'Tech Lab' : 'Teman Travels',
+      site: new URL(body.url).hostname.replace('www.', ''),
+      shape,
+      entries: [],
+      more: true,
+      handle: yt ? '@TechLab' : '@temantravels',
+      avatar: true,
+      followers: yt ? 128000 : 8420,
+      tabs,
+      tab,
+    }
+    const start = l.entries.length
+    for (let i = start; i < start + (tab === 'stories' ? 6 : 24); i++) {
+      const video = yt || shape === 'tall' || i % 5 === 2
+      l.entries.push({
+        index: i,
+        kind: video ? 'video' : 'image',
+        title: wide ? ['Building a home server in 2026', 'Ten tips for quieter fans', 'Racking it all up', 'What I run at home'][i % 4] + (i > 3 ? ` #${i}` : '') : 'Morning at the lake 🌄',
+        thumb: true,
+        duration: video ? 30 + ((i * 97) % 900) : undefined,
+        date: ago(i * 86400e3).slice(0, 10),
+        group: wide || shape === 'tall' ? undefined : `P${Math.floor(i / 2)}`,
+        page: yt,
+      })
+    }
+    l.more = tab !== 'stories' && l.entries.length < 72
+    mockLists[l.id] = l
+    return { ...l, entries: [...l.entries] }
+  },
+  browseThumbUrl: (list: string, index: number | 'avatar') => mockThumb(index === 'avatar' ? 7 : index, index !== 'avatar' && mockLists[list]?.shape === 'wide'),
+  async pickDownloads(list: string, body: { picks: number[]; mode: DownloadMode; quality: string; device: boolean }) {
+    const l = mockLists[list]
+    // -1: the profile picture.
+    const videos = body.picks.filter(i => i >= 0 && l.entries[i].page)
+    const files = body.picks.filter(i => i < 0 || !l.entries[i].page)
+    const items: DownloadItem[] = [
+      ...videos.map(i => ({ url: l.url, title: l.entries[i].title, mode: body.mode as DownloadItem['mode'] })),
+      ...(files.length ? [{ url: l.url, title: l.title, mode: 'files' as const, count: files.length }] : []),
+    ].map(x => ({ id: Math.random().toString(16).slice(2, 14), quality: body.quality, playlist: false, folder: '/DATA/Downloads', device: body.device, status: 'running', percent: 0, files: [], added: new Date().toISOString(), site: l.site, uploader: l.uploader, ...x }))
+    mockMedia.items.push(...items)
+    for (const it of items) {
+      const timer = setInterval(() => {
+        it.percent = Math.min(100, it.percent + 20)
+        if (it.percent >= 100) {
+          clearInterval(timer)
+          it.status = 'done'
+          it.files = it.mode === 'files' ? files.map(i => `${it.folder}/P${i}_1.jpg`) : [`${it.folder}/${it.title}.mp4`]
+          it.finished = new Date().toISOString()
+        }
+      }, 600)
+    }
+    return items
+  },
+  downloadFileUrl: () => 'data:text/plain,mock',
+  async setDownloadFolder() {},
+  async setDownloadCookies(_text: string, sites?: string[]) {
+    const add = sites ?? ['reddit.com']
+    mockCookies = [...mockCookies.filter(c => !add.includes(c.site)), ...add.map(site => ({ site, count: 9, signedIn: site !== 'facebook.com' }))].sort((a, b) => a.site.localeCompare(b.site))
+    return { sites: add }
+  },
+  async checkDownloadCookies() {
+    await new Promise(r => setTimeout(r, 700))
+    return { ok: true, user: 'temantravels' }
+  },
+  async removeDownloadCookies(sites?: string[]) {
+    mockCookies = sites ? mockCookies.filter(c => !sites.includes(c.site)) : []
+  },
+  async recorder(): Promise<Recorder> {
+    return { folder: '/DATA/Media/Recordings', channels: mockMedia.channels.map(c => ({ ...c })), recordings: [...mockMedia.recordings].reverse() }
+  },
+  async addChannel(body: { url: string; name: string; quality: string; auto: boolean; keepDays: number }) {
+    const c: RecChannel = { id: Math.random().toString(16).slice(2, 14), ...body, name: body.name || new URL(body.url).pathname.split('/').filter(Boolean)[0]?.replace('@', '') || 'channel', platform: new URL(body.url).hostname.replace('www.', '').split('.')[0], added: new Date().toISOString(), live: false, checked: new Date().toISOString() }
+    mockMedia.channels.push(c)
+    return c
+  },
+  async updateChannel(id: string, body: { url: string; name: string; quality: string; auto: boolean; keepDays: number }) {
+    const c = mockMedia.channels.find(x => x.id === id)
+    if (c) Object.assign(c, body)
+  },
+  async deleteChannel(id: string) {
+    mockMedia.channels = mockMedia.channels.filter(c => c.id !== id)
+  },
+  async channelAction(id: string, action: 'record' | 'stop' | 'check') {
+    const c = mockMedia.channels.find(x => x.id === id)
+    if (!c) return
+    if (action === 'record') {
+      if (!c.live) throw new Error(`${c.name} isn't live right now`)
+      const rec: Recording = { id: Math.random().toString(16).slice(2, 14), channel: c.id, title: c.title ?? '', file: `/DATA/Media/Recordings/${c.name}/now.ts`, status: 'recording', started: new Date().toISOString(), bytes: 0 }
+      mockMedia.recordings.push(rec)
+      c.recording = rec.id
+    }
+    if (action === 'stop' && c.recording) {
+      const rec = mockMedia.recordings.find(r => r.id === c.recording)
+      if (rec) Object.assign(rec, { status: 'done', ended: new Date().toISOString(), bytes: 412e6, file: rec.file.replace('.ts', '.mp4') })
+      c.recording = undefined
+    }
+  },
+  async deleteRecording(id: string) {
+    mockMedia.recordings = mockMedia.recordings.filter(r => r.id !== id)
+  },
+  async setRecorderFolder() {},
   async shareLinks() {
     return { baseUrl: mockLinkBase, links: [...mockLinks] }
   },

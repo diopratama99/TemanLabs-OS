@@ -22,6 +22,7 @@ import {
   Waypoints,
   Settings as SettingsIcon,
   DatabaseBackup,
+  Hand,
   LayoutGrid,
   Rocket,
   Share2,
@@ -41,6 +42,7 @@ import { BackupSection } from '../components/settings/BackupSection'
 import { AppsSection, type AppActions } from '../components/settings/AppsSection'
 import { DateTimeSection } from '../components/settings/DateTimeSection'
 import { UsersSection } from '../components/settings/UsersSection'
+import { PrivacyTermsSection } from '../components/settings/LegalSections'
 import {
   AccessibilitySection,
   AppearanceSection,
@@ -89,6 +91,7 @@ export type SettingsSection =
   | 'users'
   | 'account'
   | 'keyboard'
+  | 'privacy'
 type Section = SettingsSection
 
 interface SectionInfo {
@@ -119,6 +122,7 @@ const SECTIONS: SectionInfo[] = [
   { id: 'lockscreen', label: tr('Lock Screen'), icon: Lock, color: ['#3a3a40', '#121214'], keywords: 'lock idle inactive password away' },
   { id: 'users', label: tr('Users & Groups'), icon: Users, color: ['#4fa8ff', '#1a6dff'], keywords: 'linux account group sudo' },
   { id: 'account', label: tr('Login & Password'), icon: KeyRound, color: ['#a1a1a8', '#5d5d63'], keywords: 'password sign out session security' },
+  { id: 'privacy', label: tr('Privacy & Terms'), icon: Hand, color: ['#4fa8ff', '#1a6dff'], keywords: 'privacy data cookies tracking telemetry analytics connections internet terms eula license mit agreement legal copyright warranty' },
   { id: 'keyboard', label: tr('Keyboard'), icon: Keyboard, color: ['#a1a1a8', '#5d5d63'], keywords: 'shortcuts keys' },
   // Pages inside General.
   { id: 'about', label: tr('About'), icon: Info, color: ['#a1a1a8', '#5d5d63'], keywords: 'version hostname kernel processor memory', inGeneral: true },
@@ -131,7 +135,7 @@ const SECTIONS: SectionInfo[] = [
 ]
 const byId = Object.fromEntries(SECTIONS.map(s => [s.id, s])) as Record<Section, SectionInfo>
 // The sidebar in groups (separated by a gap), as on a desktop's own settings.
-const SIDEBAR: Section[][] = [['network', 'adblock', 'remote', 'backup', 'power', 'apps'], ['general', 'accessibility', 'appearance', 'dock', 'menubar', 'wallpaper'], ['lockscreen', 'users', 'account'], ['keyboard']]
+const SIDEBAR: Section[][] = [['network', 'adblock', 'remote', 'backup', 'power', 'apps'], ['general', 'accessibility', 'appearance', 'dock', 'menubar', 'wallpaper'], ['lockscreen', 'users', 'account', 'privacy'], ['keyboard']]
 const GENERAL_LIST: Section[][] = [['about', 'updates', 'storage'], ['datetime', 'language', 'startup', 'sharing']]
 
 function SectionIcon({ info, size = 20 }: { info: SectionInfo; size?: number }) {
@@ -455,6 +459,7 @@ export function Settings({ stats, section, onSectionChange, onOpenWindow, onPowe
           </>
         )}
         {section === 'keyboard' && <KeyboardSection />}
+        {section === 'privacy' && <PrivacyTermsSection />}
       </div>
     </div>
   )
