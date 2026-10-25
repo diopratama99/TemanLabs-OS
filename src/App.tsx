@@ -41,7 +41,7 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react'
-import { api, ApiError } from './api'
+import { api, ApiError, MOCK_MODE } from './api'
 import { usePlaces } from './hooks/usePlaces'
 import { DATA_ROOT, TRASH_PLACE } from './lib/places'
 import type { Device, InstalledApp } from './api/types'
@@ -314,6 +314,11 @@ export default function App() {
     setStoreCategory(category)
     openWindow('store')
   }
+  // With sample data only: the website's screenshot script (site/scripts/shots.mjs) opens apps
+  // and pages through these, whatever the interface's language.
+  useEffect(() => {
+    if (MOCK_MODE) Object.assign(window, { temanlabs: { openWindow, openSettings, openFilesAt, openStore, openMedia } })
+  })
   const focusWindow = (id: WindowId) => {
     if (windows.find(w => w.id === id)?.z === topZ.current) return
     const z = ++topZ.current

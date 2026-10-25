@@ -1,0 +1,33 @@
+---
+// The same desktop on three screens: a monitor at the back, a laptop in front of it, a phone.
+// Each plays a clip recorded from TemanLabsOS (public/demos). In the opening they come in from
+// the sides as it scrolls (--dev, from the story's styles).
+import type { Content } from '../i18n/types'
+import Handset from './Handset.astro'
+
+interface Props {
+  t: Content
+}
+const { t } = Astro.props
+const clip = (name: string) => ({ src: `/demos/${t.lang}/${name}.mp4`, poster: `/demos/${t.lang}/${name}.jpg` })
+const monitor = clip('desktop')
+const laptop = clip('store')
+---
+
+<div class="devices">
+  <figure class="monitor">
+    <div class="monitor-panel">
+      <video class="screen" src={monitor.src} poster={monitor.poster} autoplay muted loop playsinline preload="auto" aria-label={t.hero.alts.monitor}></video>
+    </div>
+    <div class="monitor-neck" aria-hidden="true"></div>
+    <div class="monitor-foot" aria-hidden="true"></div>
+  </figure>
+  <figure class="laptop">
+    <div class="laptop-lid">
+      <span class="laptop-cam" aria-hidden="true"></span>
+      <video class="screen" src={laptop.src} poster={laptop.poster} autoplay muted loop playsinline preload="metadata" aria-label={t.hero.alts.laptop}></video>
+    </div>
+    <div class="laptop-base" aria-hidden="true"><span></span></div>
+  </figure>
+  <Handset class="hero-phone" alt={t.hero.alts.phone} video={{ ...clip('phone'), autoplay: true }} />
+</div>

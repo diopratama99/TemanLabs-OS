@@ -1,0 +1,48 @@
+---
+// A phone with a screenshot or a clip on it. The app's picture sits between a status bar and the
+// gesture bar, as on a real phone, so the screen's round corners never cut into it.
+interface Props {
+  alt: string
+  /** A clip (public/demos) or a picture (public/shots). */
+  video?: { src: string; poster: string; autoplay?: boolean }
+  image?: { small: string; big: string }
+  class?: string
+}
+const { alt, video, image, class: extra = '' } = Astro.props
+---
+
+<figure class={`handset ${extra}`}>
+  <div class="handset-body">
+    <div class="handset-screen">
+      <div class="handset-status" aria-hidden="true">
+        <span>12:30</span>
+        <span class="handset-cam"></span>
+        <span class="handset-icons">
+          <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+          <svg viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor"></rect><rect x="2.5" y="2.5" width="15" height="7" rx="1.5"></rect><rect x="23.5" y="4" width="2" height="4" rx="1"></rect></svg>
+        </span>
+      </div>
+      {
+        video ? (
+          <video
+            class="screen"
+            src={video.autoplay ? video.src : undefined}
+            data-src={video.src}
+            poster={video.poster}
+            autoplay={video.autoplay}
+            muted
+            loop
+            playsinline
+            preload={video.autoplay ? 'metadata' : 'none'}
+            aria-label={alt}
+            width="390"
+            height="844"
+          />
+        ) : (
+          image && <img class="screen" src={image.small} srcset={`${image.small} 2x, ${image.big} 3x`} alt={alt} width="390" height="844" loading="lazy" decoding="async" />
+        )
+      }
+      <div class="handset-home" aria-hidden="true"><i></i></div>
+    </div>
+  </div>
+</figure>

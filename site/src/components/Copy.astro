@@ -1,0 +1,22 @@
+---
+import { icons } from '../lib/icons'
+
+// A command with a button that copies it.
+interface Props {
+  text: string
+  copy: string
+  copied: string
+  /** Inside the terminal: no box of its own. */
+  bare?: boolean
+}
+const { text, copy, copied, bare = false } = Astro.props
+---
+
+<div class={`command ${bare ? 'is-bare' : ''}`} data-copy={text}>
+  <code><span class="command-prompt" aria-hidden="true">$</span>{text}</code>
+  <button type="button" class="command-btn" data-label={copy} data-done={copied} aria-label={copy}>
+    <span class="command-icon" set:html={icons.copy} />
+    <span class="command-done" set:html={icons.check} />
+    <span class="command-text">{copy}</span>
+  </button>
+</div>

@@ -1,0 +1,54 @@
+---
+import '@fontsource-variable/inter'
+import '../styles/site.css'
+import type { Content } from '../i18n/types'
+
+interface Props {
+  t: Content
+}
+const { t } = Astro.props
+const base = Astro.site ? new URL(Astro.site) : null
+const abs = (path: string) => (base ? new URL(path, base).href : path)
+const paths = { en: '/', id: '/id/' }
+const og = abs(`/og-${t.lang}.png`)
+---
+
+<!doctype html>
+<html lang={t.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{t.meta.title}</title>
+    <meta name="description" content={t.meta.description} />
+    <meta name="theme-color" content="#04122b" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    {base && <link rel="canonical" href={abs(paths[t.lang])} />}
+    <link rel="alternate" hreflang="en" href={abs(paths.en)} />
+    <link rel="alternate" hreflang="id" href={abs(paths.id)} />
+    <link rel="alternate" hreflang="x-default" href={abs(paths.en)} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TemanLabsOS" />
+    <meta property="og:title" content={t.meta.title} />
+    <meta property="og:description" content={t.meta.description} />
+    <meta property="og:image" content={og} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content={t.locale} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={og} />
+    <link rel="preload" as="image" href={`/demos/${t.lang}/desktop.jpg`} fetchpriority="high" />
+    <script is:inline>
+      // Light, unless dark was chosen in the bar.
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('tl-theme') === 'dark' ? 'dark' : 'light'
+      } catch {
+        document.documentElement.dataset.theme = 'light'
+      }
+      document.documentElement.classList.add('js')
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ChevronRight, KeyRound, LoaderCircle, ShieldCheck, Trash2, Upload, X } from 'lucide-react'
+import { ChevronRight, KeyRound, LoaderCircle, ShieldCheck, Trash2, TriangleAlert, Upload, X } from 'lucide-react'
 import { api } from '../api'
 import type { CookieSite, Downloads } from '../api/types'
 import { BrandIcon, type Brand } from '../components/BrandIcon'
@@ -95,6 +95,14 @@ export function DownloaderSettings({ data, onClose, onChanged }: { data: Downloa
             <div className="dls-heading">
               <span>{tr('Signed-in sites')}</span>
               <small>{tr('For posts only an account can see. Each site’s cookies stay on the server.')}</small>
+            </div>
+            {/* Sites watch for accounts used by download tools; Instagram warns, limits or closes them. */}
+            <div className="dls-warning" role="note">
+              <TriangleAlert size={16} />
+              <span>
+                <strong>{tr('Never use your main account.')}</strong>{' '}
+                {tr('Sites like Instagram notice an account used from a server by download tools, and can warn, limit or close it. Make a second account just for downloading and export its cookies instead.')}
+              </span>
             </div>
             <div className="dls-list">
               {PLATFORMS.map(p => {
@@ -217,7 +225,7 @@ export function DownloaderSettings({ data, onClose, onChanged }: { data: Downloa
                 <ChevronRight size={14} /> {tr('How to get a cookies.txt')}
               </summary>
               <ol>
-                <li>{tr('On a computer, open the site in Chrome, Edge or Firefox and sign in as usual.')}</li>
+                <li>{tr('On a computer, open the site in Chrome, Edge or Firefox and sign in with the second account you made for downloading, not your own.')}</li>
                 <li>{tr('Add the “Get cookies.txt LOCALLY” extension from the browser’s extension store.')}</li>
                 <li>{tr('With the site open, click the extension’s icon, then Export. A cookies.txt file is saved.')}</li>
                 <li>{tr('Here, click Add… beside that site and choose the file.')}</li>

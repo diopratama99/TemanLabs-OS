@@ -1,0 +1,16 @@
+---
+// An app icon as the desktop draws one: a white glyph on the app's gradient.
+interface Props {
+  glyph: string
+  color: [string, string]
+  size?: number
+}
+const { glyph, color, size = 48 } = Astro.props
+---
+
+<span
+  class="app-icon"
+  style={`--size: ${size}px; background: linear-gradient(150deg, ${color[0]}, ${color[1]})`}
+  aria-hidden="true"
+  set:html={glyph}
+/>

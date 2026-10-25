@@ -6,3 +6,6 @@ server/web
 server/bin
 # Local overrides, e.g. TEMANLABS_SERVER for npm run dev
 *.local
+# The website's generated types (site/)
+site/.astro
+site/.demos

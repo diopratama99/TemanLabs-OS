@@ -1,0 +1,20 @@
+---
+// A TemanLabsOS window: glass, the three window buttons and a title.
+interface Props {
+  title: string
+  class?: string
+  id?: string
+}
+const { title, class: extra = '', id } = Astro.props
+---
+
+<section class={`win reveal ${extra}`} id={id} aria-label={title}>
+  <header class="win-bar">
+    <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+    <h3 class="win-title">{title}</h3>
+    <slot name="bar" />
+  </header>
+  <div class="win-body">
+    <slot />
+  </div>
+</section>

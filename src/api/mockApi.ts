@@ -177,6 +177,9 @@ const mockThumb = (i: number, wide: boolean) => {
     `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${a},70%,68%)'/><stop offset='1' stop-color='hsl(${(a + 70) % 360},65%,38%)'/></linearGradient></defs><rect width='${w}' height='${h}' fill='url(#g)'/><circle cx='${60 + ((i * 37) % (w - 120))}' cy='${50 + ((i * 53) % (h - 100))}' r='${24 + ((i * 11) % 36)}' fill='rgba(255,255,255,.35)'/><path d='M0 ${h} L${w * 0.35} ${h * 0.55} L${w * 0.6} ${h * 0.8} L${w * 0.8} ${h * 0.6} L${w} ${h} Z' fill='rgba(0,0,0,.25)'/></svg>`,
   )}`
 }
+const IMAGE_FILE = /\.(jpe?g|png|webp|gif|heic)$/i
+const VIDEO_FILE = /\.(mp4|mov|mkv|webm)$/i
+const pathSeed = (path: string) => [...path].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 0)
 const mockLists: Record<string, BrowseList> = {}
 let mockCookies: CookieSite[] = [
   { site: 'instagram.com', count: 10, signedIn: true },
@@ -962,10 +965,11 @@ export const mockApi: Api = {
     files[dir] = (files[dir] ?? []).map(e => (e.name === name ? { ...e, size: text.length, modified: today() } : e))
   },
 
-  // Mock mode has no file bytes; media viewers show their "can't load" state.
-  rawFileUrl: (path: string) => `about:blank#${encodeURIComponent(path)}`,
+  // Mock mode has no file bytes: photos are drawn (so Files and Preview have something to show),
+  // other media viewers show their "can't load" state.
+  rawFileUrl: (path: string) => (IMAGE_FILE.test(path) ? mockThumb(pathSeed(path), true) : `about:blank#${encodeURIComponent(path)}`),
 
-  thumbUrl: () => null,
+  thumbUrl: (path: string) => (IMAGE_FILE.test(path) || VIDEO_FILE.test(path) ? mockThumb(pathSeed(path), VIDEO_FILE.test(path)) : null),
 
   async listTree(path: string) {
     const found: string[] = []

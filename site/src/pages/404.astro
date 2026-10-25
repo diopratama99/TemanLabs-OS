@@ -1,0 +1,31 @@
+---
+import '@fontsource-variable/inter'
+import '../styles/site.css'
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Page not found · TemanLabsOS</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script is:inline>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('tl-theme') === 'dark' ? 'dark' : 'light'
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <main class="missing">
+      <img src="/logo.svg" alt="" width="88" height="88" />
+      <h1>This page isn’t here.</h1>
+      <p>Halaman ini tidak ada.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/">English</a>
+        <a class="btn btn-quiet" href="/id/">Bahasa Indonesia</a>
+      </div>
+    </main>
+  </body>
+</html>

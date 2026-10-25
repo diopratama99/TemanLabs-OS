@@ -1,0 +1,505 @@
+---
+// The page: clean bands, with TemanLabsOS's own pieces in them (its windows, app icons, Launcher
+// and Dock), and things that move as the page scrolls (lib/page.ts).
+import type { Content } from '../i18n/types'
+import { icons } from '../lib/icons'
+import { APPS, LAUNCHER } from '../data/apps'
+import { INSTALL, REPO } from '../data/site'
+import AppIcon from './AppIcon.astro'
+import Copy from './Copy.astro'
+import Devices from './Devices.astro'
+import Handset from './Handset.astro'
+import Window from './Window.astro'
+
+interface Props {
+  t: Content
+}
+const { t } = Astro.props
+const lang = t.lang
+const home = lang === 'id' ? '/id/' : '/'
+const other = lang === 'en' ? { href: '/id/', lang: 'id' } : { href: '/', lang: 'en' }
+const docs = (page: string) => `${REPO}/blob/master/docs/${page}${lang === 'id' ? '.id' : ''}.md`
+const app = (id: string) => (id === 'launcher' ? LAUNCHER : (APPS.find(a => a.id === id) ?? LAUNCHER))
+const shot = (name: string) => ({ small: `/shots/${lang}/${name}@1x.webp`, big: `/shots/${lang}/${name}.webp` })
+const clip = (name: string) => ({ src: `/demos/${lang}/${name}.mp4`, poster: `/demos/${lang}/${name}.jpg` })
+const groups = Object.entries(t.launcher.groups) as [keyof typeof t.launcher.groups, string][]
+// The logo's three pieces (public/favicon.svg), and where each starts before they make the T:
+// off toward the edges, turned and larger.
+const LOGO_PIECES = [
+  {
+    d: 'M350 224H586Q604 224 604 242V305C604 371 551 424 485 424H192Q174 424 177 406C195 300 265 224 350 224Z',
+    fill: '#0479ff',
+    from: '--dx: -31vw; --dy: -21vh; --r: -24deg; --k: 1.35',
+  },
+  {
+    d: 'M749 411H1061Q1079 411 1079 429V487C1079 553 1025 607 955 607H749Z',
+    fill: '#0479ff',
+    from: '--dx: 30vw; --dy: -10vh; --r: 18deg; --k: 1.45',
+  },
+  {
+    d: 'M633 411H750V1011Q750 1029 732 1029H620C556 1029 504 977 504 912V540C504 469 562 411 633 411Z',
+    fill: '#034bb8',
+    from: '--dx: 27vw; --dy: 25vh; --r: -12deg; --k: 1.25',
+  },
+]
+const SECURITY_TINT: Record<string, [string, string]> = {
+  key: ['#8e8e93', '#48484a'],
+  lock: ['#4a4a4f', '#1c1c1e'],
+  monitor: ['#64d2ff', '#0a6cff'],
+  eye: ['#b18cff', '#6a3fe0'],
+  hard: ['#7ad3a0', '#1f8f5a'],
+  shield: ['#5b9dff', '#2349c9'],
+}
+---
+
+<header class="nav" data-nav>
+  <div class="nav-in">
+    <a class="nav-brand" href={home} aria-label="TemanLabsOS">
+      <img src="/favicon.svg" alt="" width="30" height="30" />
+      <span>TemanLabsOS</span>
+    </a>
+    <nav class="nav-menu" aria-label="TemanLabsOS">
+      <a href="#tour">{t.menu.tour}</a>
+      <a href="#phone">{t.menu.phone}</a>
+      <a href="#apps">{t.menu.apps}</a>
+      <a href="#about">{t.menu.about}</a>
+      <a href="#install">{t.menu.install}</a>
+      <a href="#faq">{t.menu.faq}</a>
+    </nav>
+    <div class="nav-end">
+      <button class="nav-icon" type="button" data-theme-toggle aria-label={`${t.menu.light} / ${t.menu.dark}`} title={`${t.menu.light} / ${t.menu.dark}`}>
+        <span class="nav-sun" set:html={icons.sun} />
+        <span class="nav-moon" set:html={icons.moon} />
+      </button>
+      <a class="nav-icon nav-lang" href={other.href} hreflang={other.lang} lang={other.lang} title={t.menu.language}>{t.menu.languageShort}</a>
+      <a class="btn btn-dark btn-sm nav-gh" href={REPO} rel="noopener">
+        <Fragment set:html={icons.github} />
+        <span>{t.menu.github}</span>
+      </a>
+      <button class="nav-icon nav-toggle" type="button" data-menu-toggle aria-label="Menu" aria-expanded="false">
+        <span class="nav-open" set:html={icons.menu} />
+        <span class="nav-close" set:html={icons.close} />
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <!-- The opening, held on screen while the page scrolls through it (--p from page.ts): the
+       three pieces of the logo fly in and make the T, a line splits apart, and the same desktop
+       comes forward on three screens. -->
+  <section class="story" data-progress="story">
+    <div class="story-stage">
+      <div class="mark" aria-hidden="true">
+        {
+          LOGO_PIECES.map(piece => (
+            <svg class="mark-piece" viewBox="0 0 1254 1254" style={piece.from}>
+              <path d={piece.d} fill={piece.fill} />
+            </svg>
+          ))
+        }
+      </div>
+      <div class="wrap story-intro">
+        <h1>{t.hero.title}</h1>
+        <p class="hero-lead">{t.hero.lead}</p>
+        <div class="actions">
+          <a class="btn btn-white btn-lg" href="#install">{t.hero.primary}</a>
+          <a class="btn btn-line btn-lg" href={REPO} rel="noopener">
+            <Fragment set:html={icons.github} />
+            {t.hero.secondary}
+          </a>
+        </div>
+        <div class="hero-command">
+          <Copy text={INSTALL} copy={t.hero.copy} copied={t.hero.copied} />
+        </div>
+        <p class="hero-note">{t.hero.note}</p>
+        <span class="story-hint" aria-hidden="true"><i></i></span>
+      </div>
+      <p class="story-line" aria-hidden="true">
+        <span class="story-w1">{t.story[0]}</span>
+        <span class="story-w2">{t.story[1]}</span>
+      </p>
+      <div class="wrap-wide story-devices">
+        <Devices t={t} />
+      </div>
+    </div>
+  </section>
+
+  <!-- Where it sits: the server's apps, TemanLabsOS, and every screen that opens it. -->
+  <section class="band" id="connect">
+    <div class="wrap connect">
+      <div class="connect-copy">
+        <div class="band-head band-head-left reveal">
+          <h2>{t.connect.title}</h2>
+          <p>{t.connect.lead}</p>
+        </div>
+        <div class="facts reveal">
+          {
+            t.connect.facts.map(f => (
+              <div>
+                <strong>{f.value}</strong>
+                <span>{f.label}</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <div class="map reveal" aria-hidden="true">
+        <div class="map-card">
+          <span class="map-title">{t.connect.server}</span>
+          <div class="map-icons">
+            {
+              ['files', 'store', 'activity', 'downloader', 'backup', 'adblock', 'devices', 'terminal'].map(id => (
+                <span class="map-app">
+                  <AppIcon {...app(id)} size={40} />
+                  <small>{APPS.find(a => a.id === id)!.name[lang]}</small>
+                </span>
+              ))
+            }
+          </div>
+        </div>
+        <div class="map-wire"><i></i></div>
+        <div class="map-core">
+          <img src="/logo.svg" alt="" width="64" height="64" loading="lazy" />
+          <b>TemanLabsOS</b>
+        </div>
+        <div class="map-wire"><i></i></div>
+        <div class="map-card">
+          <span class="map-title">{t.connect.devices}</span>
+          <div class="map-icons map-screens">
+            {
+              (['laptop', 'monitor', 'phone', 'tablet'] as const).map((k, i) => (
+                <span class="map-app">
+                  <span class="map-screen" set:html={icons[k]} />
+                  <small>{t.connect.screens[i]}</small>
+                </span>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Where it installs: from a rented VPS to a TV box. -->
+  <section class="band band-alt" id="hosts">
+    <div class="wrap">
+      <div class="band-head reveal">
+        <h2>{t.hosts.title}</h2>
+        <p>{t.hosts.lead}</p>
+      </div>
+      <div class="hosts">
+        {
+          t.hosts.items.map(h => (
+            <article class="card host reveal">
+              <span class="host-icon" set:html={icons[h.icon]} />
+              <h3>{h.title}</h3>
+              <p>{h.text}</p>
+              <span class="host-arch">{h.arch}</span>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="features">
+    <div class="wrap">
+      <div class="band-head reveal">
+        <h2>{t.widgets.title}</h2>
+        <p>{t.widgets.lead}</p>
+      </div>
+      <div class="widgets">
+        {
+          t.widgets.items.map(w => (
+            <article class="card widget reveal">
+              <img src={`/icons/${w.icon}.svg`} alt="" width="44" height="44" loading="lazy" />
+              <h3>{w.title}</h3>
+              <p>{w.text}</p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- The tour: the window stays on screen while the page scrolls through its apps. -->
+  <section class="band band-alt" id="tour">
+    <div class="wrap">
+      <div class="band-head reveal">
+        <h2>{t.tour.title}</h2>
+        <p>{t.tour.lead}</p>
+      </div>
+    </div>
+    <div class="tour-scroll" data-tour-scroll style={`--steps: ${t.tour.items.length}`}>
+      <div class="tour-sticky">
+        <div class="wrap-tour">
+          <Window title={t.tour.window} class="tour-win">
+            <span class="tour-progress" slot="bar" aria-hidden="true"><i></i></span>
+            <div class="tour" data-tour>
+              <nav class="sidebar" aria-label={t.tour.window}>
+                {
+                  t.tour.items.map((it, i) => (
+                    <button type="button" class={`side-item ${i === 0 ? 'is-active' : ''}`} data-index={i} aria-pressed={i === 0 ? 'true' : 'false'}>
+                      <AppIcon {...app(it.app)} size={22} />
+                      <span>{it.label}</span>
+                    </button>
+                  ))
+                }
+              </nav>
+              <div class="tour-main">
+                <div class="tour-media">
+                  {
+                    t.tour.items.map((it, i) =>
+                      it.media.kind === 'video' ? (
+                        <video class={i === 0 ? 'is-active' : ''} data-src={clip(it.media.name).src} poster={clip(it.media.name).poster} muted loop playsinline preload="none" aria-label={it.title} width="1440" height="900" />
+                      ) : (
+                        <img class={i === 0 ? 'is-active' : ''} src={shot(it.media.name).small} srcset={`${shot(it.media.name).small} 1440w, ${shot(it.media.name).big} 2880w`} sizes="(max-width: 1100px) 100vw, 860px" alt={it.title} width="1440" height="900" loading="lazy" decoding="async" />
+                      ),
+                    )
+                  }
+                </div>
+                <div class="tour-texts">
+                  {
+                    t.tour.items.map((it, i) => (
+                      <div class={`tour-text ${i === 0 ? 'is-active' : ''}`} aria-hidden={i === 0 ? 'false' : 'true'}>
+                        <h3>{it.title}</h3>
+                        <p>{it.text}</p>
+                        <ul class="checks">
+                          {it.points.map(p => (
+                            <li>
+                              <Fragment set:html={icons.check} />
+                              {p}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            </div>
+          </Window>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="phone">
+    <div class="wrap phone-row">
+      <div class="phone-copy">
+        <div class="band-head band-head-left reveal">
+          <h2>{t.phone.title}</h2>
+          <p>{t.phone.lead}</p>
+        </div>
+        <ul class="phone-points">
+          {
+            t.phone.points.map(p => (
+              <li class="reveal">
+                <span set:html={icons.check} />
+                <div>
+                  <h3>{p.title}</h3>
+                  <p>{p.text}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="phones" data-progress="phones">
+        <Handset class="phone-side phone-a" alt={t.phone.alts[0]} image={shot('phone-home')} />
+        <Handset class="phone-mid" alt={t.phone.alts[1]} video={clip('phone')} />
+        <Handset class="phone-side phone-b" alt={t.phone.alts[2]} image={shot('phone-downloader')} />
+      </div>
+    </div>
+  </section>
+
+  <section class="band band-alt" id="apps">
+    <div class="wrap">
+      <div class="band-head reveal">
+        <h2>{t.launcher.title}</h2>
+        <p>{t.launcher.lead}</p>
+      </div>
+      <div class="card launcher reveal" data-launcher>
+        <div class="launcher-top">
+          <label class="launcher-search">
+            <Fragment set:html={icons.search} />
+            <input type="search" placeholder={t.launcher.search} aria-label={t.launcher.search} data-launcher-search />
+          </label>
+          <div class="segmented" role="radiogroup" aria-label={t.launcher.title}>
+            <button type="button" role="radio" aria-checked="true" class="is-active" data-group="all">{t.launcher.all}</button>
+            {
+              groups.map(([id, label]) => (
+                <button type="button" role="radio" aria-checked="false" data-group={id}>
+                  {label}
+                </button>
+              ))
+            }
+          </div>
+        </div>
+        <ul class="launcher-grid">
+          {
+            APPS.map((a, i) => (
+              <li class="pop" style={`--i: ${i}`} data-group={a.group} data-name={`${a.name.en} ${a.name.id} ${a.text[lang]}`.toLowerCase()}>
+                <AppIcon glyph={a.glyph} color={a.color} size={58} />
+                <strong>{a.name[lang]}</strong>
+                <span>{a.text[lang]}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="launcher-none" hidden data-launcher-none>{t.launcher.none}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="about">
+    <div class="wrap about-row">
+      <Window title={t.about.window} class="about-win">
+        <div class="about">
+          <img src="/logo.svg" alt="" width="104" height="104" loading="lazy" />
+          <h3>TemanLabsOS</h3>
+          <p class="about-tag">{t.about.tagline}</p>
+          <p class="about-version">{t.about.version}</p>
+          <dl class="group">
+            {
+              t.about.rows.map(([k, v]) => (
+                <div class="group-row">
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))
+            }
+          </dl>
+          <a class="btn btn-soft" href={REPO} rel="noopener">
+            <Fragment set:html={icons.github} />
+            {t.about.button}
+          </a>
+        </div>
+      </Window>
+      <Window title={t.security.window} class="security-win">
+        <h4 class="pane-title">{t.security.title}</h4>
+        <ul class="group">
+          {
+            t.security.items.map(s => (
+              <li class="group-row setting">
+                <span class="tile" style={`background: linear-gradient(150deg, ${SECURITY_TINT[s.icon][0]}, ${SECURITY_TINT[s.icon][1]})`} set:html={icons[s.icon]} />
+                <div>
+                  <strong>{s.title}</strong>
+                  <p>{s.text}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+        <div class="group warn">
+          <div class="group-row setting">
+            <span class="tile" style="background: linear-gradient(150deg, #ffc25c, #ff8a00)" set:html={icons.warning} />
+            <div>
+              <strong>{t.security.warning.title}</strong>
+              <p>{t.security.warning.text}</p>
+            </div>
+          </div>
+        </div>
+      </Window>
+    </div>
+  </section>
+
+  <section class="band band-alt" id="install">
+    <div class="wrap">
+      <div class="band-head reveal">
+        <h2>{t.install.title}</h2>
+        <p>{t.install.lead}</p>
+      </div>
+      <div class="install-row">
+        <Window title={t.install.window} class="steps-win">
+          <ol class="steps">
+            {
+              t.install.steps.map((s, i) => (
+                <li>
+                  <span class="step-num">{i + 1}</span>
+                  <div>
+                    <strong>{s.title}</strong>
+                    <p>{s.text}</p>
+                  </div>
+                </li>
+              ))
+            }
+          </ol>
+          <p class="steps-req">{t.install.requirements}</p>
+          <a class="btn btn-soft" href={docs('installation')} rel="noopener">
+            {t.install.guide}
+            <Fragment set:html={icons.arrow} />
+          </a>
+        </Window>
+        <Window title="admin@home-server: ~" class="term-win">
+          <div class="term">
+            <Copy text={INSTALL} copy={t.hero.copy} copied={t.hero.copied} bare />
+            <pre>{t.install.terminal.map(line => <span class={line.startsWith('==>') ? 'term-say' : 'term-out'}>{line.startsWith('==>') ? <><b>==&gt;</b>{line.slice(3)}</> : line}</span>)}</pre>
+          </div>
+        </Window>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="faq">
+    <div class="wrap faq-wrap">
+      <div class="band-head reveal">
+        <h2>{t.faq.title}</h2>
+      </div>
+      <div class="card faq reveal">
+        {
+          t.faq.items.map(f => (
+            <details class="faq-item">
+              <summary>
+                {f.q}
+                <span set:html={icons.chevron} />
+              </summary>
+              <p>{f.a}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band end">
+    <div class="wrap end-text reveal">
+      <img src="/logo.svg" alt="" width="84" height="84" loading="lazy" />
+      <h2>{t.end.title}</h2>
+      <p>{t.end.lead}</p>
+      <div class="actions">
+        <a class="btn btn-white btn-lg" href="#install">{t.end.primary}</a>
+        <a class="btn btn-line btn-lg" href={REPO} rel="noopener">
+          <Fragment set:html={icons.github} />
+          {t.end.secondary}
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-in">
+    <div class="footer-brand">
+      <img src="/favicon.svg" alt="" width="22" height="22" loading="lazy" />
+      <span><b>TemanLabsOS</b> · {t.footer.tagline}</span>
+    </div>
+    <nav class="footer-links">
+      <a href={docs('installation')} rel="noopener">{t.footer.links.install}</a>
+      <a href={docs('architecture')} rel="noopener">{t.footer.links.architecture}</a>
+      <a href={`${REPO}/releases`} rel="noopener">{t.footer.links.releases}</a>
+      <a href={`${REPO}/issues`} rel="noopener">{t.footer.links.issues}</a>
+      <a href={`${REPO}/blob/master/LICENSE`} rel="noopener">{t.footer.links.license}</a>
+      <a href={other.href} hreflang={other.lang} lang={other.lang}>{t.menu.language}</a>
+    </nav>
+    <p class="footer-fine">
+      © {new Date().getFullYear()} · {t.footer.made} <a href="https://github.com/diopratama99" rel="noopener">Dio Pratama</a> · {t.footer.notice}
+    </p>
+  </div>
+</footer>
+
+<script>
+  import { start } from '../lib/page'
+  start()
+</script>
