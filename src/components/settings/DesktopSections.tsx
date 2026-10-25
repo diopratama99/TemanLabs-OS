@@ -3,6 +3,7 @@ import { Check } from 'lucide-react'
 import { ALT, MOD, SHIFT } from '../../lib/platform'
 import { ACCENT_COLORS, DEFAULT_MENU_BAR, supportsRefraction, useSettings, type DockMagnification, type MenuBarPrefs, type Theme } from '../../lib/settings'
 import { language, LANGUAGES, tr } from '../../lib/i18n'
+import { SHELL, switchShell } from '../../lib/shell'
 import { QUICK_SEARCH_SHORTCUT } from '../MenuBar'
 import { PopUpButton } from '../PopUpButton'
 import { Switch } from '../Switch'
@@ -82,6 +83,16 @@ export function AppearanceSection() {
           disabled={!supportsRefraction}
           onChange={v => update({ refraction: v })}
         />
+      </div>
+      <div className="group">
+        <SettingRow
+          label={tr('Layout')}
+          note={SHELL === 'mobile' ? tr('This browser has the phone layout: screens and tabs.') : tr('A phone gets its own layout, with screens and tabs; this switches it on for this browser too.')}
+        >
+          <button className="btn" onClick={() => switchShell(SHELL === 'mobile' ? 'desktop' : 'mobile')}>
+            {SHELL === 'mobile' ? tr('Use the Desktop') : tr('Use the Phone Layout')}
+          </button>
+        </SettingRow>
       </div>
     </>
   )

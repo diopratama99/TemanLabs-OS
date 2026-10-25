@@ -21,6 +21,12 @@ import { tr } from '../lib/i18n'
 
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8]
 const SLIDESHOW_MS = 4000
+// Touch: a swipe this far (or this fast, in px per ms) goes to the next photo; a double tap
+// zooms to this many times the fitted size.
+const SWIPE_PX = 60
+const SWIPE_FLICK = 0.45
+const TAP_ZOOM = 2.5
+const DOUBLE_TAP_MS = 300
 
 interface Props {
   request: MediaRequest | null
@@ -73,7 +79,13 @@ export function PhotoViewer({ request, onTitle }: Props) {
     strip.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
   }, [current])
 
-  const go = (step: number) => list.length > 1 && setIndex(i => (i + step + list.length) % list.length)
+  // Which way the new photo slides in.
+  const [enter, setEnter] = useState<'next' | 'prev' | null>(null)
+  const go = (step: number) => {
+    if (list.length < 2) return
+    setEnter(step > 0 ? 'next' : 'prev')
+    setIndex(i => (i + step + list.length) % list.length)
+  }
 
   const count = list.length
   useEffect(() => {
@@ -140,17 +152,102 @@ export function PhotoViewer({ request, onTitle }: Props) {
     e.preventDefault()
     step(e.deltaY < 0 ? 1 : -1)
   }
+  // ----- Touch, like a phone's gallery: swipe to the next photo, pinch or double tap to zoom -----
+  const fingers = useRef(new Map<number, { x: number; y: number }>())
+  const swipe = useRef<{ x: number; y: number; at: number; axis: 'x' | 'y' | null } | null>(null)
+  const pinch = useRef<{ dist: number; zoom: number; fit: number } | null>(null)
+  // Where this touch began, and whether a second finger joined it (then it's no tap or swipe).
+  const gesture = useRef<{ x: number; y: number; multi: boolean } | null>(null)
+  const lastTap = useRef(0)
+  const touchedAt = useRef(0)
+  const [dragX, setDragX] = useState(0)
+  // The scale the photo is drawn at when it fits the stage.
+  const fitScale = () => {
+    const img = stage.current?.querySelector<HTMLImageElement>('.pv-image')
+    const el = stage.current
+    if (!img?.naturalWidth || !el) return 1
+    return Math.min(1, el.clientWidth / img.naturalWidth, el.clientHeight / img.naturalHeight)
+  }
+  const spread = () => {
+    const [a, b] = [...fingers.current.values()]
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
+  }
+
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     const el = stage.current
-    if (!el || zoom === null) return
+    if (!el) return
+    if (e.pointerType === 'touch') {
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      e.currentTarget.setPointerCapture(e.pointerId)
+      if (fingers.current.size === 1) gesture.current = { x: e.clientX, y: e.clientY, multi: false }
+      else if (gesture.current) gesture.current.multi = true
+      if (fingers.current.size === 2) {
+        const fit = fitScale()
+        swipe.current = null
+        pan.current = null
+        setDragX(0)
+        pinch.current = { dist: spread() || 1, zoom: zoom ?? fit, fit }
+        return
+      }
+      if (zoom === null) {
+        swipe.current = { x: e.clientX, y: e.clientY, at: performance.now(), axis: null }
+        return
+      }
+    }
+    if (zoom === null) return
     pan.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const el = stage.current
-    if (!el || !pan.current) return
+    if (!el) return
+    if (e.pointerType === 'touch' && fingers.current.has(e.pointerId)) {
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const p = pinch.current
+      if (p && fingers.current.size >= 2) {
+        const z = (p.zoom * spread()) / p.dist
+        setZoom(z <= p.fit * 1.02 ? null : Math.min(ZOOM_STEPS.at(-1)!, z))
+        return
+      }
+      const s = swipe.current
+      if (s) {
+        const dx = e.clientX - s.x
+        const dy = e.clientY - s.y
+        if (!s.axis && Math.hypot(dx, dy) > 10) s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+        if (s.axis === 'x' && list.length > 1) setDragX(dx)
+        return
+      }
+    }
+    if (!pan.current) return
     el.scrollLeft = pan.current.left - (e.clientX - pan.current.x)
     el.scrollTop = pan.current.top - (e.clientY - pan.current.y)
+  }
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>, cancelled = false) => {
+    pan.current = null
+    if (e.pointerType !== 'touch') return
+    // The browser's own double click after a double tap is left to the tap code above.
+    touchedAt.current = performance.now()
+    fingers.current.delete(e.pointerId)
+    if (fingers.current.size < 2) pinch.current = null
+    const g = gesture.current
+    if (fingers.current.size === 0) gesture.current = null
+    const s = swipe.current
+    swipe.current = null
+    setDragX(0)
+    if (cancelled || !g || g.multi) return
+    if (s?.axis === 'x') {
+      const dx = e.clientX - s.x
+      const speed = Math.abs(dx) / Math.max(1, performance.now() - s.at)
+      if (Math.abs(dx) > SWIPE_PX || speed > SWIPE_FLICK) go(dx < 0 ? 1 : -1)
+      return
+    }
+    if (s?.axis === 'y' || Math.hypot(e.clientX - g.x, e.clientY - g.y) > 10) return
+    // A double tap zooms in on the photo, or back out to fit.
+    const now = performance.now()
+    if (now - lastTap.current < DOUBLE_TAP_MS) {
+      lastTap.current = 0
+      setZoom(z => (z === null ? Math.min(ZOOM_STEPS.at(-1)!, fitScale() * TAP_ZOOM) : null))
+    } else lastTap.current = now
   }
 
   if (!current) {
@@ -176,13 +273,14 @@ export function PhotoViewer({ request, onTitle }: Props) {
         <ToolbarTitle title={nameOf(current)} subtitle={list.length > 1 ? tr('{0} of {1}', index + 1, list.length) : undefined} />
         <span className="tb-spacer" />
         <div className="tb-group">
-        <button className="tb-btn" onClick={() => step(-1)} aria-label={tr('Zoom out')}>
+        {/* Zoom and wallpaper are the desktop's; a phone pinches, and has no wallpaper here. */}
+        <button className="tb-btn pv-desk" onClick={() => step(-1)} aria-label={tr('Zoom out')}>
           <ZoomOut size={15} />
         </button>
-        <button className="tb-btn tb-text" onClick={() => setZoom(z => (z === null ? 1 : null))} title={tr('Toggle actual size / fit')}>
+        <button className="tb-btn tb-text pv-desk" onClick={() => setZoom(z => (z === null ? 1 : null))} title={tr('Toggle actual size / fit')}>
           {zoom === null ? tr('Fit') : `${Math.round(zoom * 100)}%`}
         </button>
-        <button className="tb-btn" onClick={() => step(1)} aria-label={tr('Zoom in')}>
+        <button className="tb-btn pv-desk" onClick={() => step(1)} aria-label={tr('Zoom in')}>
           <ZoomIn size={15} />
         </button>
         <button className="tb-btn" onClick={() => setRotation(r => r + 90)} aria-label={tr('Rotate')}>
@@ -191,7 +289,7 @@ export function PhotoViewer({ request, onTitle }: Props) {
         <button className={`icon-btn ${playing ? 'is-on' : ''}`} onClick={() => setPlaying(p => !p)} aria-label={tr('Slideshow')} title={tr('Slideshow')}>
           {playing ? <Pause size={15} /> : <Play size={15} />}
         </button>
-        <button className="tb-btn" onClick={() => void setAsWallpaper()} aria-label={tr('Set as wallpaper')} title={tr('Set as Wallpaper')}>
+        <button className="tb-btn pv-desk" onClick={() => void setAsWallpaper()} aria-label={tr('Set as wallpaper')} title={tr('Set as Wallpaper')}>
           <ImageIcon size={15} />
         </button>
         <button className="tb-btn" onClick={download} aria-label={tr('Download')} title={tr('Download')}>
@@ -207,8 +305,9 @@ export function PhotoViewer({ request, onTitle }: Props) {
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={() => (pan.current = null)}
-        onDoubleClick={() => setZoom(z => (z === null ? 1 : null))}
+        onPointerUp={e => onPointerUp(e)}
+        onPointerCancel={e => onPointerUp(e, true)}
+        onDoubleClick={() => performance.now() - touchedAt.current > 800 && setZoom(z => (z === null ? 1 : null))}
       >
         {broken ? (
           <div className="media-empty">
@@ -221,13 +320,13 @@ export function PhotoViewer({ request, onTitle }: Props) {
         ) : (
           <img
             key={current}
-            className="pv-image"
+            className={`pv-image ${dragX ? 'is-dragging' : ''} ${enter ? `is-enter-${enter}` : ''}`}
             src={api.rawFileUrl(current)}
             alt={nameOf(current)}
             draggable={false}
             onError={() => setBroken(true)}
             style={{
-              transform: rotation ? `rotate(${rotation}deg)` : undefined,
+              transform: [dragX ? `translateX(${dragX}px)` : '', rotation ? `rotate(${rotation}deg)` : ''].join(' ').trim() || undefined,
               ...(zoom === null ? null : { maxWidth: 'none', maxHeight: 'none', zoom }),
             }}
           />

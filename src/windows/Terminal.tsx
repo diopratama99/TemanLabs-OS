@@ -10,6 +10,7 @@ import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { useSettings } from '../lib/settings'
 import { tr } from '../lib/i18n'
+import { SHELL } from '../lib/shell'
 
 const THEMES: Record<'light' | 'dark', ITheme> = {
   dark: {
@@ -64,6 +65,28 @@ interface Props {
 const PROMPT_QUIET_MS = 250
 const PROMPT_FALLBACK_MS = 2500
 
+// A phone's keyboard has none of these; a row of them sits under the terminal there.
+const PHONE_KEYS: { label: string; send: string; title?: string }[] = [
+  { label: 'Esc', send: '\x1b' },
+  { label: 'Tab', send: '\t' },
+  { label: '^C', send: '\x03', title: 'Ctrl+C' },
+  { label: '←', send: '\x1b[D' },
+  { label: '↑', send: '\x1b[A' },
+  { label: '↓', send: '\x1b[B' },
+  { label: '→', send: '\x1b[C' },
+  { label: '|', send: '|' },
+  { label: '/', send: '/' },
+  { label: '-', send: '-' },
+  { label: '~', send: '~' },
+]
+
+/** What Ctrl and a key make: Ctrl+C is 0x03, Ctrl+D 0x04… (letters and a few signs only). */
+const withCtrl = (data: string) => {
+  if (data.length !== 1) return data
+  const code = data.toUpperCase().charCodeAt(0)
+  return code >= 64 && code <= 95 ? String.fromCharCode(code - 64) : data
+}
+
 /** A real shell on the server: xterm.js bridged to a PTY over the /ws/terminal WebSocket. */
 export function Terminal({ menus = true, onTitle, connect, input, onFindCommand }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -80,6 +103,10 @@ export function Terminal({ menus = true, onTitle, connect, input, onFindCommand 
   connectRef.current = connect
   // A command that arrived before the shell was ready.
   const pending = useRef<string | null>(null)
+  // On a phone: Ctrl held for the next key typed.
+  const [ctrl, setCtrl] = useState(false)
+  const ctrlRef = useRef(false)
+  ctrlRef.current = ctrl
 
   useEffect(() => {
     const host = hostRef.current
@@ -146,7 +173,13 @@ export function Terminal({ menus = true, onTitle, connect, input, onFindCommand 
     const showTitle = () => titleRef.current?.(`${shellTitle} — ${term.cols}×${term.rows}`)
     showTitle()
     const subscriptions = [
-      term.onData(data => send(encoder.encode(data))),
+      term.onData(data => {
+        if (ctrlRef.current) {
+          data = withCtrl(data)
+          setCtrl(false)
+        }
+        send(encoder.encode(data))
+      }),
       term.onBinary(data => send(Uint8Array.from(data, ch => ch.charCodeAt(0)))),
       term.onResize(() => {
         sendResize()
@@ -225,10 +258,31 @@ export function Terminal({ menus = true, onTitle, connect, input, onFindCommand 
     menus,
   )
 
+  const key = (data: string) => {
+    termRef.current?.input(data)
+    termRef.current?.focus()
+  }
+
   return (
     <div className={`terminal terminal-${status}`} onContextMenu={openMenu}>
       <div className="terminal-host" ref={hostRef} />
       {status === 'connecting' && <div className="terminal-status">{tr('Connecting…')}</div>}
+      {SHELL === 'mobile' && (
+        // Pressing these keeps the keyboard up: they don't take the focus from the terminal.
+        <div className="terminal-keys" onPointerDown={e => e.preventDefault()}>
+          <button className={ctrl ? 'is-on' : ''} onClick={() => setCtrl(c => !c)} aria-pressed={ctrl}>
+            Ctrl
+          </button>
+          {PHONE_KEYS.map(k => (
+            <button key={k.label} onClick={() => key(k.send)} title={k.title}>
+              {k.label}
+            </button>
+          ))}
+          <button onClick={e => openMenu(e)} aria-label={tr('More')}>
+            ⋯
+          </button>
+        </div>
+      )}
     </div>
   )
 }

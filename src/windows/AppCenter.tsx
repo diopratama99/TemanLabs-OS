@@ -40,6 +40,7 @@ import { useAppMenus } from '../lib/appMenus'
 import { useContextMenu } from '../lib/contextMenu'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
+import { useMobileBack } from '../lib/mobileBack'
 
 /** 'All', 'Installed', 'Updates', or a store category ("Media", "Home"…). */
 export type StoreCategory = string
@@ -219,6 +220,12 @@ export function AppCenter({
     requestAnimationFrame(() => pane.current?.scrollTo({ top: listScroll.current }))
   }, [])
   useEffect(() => setPage(null), [category, query])
+  // On a phone, back from an app's page returns to the list.
+  useMobileBack(() => {
+    if (!page) return false
+    closePage()
+    return true
+  })
   // Built-in picks install in one click; store apps ask for their settings first.
   const startGet = (entry: StoreEntry, details: StoreAppDetails | null = null) => {
     if (entry.source === 'TemanLabsOS') {

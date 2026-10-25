@@ -4,6 +4,8 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Download,
   Film,
   Maximize,
@@ -43,6 +45,15 @@ const HIDE_MS = 2500
 // The backdrop is a tiny copy of the frame, blurred by CSS; a few updates a second are plenty.
 const BACKDROP_W = 48
 const BACKDROP_MS = 120
+// Touch, like a phone's video player: a tap shows or hides the controls, a double tap on the
+// left or right skips 5 seconds, and each quick tap after it 5 more; a sideways drag scrubs.
+const TAP_MS = 260
+const STREAK_MS = 700
+const DRAG_PX = 14
+// Dragging across the whole width moves this many seconds (or the whole video, if shorter).
+const SCRUB_WIDTH_SECONDS = 120
+
+type Side = 'back' | 'middle' | 'ahead'
 
 interface Props {
   request: MediaRequest | null
@@ -356,12 +367,107 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     setSeeking(false)
   }
 
-  // A tap on a touch screen first brings the controls back; a click plays or pauses.
-  const onVideoClick = (e: ReactMouseEvent) => {
-    if ((e.nativeEvent as PointerEvent).pointerType === 'touch' && !shown) {
-      wake()
+  // ----- Touch -----
+  const touch = useRef<{ x: number; y: number; from: number; shown: boolean; scrub: boolean; moved: boolean } | null>(null)
+  const pendingTap = useRef<{ at: number; side: Side; timer: number } | null>(null)
+  const streak = useRef<{ side: Side; until: number } | null>(null)
+  const touchedAt = useRef(0)
+  // The skip a double tap made, shown on its side ("10 seconds" after three taps).
+  const [skipped, setSkipped] = useState<{ side: 'back' | 'ahead'; total: number; n: number } | null>(null)
+  const skippedTimer = useRef(0)
+  const [scrub, setScrub] = useState<{ at: number; delta: number } | null>(null)
+  useEffect(
+    () => () => {
+      clearTimeout(skippedTimer.current)
+      clearTimeout(pendingTap.current?.timer)
+    },
+    [],
+  )
+
+  const sideOf = (x: number): Side => {
+    const r = stage.current!.getBoundingClientRect()
+    const f = (x - r.left) / r.width
+    return f < 0.38 ? 'back' : f > 0.62 ? 'ahead' : 'middle'
+  }
+  const skip = (side: 'back' | 'ahead') => {
+    const v = video.current
+    if (!v) return
+    const by = side === 'back' ? -SKIP_SECONDS : SKIP_SECONDS
+    jumpTo(Math.min(v.duration || Infinity, Math.max(0, v.currentTime + by)))
+    streak.current = { side, until: performance.now() + STREAK_MS }
+    setSkipped(s => ({ side, total: (s?.side === side ? s.total : 0) + SKIP_SECONDS, n: (s?.n ?? 0) + 1 }))
+    clearTimeout(skippedTimer.current)
+    skippedTimer.current = window.setTimeout(() => setSkipped(null), STREAK_MS + 150)
+  }
+  const onTap = (x: number, wasShown: boolean) => {
+    const side = sideOf(x)
+    const now = performance.now()
+    // Already skipping: each tap on that side is another 5 seconds.
+    const st = streak.current
+    if (st && st.side === side && now < st.until && side !== 'middle') {
+      skip(side)
       return
     }
+    const p = pendingTap.current
+    if (p && p.side === side && now - p.at < TAP_MS) {
+      clearTimeout(p.timer)
+      pendingTap.current = null
+      if (side === 'middle') toggleFullscreen()
+      else skip(side)
+      return
+    }
+    if (p) clearTimeout(p.timer)
+    // A single tap: wait a moment to be sure it isn't the first of two.
+    const timer = window.setTimeout(() => {
+      pendingTap.current = null
+      if (wasShown && playing) {
+        clearTimeout(idleTimer.current)
+        setIdle(true)
+      } else wake()
+    }, TAP_MS)
+    pendingTap.current = { at: now, side, timer }
+  }
+  const onVideoPointerDown = (e: ReactPointerEvent<HTMLVideoElement>) => {
+    if (e.pointerType !== 'touch' || !video.current) return
+    touch.current = { x: e.clientX, y: e.clientY, from: video.current.currentTime, shown, scrub: false, moved: false }
+  }
+  const onVideoPointerMove = (e: ReactPointerEvent<HTMLVideoElement>) => {
+    const t = touch.current
+    const v = video.current
+    if (!t || !v || e.pointerType !== 'touch') return
+    const dx = e.clientX - t.x
+    const dy = e.clientY - t.y
+    if (!t.moved && Math.hypot(dx, dy) > DRAG_PX) {
+      t.moved = true
+      if (Math.abs(dx) > Math.abs(dy) && duration) {
+        t.scrub = true
+        e.currentTarget.setPointerCapture(e.pointerId)
+        setSeeking(true)
+      }
+    }
+    if (!t.scrub) return
+    const width = stage.current?.clientWidth || 1
+    const at = Math.min(duration, Math.max(0, t.from + (dx / width) * Math.min(SCRUB_WIDTH_SECONDS, duration)))
+    v.currentTime = at
+    setTime(at)
+    setScrub({ at, delta: at - t.from })
+  }
+  const onVideoPointerUp = (e: ReactPointerEvent<HTMLVideoElement>, cancelled = false) => {
+    const t = touch.current
+    if (!t || e.pointerType !== 'touch') return
+    touch.current = null
+    touchedAt.current = performance.now()
+    if (t.scrub) {
+      setSeeking(false)
+      setScrub(null)
+      return
+    }
+    if (!cancelled && !t.moved) onTap(e.clientX, t.shown)
+  }
+
+  // A click plays or pauses; on a touch screen the tap code above has it instead.
+  const onVideoClick = (e: ReactMouseEvent) => {
+    if ((e.nativeEvent as PointerEvent).pointerType === 'touch' || performance.now() - touchedAt.current < 800) return
     togglePlay()
   }
 
@@ -419,6 +525,24 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
             {flash.text}
           </div>
         )}
+        {skipped && (
+          <div className={`vp-skipfx is-${skipped.side}`} aria-hidden>
+            <span className="vp-skipfx-ripple" key={skipped.n} />
+            <span className="vp-skipfx-label">
+              {skipped.side === 'back' ? <ChevronsLeft size={22} /> : <ChevronsRight size={22} />}
+              {tr('{0} seconds', skipped.total)}
+            </span>
+          </div>
+        )}
+        {scrub && (
+          <div className="vp-scrubfx" aria-hidden>
+            <b>{formatTime(scrub.at)}</b>
+            <span>
+              {scrub.delta < 0 ? '−' : '+'}
+              {formatTime(Math.abs(scrub.delta))}
+            </span>
+          </div>
+        )}
         {resumed !== null && !error && (
           <div className="vp-resumed" role="status">
             <span>{tr('Continuing from {0}', formatTime(resumed))}</span>
@@ -453,7 +577,11 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
             playsInline
             loop={loop}
             onClick={onVideoClick}
-            onDoubleClick={toggleFullscreen}
+            onDoubleClick={() => performance.now() - touchedAt.current > 800 && toggleFullscreen()}
+            onPointerDown={onVideoPointerDown}
+            onPointerMove={onVideoPointerMove}
+            onPointerUp={e => onVideoPointerUp(e)}
+            onPointerCancel={e => onVideoPointerUp(e, true)}
             onPlay={() => setPlaying(true)}
             onPause={() => {
               setPlaying(false)

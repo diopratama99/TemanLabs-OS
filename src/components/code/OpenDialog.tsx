@@ -9,6 +9,7 @@ import { formatBytes } from '../../lib/format'
 import { ancestors, displayName, joinPath, parentOf } from '../../lib/paths'
 import { FileTypeIcon } from './FileTypeIcon'
 import { tr } from '../../lib/i18n'
+import { SHELL } from '../../lib/shell'
 
 interface Props {
   mode: 'file' | 'folder'
@@ -206,7 +207,12 @@ export function OpenDialog({ mode, startDir, onOpen, onUpload, onCancel, accept 
                 aria-selected={entry.name === selected}
                 aria-disabled={!usable(entry)}
                 className={`ce-open-row ${entry.name === selected ? 'is-selected' : ''} ${usable(entry) ? '' : 'is-disabled'}`}
-                onClick={() => usable(entry) && setSelected(entry.name)}
+                onClick={() => {
+                  if (!usable(entry)) return
+                  // On a phone, a tap goes into a folder (there's no double tap for it).
+                  if (SHELL === 'mobile' && entry.kind === 'folder') activate(entry)
+                  else setSelected(entry.name)
+                }}
                 onDoubleClick={() => activate(entry)}
               >
                 <FileTypeIcon name={entry.name} folder={entry.kind === 'folder'} size={16} />

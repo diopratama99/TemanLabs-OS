@@ -7,6 +7,7 @@ import { Glass } from './Glass'
 import { Wallpaper } from './Wallpaper'
 import { LogoTile } from './Logo'
 import { tr } from '../lib/i18n'
+import { SHELL } from '../lib/shell'
 
 interface Props {
   hostname: string
@@ -38,6 +39,43 @@ export function Login({ hostname, onSignedIn, unlock }: Props) {
     } finally {
       setPending(false)
     }
+  }
+
+  if (SHELL === 'mobile') {
+    // A phone gets a plain sign-in: no wallpaper or clock, a field and a button big enough for a thumb.
+    return (
+      <div className="m-login">
+        <form className="m-login-form" onSubmit={submit}>
+          <LogoTile size={76} />
+          <h1>{hostname || tr('TemanLabsOS')}</h1>
+          <p>{unlock ? tr('Locked. Enter the password to go on.') : tr('Sign in to your server')}</p>
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder={tr('Password')}
+            aria-label={tr('Password')}
+            autoComplete="current-password"
+            autoFocus
+            disabled={pending}
+            className={error ? 'has-error' : ''}
+          />
+          {error && (
+            <span className="m-login-error" role="alert">
+              {error}
+            </span>
+          )}
+          <button type="submit" className="m-login-go" disabled={!password || pending}>
+            {pending ? <LoaderCircle size={18} className="spin" /> : unlock ? tr('Unlock') : tr('Sign In')}
+          </button>
+          {unlock && (
+            <button type="button" className="m-login-switch" onClick={unlock.onSignOut}>
+              {tr('Sign Out Instead')}
+            </button>
+          )}
+        </form>
+      </div>
+    )
   }
 
   return (

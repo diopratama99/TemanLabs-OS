@@ -68,36 +68,19 @@ import { isEditable } from './lib/dom'
 import { useSettings } from './lib/settings'
 import { findShortcut, shortcutOf, TEXT_EDITING_KEYS } from './lib/shortcuts'
 import { SYSTEM_APPS, VIEWER_APPS } from './lib/systemApps'
-import { AppCenter, type StoreCategory } from './windows/AppCenter'
-import { SystemMonitor } from './windows/SystemMonitor'
-import { Sharing, type ShareRequest } from './windows/Sharing'
+import type { StoreCategory } from './windows/AppCenter'
+import type { ShareRequest } from './windows/Sharing'
 import { PowerOverlay } from './components/PowerOverlay'
 import { AppSettings, type SettingsRequest } from './components/AppSettings'
 import { useAppUpdates } from './hooks/useAppUpdates'
 import { useSystemBadges } from './hooks/useSystemBadges'
-import { LogViewer } from './windows/LogViewer'
-import { DiskManager } from './windows/DiskManager'
-import { NetworkTools } from './windows/NetworkTools'
-import { ScheduledTasks } from './windows/ScheduledTasks'
-import { SystemUpdates } from './windows/SystemUpdates'
-import { Kubernetes } from './windows/Kubernetes'
-import { MusicPlayer } from './windows/MusicPlayer'
-import { PhotoViewer } from './windows/PhotoViewer'
-import { VideoPlayer } from './windows/VideoPlayer'
-import { Remux } from './windows/Remux'
-import { Commands } from './windows/Commands'
-import { Devices } from './windows/Devices'
 import { RemoteScreen } from './windows/RemoteScreen'
 import { FileInfo } from './components/FileInfo'
 import { AppView } from './windows/AppView'
-import { CodeEditor, type OpenRequest } from './windows/CodeEditor'
-import { Files } from './windows/Files'
-import { Settings, type SettingsSection } from './windows/Settings'
-import { AboutServer } from './windows/AboutServer'
-import { Downloader } from './windows/Downloader'
-import { LiveRecorder } from './windows/LiveRecorder'
+import type { OpenRequest } from './windows/CodeEditor'
+import type { SettingsSection } from './windows/Settings'
 import { WindowErrorBoundary } from './components/WindowErrorBoundary'
-import { Terminal } from './windows/Terminal'
+import { renderSystemWindow, SYSTEM_WINDOWS, WINDOW_VARIANT, type MediaWindow, type WindowHost } from './components/SystemWindowContent'
 
 interface WindowState {
   id: WindowId
@@ -115,53 +98,6 @@ interface WindowState {
   fullscreen?: boolean
 }
 
-const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: number; height: number }> = {
-  store: { title: tr('App Center'), width: 940, height: 600 },
-  files: { title: tr('Files'), width: 820, height: 520 },
-  code: { title: tr('Code'), width: 1120, height: 700 },
-  settings: { title: tr('Settings'), width: 860, height: 690 },
-  terminal: { title: tr('Terminal'), width: 680, height: 420 },
-  activity: { title: tr('System Monitor'), width: 980, height: 600 },
-  sharing: { title: tr('File Sharing'), width: 900, height: 600 },
-  updates: { title: tr('System Updates'), width: 760, height: 620 },
-  console: { title: tr('Log Viewer'), width: 1080, height: 660 },
-  disks: { title: tr('Disk Manager'), width: 900, height: 620 },
-  network: { title: tr('Network Tools'), width: 900, height: 600 },
-  scheduler: { title: tr('Scheduled Tasks'), width: 860, height: 560 },
-  kubernetes: { title: tr('Kubernetes'), width: 1080, height: 680 },
-  music: { title: tr('Music Player'), width: 760, height: 600 },
-  preview: { title: tr('Image Viewer'), width: 920, height: 640 },
-  video: { title: tr('Video Player'), width: 960, height: 600 },
-  remux: { title: tr('Remux'), width: 980, height: 640 },
-  commands: { title: tr('Commands'), width: 1040, height: 680 },
-  devices: { title: tr('Devices'), width: 900, height: 600 },
-  about: { title: tr('About This Server'), width: 300, height: 430 },
-  downloader: { title: tr('Downloader'), width: 820, height: 600 },
-  recorder: { title: tr('Live Recorder'), width: 900, height: 640 },
-}
-
-// Windows with a source-list sidebar run it full height; Terminal gets a slim title bar.
-const WINDOW_VARIANT: Partial<Record<SystemWindowId, 'sidebar' | 'compact'>> = {
-  files: 'sidebar',
-  store: 'sidebar',
-  settings: 'sidebar',
-  sharing: 'sidebar',
-  console: 'sidebar',
-  disks: 'sidebar',
-  scheduler: 'sidebar',
-  kubernetes: 'sidebar',
-  // A slim title bar for windows with nothing in it but their title.
-  terminal: 'compact',
-  video: 'compact',
-  code: 'compact',
-  music: 'compact',
-  remux: 'compact',
-  devices: 'compact',
-  about: 'compact',
-  commands: 'sidebar',
-}
-
-type MediaWindow = 'preview' | 'video' | 'music'
 const MEDIA_WINDOW: Record<MediaKind, MediaWindow> = { image: 'preview', video: 'video', audio: 'music' }
 
 const APP_WINDOW_SIZE = { width: 1040, height: 660 }
@@ -770,6 +706,52 @@ export default function App() {
 
   menuContentRef.current = menuBarContent
 
+  // What the built-in apps need from the desktop: its state, and how it opens things.
+  const host: WindowHost = {
+    stats,
+    apps,
+    appsState: { busy, install, installCustom, toggle, uninstall, refresh: refreshApps },
+    appUpdates,
+    storeCategory,
+    setStoreCategory,
+    settingsSection,
+    setSettingsSection,
+    filesOpen,
+    editorRequest,
+    mediaRequests,
+    remuxRequest,
+    shareRequest,
+    terminalInput,
+    openWindow,
+    openAppWindow,
+    openAppSettings,
+    openMedia,
+    openFilesAt,
+    openInEditor,
+    openSettings,
+    openStore,
+    openRemote,
+    openShare: path => {
+      setShareRequest({ path, nonce: Date.now() })
+      openWindow('sharing')
+    },
+    openRemux: path => {
+      setRemuxRequest({ path, nonce: Date.now() })
+      openWindow('remux')
+    },
+    runInTerminal: text => {
+      setTerminalInput({ text, nonce: Date.now() })
+      openWindow('terminal')
+    },
+    setWindowTitle,
+    onPower: action => void api.power(action).then(() => setPowering(action)),
+    onEditWidgets: () => {
+      // The desktop has to be visible to arrange widgets.
+      minimizeWindow('settings')
+      startEditingWidgets()
+    },
+  }
+
   const renderWindow = (w: WindowState) => {
     const appId = appIdOf(w.id)
     if (appId) return <AppView key={w.nonce} app={appFor(w.id)} busy={busy.has(appId)} onToggle={toggle} />
@@ -777,125 +759,7 @@ export default function App() {
     if (infoPath) return <FileInfo path={infoPath} onTitle={t => setWindowTitle(w.id, t)} />
     const remote = remoteDevices[remoteIdOf(w.id) ?? '']
     if (remote) return <RemoteScreen device={remote} active={w.id === front?.id} />
-    switch (w.id as SystemWindowId) {
-      case 'store':
-        return (
-          <AppCenter
-            apps={apps}
-            busy={busy}
-            category={storeCategory}
-            onCategoryChange={setStoreCategory}
-            onInstall={install}
-            onInstallCustom={installCustom}
-            onToggle={toggle}
-            onUninstall={uninstall}
-            onOpenApp={openAppWindow}
-            onSettings={openAppSettings}
-            onInstalled={() => void refreshApps()}
-            updates={appUpdates}
-          />
-        )
-      case 'files':
-        return (
-          <Files
-            onOpenFile={path => openInEditor(path)}
-            onOpenFolder={path => openInEditor(path, 'folder')}
-            onOpenMedia={openMedia}
-            onShareFolder={path => {
-              setShareRequest({ path, nonce: Date.now() })
-              openWindow('sharing')
-            }}
-            onConvert={path => {
-              setRemuxRequest({ path, nonce: Date.now() })
-              openWindow('remux')
-            }}
-            onGetInfo={path => openWindow(`info:${path}`)}
-            open={filesOpen}
-          />
-        )
-      case 'code':
-        return <CodeEditor stats={stats} request={editorRequest} />
-      case 'settings':
-        return (
-          <Settings
-            stats={stats}
-            section={settingsSection}
-            onSectionChange={setSettingsSection}
-            onOpenWindow={openWindow}
-            onPower={action => void api.power(action).then(() => setPowering(action))}
-            onEditWidgets={() => {
-              // The desktop has to be visible to arrange widgets.
-              minimizeWindow('settings')
-              startEditingWidgets()
-            }}
-            appUpdates={appUpdates.count}
-            onOpenAppUpdates={() => openStore('Updates')}
-            apps={apps}
-            appActions={{
-              busy,
-              onOpen: openAppWindow,
-              onToggle: toggle,
-              onUninstall: uninstall,
-              onSettings: openAppSettings,
-              updateAvailable: appUpdates.available,
-              onOpenStore: () => openStore('All'),
-              onRefresh: () => void refreshApps(),
-            }}
-          />
-        )
-      case 'terminal':
-        return <Terminal onTitle={t => setWindowTitle('terminal', t)} input={terminalInput} onFindCommand={() => openWindow('commands')} />
-      case 'preview':
-        return <PhotoViewer request={mediaRequests.preview ?? null} onTitle={t => setWindowTitle('preview', t)} />
-      case 'video':
-        return (
-          <VideoPlayer
-            request={mediaRequests.video ?? null}
-            onTitle={t => setWindowTitle('video', t)}
-            onConvert={path => {
-              setRemuxRequest({ path, nonce: Date.now() })
-              openWindow('remux')
-            }}
-          />
-        )
-      case 'devices':
-        return <Devices onConnect={openRemote} />
-      case 'downloader':
-        return <Downloader onOpenMedia={openMedia} onShowInFiles={openFilesAt} />
-      case 'recorder':
-        return <LiveRecorder onOpenMedia={openMedia} onShowInFiles={openFilesAt} />
-      case 'about':
-        return <AboutServer stats={stats} onMoreInfo={() => openSettings('about')} />
-      case 'commands':
-        return (
-          <Commands
-            onRun={text => {
-              setTerminalInput({ text, nonce: Date.now() })
-              openWindow('terminal')
-            }}
-          />
-        )
-      case 'remux':
-        return <Remux request={remuxRequest} onPlay={openMedia} />
-      case 'music':
-        return <MusicPlayer request={mediaRequests.music ?? null} onTitle={t => setWindowTitle('music', t)} />
-      case 'updates':
-        return <SystemUpdates />
-      case 'console':
-        return <LogViewer />
-      case 'disks':
-        return <DiskManager />
-      case 'network':
-        return <NetworkTools />
-      case 'scheduler':
-        return <ScheduledTasks />
-      case 'kubernetes':
-        return <Kubernetes />
-      case 'sharing':
-        return <Sharing stats={stats} request={shareRequest} />
-      case 'activity':
-        return <SystemMonitor apps={apps} stats={stats} onOpenApp={openAppWindow} />
-    }
+    return renderSystemWindow(w.id as SystemWindowId, host)
   }
 
   const appChrome = (w: WindowState) => {

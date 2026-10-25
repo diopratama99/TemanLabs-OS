@@ -60,6 +60,7 @@ import { useSettings } from '../lib/settings'
 import { CODE_APP } from '../lib/systemApps'
 import { Terminal } from './Terminal'
 import { tr } from '../lib/i18n'
+import { SHELL } from '../lib/shell'
 
 const MonacoView = lazy(() => import('../components/code/MonacoView'))
 
@@ -89,7 +90,8 @@ const session = {
   active: null as string | null,
   /** Workspace folder shown in the Explorer; null after Close Folder. */
   root: ROOT as string | null,
-  panel: 'explorer' as Panel | null,
+  // On a phone the Explorer would cover the file; it opens from the activity bar.
+  panel: (SHELL === 'mobile' ? null : 'explorer') as Panel | null,
   lastPanel: 'explorer' as Panel,
   terminal: false,
   expanded: new Set([ROOT]) as Set<string>,

@@ -8,6 +8,7 @@ import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { formatFileDate } from '../lib/format'
 import { tr } from '../lib/i18n'
+import { useMobileBack } from '../lib/mobileBack'
 import type { MediaKind } from '../lib/media'
 import { displayName, parentOf } from '../lib/paths'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
@@ -144,6 +145,12 @@ function DownloaderMain({ onOpenMedia, onShowInFiles }: Props) {
   const [settings, setSettings] = useState(false)
   const [choosingFolder, setChoosingFolder] = useState(false)
   const [browsing, setBrowsing] = useState<string | null>(null)
+  // On a phone, back from choosing items returns to the form.
+  useMobileBack(() => {
+    if (!browsing) return false
+    setBrowsing(null)
+    return true
+  })
   const { show } = useContextMenu()
   // Downloads being saved on this device now, and how far (null: size not known).
   const [saving, setSaving] = useState<Record<string, number | null>>({})

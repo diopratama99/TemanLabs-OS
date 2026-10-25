@@ -1,0 +1,1426 @@
+/* ===== TemanLabsOS on a phone =====
+   A plain, flat interface built for a finger: screens with a bar on top, tabs at the bottom,
+   cards on a solid background. Nothing here applies to the desktop (data-shell="desktop"). */
+
+:root[data-shell='mobile'] {
+  --m-bg: #f2f2f7;
+  --m-card: #ffffff;
+  --m-bar: rgba(248, 248, 250, 0.92);
+  --m-line: rgba(60, 60, 67, 0.16);
+  --m-press: rgba(0, 0, 0, 0.06);
+  --m-tabbar-h: 58px;
+  /* The desktop's translucent surfaces are solid here. */
+  --tile-bg: var(--m-card);
+  --tile-bg-strong: var(--m-card);
+  --group-bg: var(--m-card);
+  --sidebar-bg: var(--m-card);
+  --menu-bg: var(--m-card);
+  --glass-edge: transparent;
+}
+
+:root[data-shell='mobile'][data-theme='dark'] {
+  --m-bg: #000000;
+  --m-card: #1c1c1e;
+  --m-bar: rgba(22, 22, 24, 0.92);
+  --m-line: rgba(84, 84, 88, 0.5);
+  --m-press: rgba(255, 255, 255, 0.08);
+}
+
+[data-shell='mobile'] body {
+  font-size: 15px;
+  background: var(--m-bg);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-shell='mobile'] button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ----- The frame: screens over a tab bar ----- */
+.m-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--m-bg);
+  color: var(--text);
+}
+
+.m-screens {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.m-screen.window {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--m-bg);
+  box-shadow: none;
+  transform: none;
+}
+
+.m-screen[hidden] {
+  display: none;
+}
+
+.m-bar {
+  flex: none;
+  min-height: 52px;
+  padding: calc(env(safe-area-inset-top) + 4px) 8px 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--m-bar);
+  border-bottom: 0.5px solid var(--m-line);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  z-index: 5;
+}
+
+.m-back,
+.m-icon-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  color: var(--accent);
+}
+
+.m-back:active,
+.m-icon-btn:active {
+  background: var(--m-press);
+}
+
+.m-bar-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0 6px;
+  font-size: 17px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An app with its own title in its controls shows that one, not this. */
+.m-bar:has(.m-toolbar .tb-title) .m-bar-title {
+  display: none;
+}
+
+.m-toolbar.window-toolbar {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.m-toolbar:empty {
+  display: none;
+}
+
+.m-bar:has(.m-toolbar .tb-title) .m-toolbar {
+  flex: 1;
+}
+
+.m-toolbar .tb-title strong {
+  font-size: 17px;
+}
+
+.m-toolbar .tb-spacer {
+  flex: 1;
+}
+
+.m-bar-actions {
+  flex: none;
+  display: flex;
+}
+
+.m-body.window-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.m-tabbar {
+  flex: none;
+  display: flex;
+  padding: 4px 0 max(6px, env(safe-area-inset-bottom));
+  background: var(--m-bar);
+  border-top: 0.5px solid var(--m-line);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.m-tabbar button {
+  flex: 1;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.m-tabbar button.is-active {
+  color: var(--accent);
+}
+
+.m-tab-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.m-badge {
+  position: absolute;
+  top: -5px;
+  right: -10px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  color: #fff;
+  background: var(--red);
+}
+
+/* ----- Lists and sections: the tabs' own screens ----- */
+.m-home,
+.m-apps,
+.m-settings {
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px 16px 28px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-section {
+  margin-top: 22px;
+}
+
+.m-section:first-child {
+  margin-top: 0;
+}
+
+.m-section h3 {
+  margin: 0 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-2);
+}
+
+.m-list {
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--m-card);
+}
+
+.m-row {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+}
+
+button.m-row:active,
+.m-row-main:active {
+  background: var(--m-press);
+}
+
+.m-row + .m-row {
+  box-shadow: inset 0 0.5px 0 var(--m-line);
+}
+
+.m-row-main {
+  flex: 1;
+  min-width: 0;
+  margin: -8px 0 -8px -14px;
+  padding: 8px 0 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+}
+
+.m-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.m-row-text strong {
+  font-size: 16px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-row-text small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.m-row-icon {
+  flex: none;
+  color: var(--text-2);
+}
+
+.m-row-icon.is-bad,
+.m-row.is-danger .m-row-icon,
+.m-row.is-danger strong {
+  color: var(--red);
+}
+
+.m-row-icon.is-accent {
+  color: var(--accent);
+}
+
+.m-chevron {
+  flex: none;
+  color: var(--text-3);
+}
+
+.m-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.m-dot.is-on {
+  background: var(--green);
+}
+
+.m-dot.is-busy {
+  background: #ff9f0a;
+}
+
+.m-search {
+  height: 40px;
+  margin-bottom: 18px;
+  padding: 0 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+  background: var(--m-card);
+}
+
+.m-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: transparent;
+}
+
+.m-empty {
+  margin: 30px 0;
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* ----- Home ----- */
+.m-hero {
+  margin-bottom: 14px;
+  padding: 4px 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.m-hero h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.m-hero p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.m-pill {
+  padding: 5px 11px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--m-card);
+}
+
+.m-pill.is-ok {
+  color: var(--green);
+}
+
+.m-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.m-stat {
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--m-card);
+}
+
+.m-stat.is-wide {
+  grid-column: span 2;
+}
+
+.m-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.m-stat strong {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-stat small {
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.m-meter {
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--m-line);
+}
+
+.m-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.m-meter i.is-high {
+  background: var(--red);
+}
+
+.m-shortcuts {
+  padding: 14px 6px 8px;
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 4px;
+  background: var(--m-card);
+}
+
+.m-shortcut {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.m-shortcut span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ----- Menus as sheets from the bottom ----- */
+.m-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.32);
+  animation: fade-in 0.18s ease-out;
+}
+
+.m-sheet {
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: m-sheet-up 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes m-sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+.m-sheet-items {
+  border-radius: 14px;
+  overflow-y: auto;
+  background: var(--m-card);
+}
+
+.m-sheet-items hr {
+  margin: 0;
+  border: 0;
+  height: 6px;
+  background: var(--m-bg);
+}
+
+.m-sheet-item {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.m-sheet-item + .m-sheet-item {
+  box-shadow: inset 0 0.5px 0 var(--m-line);
+}
+
+.m-sheet-item:active {
+  background: var(--m-press);
+}
+
+.m-sheet-item:disabled {
+  opacity: 0.4;
+}
+
+.m-sheet-item.is-danger {
+  color: var(--red);
+}
+
+.m-sheet-icon {
+  width: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.m-sheet-item.is-danger .m-sheet-icon {
+  color: var(--red);
+}
+
+.m-sheet-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.m-sheet-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-sheet-more {
+  color: var(--text-3);
+}
+
+.m-sheet-back {
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--m-card);
+}
+
+.m-sheet-cancel {
+  min-height: 54px;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--accent);
+  background: var(--m-card);
+}
+
+/* ----- A note when something failed ----- */
+.m-toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--m-tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  z-index: 900;
+  padding: 10px 6px 10px 14px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(40, 40, 44, 0.96);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.m-toast span {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-toast .m-icon-btn {
+  color: #fff;
+}
+
+/* ----- The desktop's apps inside a phone's screen ----- */
+
+/* Settings: the list of sections is the tab's first screen, so its own sidebar and arrows go. */
+[data-shell='mobile'] .set-sidebar,
+[data-shell='mobile'] .set-nav {
+  display: none !important;
+}
+
+[data-shell='mobile'] .m-screen .split {
+  height: 100%;
+}
+
+[data-shell='mobile'] .m-screen .pane,
+[data-shell='mobile'] .m-screen .set-pane {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Sheets inside an app fill the width and stay clear of the bars. */
+[data-shell='mobile'] .m-screen .sheet {
+  width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+}
+
+/* The desktop puts a phone-sized window between its menu bar and Dock (with !important); a
+   phone's screen is the whole screen. */
+[data-shell='mobile'] .m-screen.window {
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
+/* An app's content keeps clear of the bar above it. */
+[data-shell='mobile'] .m-screen .pane,
+[data-shell='mobile'] .m-screen .set-pane {
+  padding-top: 14px;
+}
+
+/* The desktop's apps are drawn for a pointer: a tenth bigger here, for a finger and the eye.
+   Not the ones that measure their own pixels (the terminal, the code editor, a remote screen). */
+.m-screen:not(.is-exact) .m-body {
+  zoom: 1.1;
+}
+
+/* ----- Shared fixes for the desktop's apps ----- */
+
+/* A sidebar turned into a row of tabs: its headings ("Favorites", "Reports") don't fit there. */
+[data-shell='mobile'] .m-screen .split > .sidebar .sidebar-group {
+  display: none;
+}
+
+/* Buttons keep their words on one line. */
+[data-shell='mobile'] .m-screen .btn,
+[data-shell='mobile'] .m-screen .tb-btn {
+  white-space: nowrap;
+}
+
+/* Files: the bar's back goes back through folders; forward has no room. */
+[data-shell='mobile'] .files-nav .tb-btn:last-child {
+  display: none;
+}
+
+/* Log Viewer: each message as a small card of its own (when · from, then what). */
+[data-shell='mobile'] .cn-head {
+  display: none;
+}
+
+[data-shell='mobile'] .cn-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'time source' 'msg msg';
+  gap: 2px 10px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+[data-shell='mobile'] .cn-time {
+  grid-area: time;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+[data-shell='mobile'] .cn-source {
+  grid-area: source;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+[data-shell='mobile'] .cn-msg {
+  grid-area: msg;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* File Sharing: Samba's state at the end of the row of tabs, on one line. */
+[data-shell='mobile'] .sh-service {
+  flex: none;
+  white-space: nowrap;
+}
+
+[data-shell='mobile'] .sh-service small {
+  display: none;
+}
+
+/* Devices: the count and its two buttons wrap rather than run off the side. */
+[data-shell='mobile'] .dv-bar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* System Updates: a notice's button goes under its words, not beside them. */
+[data-shell='mobile'] .su-banner,
+[data-shell='mobile'] .su-hero {
+  flex-wrap: wrap;
+}
+
+[data-shell='mobile'] .su-banner > span,
+[data-shell='mobile'] .su-hero > div:not(.su-actions) {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+[data-shell='mobile'] .su-banner .btn,
+[data-shell='mobile'] .su-actions {
+  margin-left: auto;
+}
+
+/* A setting's row: its value or field goes under the label when they don't fit side by side,
+   rather than both squeezing into narrow columns. */
+[data-shell='mobile'] .m-screen .row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* (The label, that is: not an icon or a picture that leads the row.) */
+[data-shell='mobile'] .m-screen .row > span:first-child:not(:only-child):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+[data-shell='mobile'] .m-screen .row > input,
+[data-shell='mobile'] .m-screen .row > .field,
+[data-shell='mobile'] .m-screen .row > textarea {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+
+/* Values (11.2 W, an address) stay whole. */
+[data-shell='mobile'] .m-screen .row > :last-child:not(:first-child) {
+  overflow-wrap: anywhere;
+}
+
+/* Pages inside an app go back with the bar's own button: theirs would be a second one. */
+[data-shell='mobile'] .dlb-nav,
+[data-shell='mobile'] .ap-back {
+  display: none;
+}
+
+/* ----- Signing in ----- */
+.m-login {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  background: var(--m-bg);
+  color: var(--text);
+}
+
+.m-login-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.m-login-form h1 {
+  margin: 10px 0 0;
+  font-size: 24px;
+  font-weight: 750;
+}
+
+.m-login-form p {
+  margin: 0 0 14px;
+  font-size: 15px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.m-login-form input {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 17px;
+  color: var(--text);
+  background: var(--m-card);
+  outline: none;
+}
+
+.m-login-form input:focus {
+  border-color: var(--accent);
+}
+
+.m-login-form input.has-error {
+  border-color: var(--red);
+}
+
+.m-login-error {
+  align-self: flex-start;
+  font-size: 14px;
+  color: var(--red);
+}
+
+.m-login-go {
+  width: 100%;
+  height: 52px;
+  margin-top: 4px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--accent);
+}
+
+.m-login-go:disabled {
+  opacity: 0.5;
+}
+
+.m-login-switch {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+/* Image Viewer: zoom buttons and the wallpaper are the desktop's; a phone pinches. */
+[data-shell='mobile'] .pv-desk {
+  display: none;
+}
+
+/* Terminal: the keys a phone's keyboard lacks, in a row under the shell. */
+.terminal-keys {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--m-bar);
+  border-top: 0.5px solid var(--m-line);
+}
+
+.terminal-keys button {
+  flex: none;
+  min-width: 42px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font: 600 14px var(--mono);
+  color: var(--text);
+  background: var(--m-card);
+  box-shadow: 0 1px 0 var(--m-line);
+}
+
+.terminal-keys button.is-on {
+  color: #fff;
+  background: var(--accent);
+}
+
+[data-shell='mobile'] .terminal {
+  flex-direction: column;
+  padding: 0;
+}
+
+[data-shell='mobile'] .terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 2px 4px 8px;
+}
+
+/* Typing: the tabs step aside for the keyboard (the page shrinks above it on Android). */
+.m-shell:has(.m-screens input:focus, .m-screens textarea:focus, .m-screens [contenteditable='true']:focus) .m-tabbar {
+  display: none;
+}
+
+/* ----- An app's sidebar: a drawer from the ☰ button, not a strip of tiny tabs ----- */
+
+/* Out of the layout until it's asked for; the app's content gets the whole screen. */
+[data-shell='mobile'] .m-screen.has-drawer .split {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+[data-shell='mobile'] .m-screen.has-drawer .split > .sidebar {
+  display: none !important;
+}
+
+[data-shell='mobile'] .m-screen.has-drawer.is-drawer-open .split > .sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  width: min(82%, 320px);
+  height: auto !important;
+  margin: 0 !important;
+  padding: 10px 10px max(16px, env(safe-area-inset-bottom)) !important;
+  border-radius: 0 18px 18px 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: var(--m-card) !important;
+  box-shadow: 8px 0 40px rgba(0, 0, 0, 0.25);
+  animation: m-drawer-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes m-drawer-in {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+}
+
+.m-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  background: rgba(0, 0, 0, 0.32);
+  animation: fade-in 0.18s ease-out;
+}
+
+/* In the drawer: headings back, and rows a finger can hit. */
+[data-shell='mobile'] .m-screen.is-drawer-open .split > .sidebar .sidebar-group {
+  display: block !important;
+  padding: 14px 12px 6px;
+  font-size: 12px;
+}
+
+[data-shell='mobile'] .m-screen.is-drawer-open .split > .sidebar .sidebar-item {
+  flex: none !important;
+  width: 100% !important;
+  min-height: 46px;
+  padding: 0 12px !important;
+  border-radius: 11px;
+  font-size: 15px;
+  white-space: normal !important;
+  justify-content: flex-start;
+}
+
+[data-shell='mobile'] .m-screen.is-drawer-open .split > .sidebar .sidebar-search {
+  flex: none;
+  min-width: 0 !important;
+  margin: 4px 2px 10px !important;
+  height: 40px;
+  font-size: 15px;
+}
+
+/* ----- The bar: an app's tabs and search get a row of their own under its title ----- */
+.m-bar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.m-toolbar.window-toolbar {
+  display: contents;
+}
+
+.m-toolbar > .tb-title {
+  flex: 1;
+  min-width: 0;
+  margin-left: 6px;
+}
+
+.m-toolbar > .tb-segmented:not(.tb-icons),
+.m-toolbar > .tb-search,
+.m-toolbar > label.tb-search {
+  order: 20;
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.m-toolbar > .tb-segmented:not(.tb-icons) {
+  height: 36px;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.m-toolbar > .tb-segmented:not(.tb-icons) button {
+  flex: 1 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.m-toolbar > .tb-search {
+  height: 38px;
+  font-size: 15px;
+}
+
+/* The bar's title keeps room to be read; an app's buttons go to the next row when they'd crowd it. */
+.m-toolbar > .tb-title {
+  flex: 1 0 44%;
+}
+
+.m-toolbar > .tb-title strong {
+  font-size: 17px;
+}
+
+/* Files: its own back only once there's a folder to go back to. */
+[data-shell='mobile'] .files-nav .tb-btn:disabled {
+  display: none;
+}
+
+/* File Sharing: a shared folder's name, who can use it under it, its buttons beside. */
+[data-shell='mobile'] .sh-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  grid-template-areas: 'icon main copy edit' 'icon access copy edit';
+  column-gap: 10px;
+  row-gap: 0;
+}
+
+[data-shell='mobile'] .sh-row > .sh-icon {
+  grid-area: icon;
+}
+
+[data-shell='mobile'] .sh-row > .sh-main {
+  grid-area: main;
+}
+
+[data-shell='mobile'] .sh-row > .sh-access {
+  grid-area: access;
+  max-width: none;
+  font-size: 12px;
+}
+
+[data-shell='mobile'] .sh-row > .pill-btn {
+  grid-area: copy;
+}
+
+[data-shell='mobile'] .sh-row > .icon-btn {
+  grid-area: edit;
+}
+
+[data-shell='mobile'] .sh-row > .sh-source {
+  display: none;
+}
+
+/* ----- An app's sheets (forms): from the bottom, the screen's full width ----- */
+[data-shell='mobile'] .m-screen .sheet-backdrop {
+  padding: 0 !important;
+  align-items: flex-end !important;
+  justify-content: stretch !important;
+}
+
+[data-shell='mobile'] .m-screen .sheet {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: 92% !important;
+  border-radius: 18px 18px 0 0 !important;
+  padding-bottom: env(safe-area-inset-bottom);
+  transform-origin: bottom center;
+  animation: m-sheet-up 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+
+/* The folder picker (Open, Choose…): the whole screen, the folders in one column. */
+[data-shell='mobile'] .ce-sheet-backdrop {
+  padding: 0 !important;
+  align-items: stretch !important;
+}
+
+[data-shell='mobile'] .ce-open {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+[data-shell='mobile'] .ce-open-side {
+  display: none !important;
+}
+
+[data-shell='mobile'] .ce-open-row {
+  min-height: 44px;
+}
+
+[data-shell='mobile'] .ce-open-foot {
+  flex-wrap: wrap;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+/* Downloader settings: a site's buttons under its name when they'd squeeze it. */
+[data-shell='mobile'] .dls-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+[data-shell='mobile'] .dls-text {
+  flex: 1 1 160px;
+}
+
+[data-shell='mobile'] .dls-row .btn {
+  margin-left: auto;
+}
+
+/* ----- Tables made for a wide window, as rows a phone can read ----- */
+
+/* Processes: what it is, its CPU and memory; the rest (PID, user, threads) is in its menu. */
+[data-shell='mobile'] .ps-row {
+  grid-template-columns: minmax(0, 1fr) 60px 82px !important;
+  gap: 10px;
+  min-height: 40px;
+}
+
+[data-shell='mobile'] .ps-row > :nth-child(2),
+[data-shell='mobile'] .ps-row > :nth-child(3),
+[data-shell='mobile'] .ps-row > :nth-child(6),
+[data-shell='mobile'] .ps-row > :nth-child(7) {
+  display: none !important;
+}
+
+/* Services: the name with room to be read, then its state. */
+[data-shell='mobile'] .sv-row {
+  min-height: 44px;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  column-gap: 10px;
+}
+
+/* A long name (Docker Application Container Engine) goes onto a second line instead of under the pill. */
+[data-shell='mobile'] .sv-name {
+  min-width: 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+[data-shell='mobile'] .sv-name strong {
+  display: block;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+[data-shell='mobile'] .sv-name .sv-lock {
+  margin-left: 4px;
+  vertical-align: -1px;
+}
+
+/* Ports: the port on the left, what listens on it and where, one under the other. */
+[data-shell='mobile'] .pv-row:not(.am-head) {
+  grid-template-columns: 64px minmax(0, 1fr) !important;
+  grid-template-areas: 'port proc' 'port addr';
+  row-gap: 3px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+[data-shell='mobile'] .pv-row.am-head {
+  display: none !important;
+}
+
+[data-shell='mobile'] .pv-row > .pv-port {
+  grid-area: port;
+  align-self: start;
+}
+
+[data-shell='mobile'] .pv-row > :nth-child(3) {
+  grid-area: proc;
+  display: block !important;
+  font-weight: 600;
+}
+
+[data-shell='mobile'] .pv-row > .pv-addr {
+  grid-area: addr;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+[data-shell='mobile'] .pv-row > .pv-addr .am-name-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-shell='mobile'] .pv-row > :nth-child(n + 4) {
+  display: none !important;
+}
+
+/* Network Tools → Connections: the process and its state, then where to and from. */
+[data-shell='mobile'] .nu-conn.is-head {
+  display: none !important;
+}
+
+[data-shell='mobile'] .nu-conn {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-areas: 'proc state' 'peer peer' 'local local';
+  gap: 2px 10px;
+  padding: 9px 14px !important;
+}
+
+[data-shell='mobile'] .nu-conn > :nth-child(1) {
+  grid-area: proc;
+  font-weight: 600;
+}
+
+[data-shell='mobile'] .nu-conn > :nth-child(2) {
+  grid-area: peer;
+  overflow-wrap: anywhere;
+}
+
+[data-shell='mobile'] .nu-conn > :nth-child(2)::before {
+  content: '→ ';
+  color: var(--text-3);
+}
+
+[data-shell='mobile'] .nu-conn > :nth-child(3) {
+  grid-area: local;
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+[data-shell='mobile'] .nu-conn > :nth-child(4) {
+  grid-area: state;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* History: one chart a row, the screen's width. */
+[data-shell='mobile'] .hv-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+[data-shell='mobile'] .hc,
+[data-shell='mobile'] .hc-plot {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Firewall: its button under the words, not squeezing them. */
+[data-shell='mobile'] .fw-status {
+  flex-wrap: wrap;
+}
+
+[data-shell='mobile'] .fw-status > span,
+[data-shell='mobile'] .fw-status > div {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* Tabs inside a sheet's header (Manual Install: Set Up / Docker Compose) keep their words whole. */
+[data-shell='mobile'] .sheet .segmented button,
+[data-shell='mobile'] .sheet .tb-segmented button {
+  white-space: nowrap;
+  padding: 0 12px;
+}
+
+/* A field and its button on one line (Server name, Address for links): the field gives way, so
+   the button stays on screen. */
+[data-shell='mobile'] .m-body input:not([type='checkbox']):not([type='radio']):not([type='range']) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-shell='mobile'] .ug-password input {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+}
+
+[data-shell='mobile'] .ug-password .btn {
+  flex: none;
+}
+
+[data-shell='mobile'] .sl-base {
+  display: flex;
+  width: 100%;
+}
+
+[data-shell='mobile'] .sl-base input {
+  flex: 1;
+  width: auto;
+}
+
+[data-shell='mobile'] .sl-base .btn {
+  flex: none;
+}
+
+/* App Center → Installed: the app's name, status and Open on the first line; its other buttons
+   on a line of their own below. */
+[data-shell='mobile'] .installed-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+[data-shell='mobile'] .installed-row > .store-card-info {
+  flex: 1 1 0;
+}
+
+[data-shell='mobile'] .installed-row > button {
+  flex: 1 1 auto;
+  justify-content: center;
+  order: 3;
+}
+
+[data-shell='mobile'] .installed-row > .icon-btn,
+[data-shell='mobile'] .installed-row > .get-btn {
+  flex: none;
+}
+
+[data-shell='mobile'] .installed-row > .get-btn {
+  order: 1;
+}
+
+/* Breaks the line after Open. */
+[data-shell='mobile'] .installed-row::after {
+  content: '';
+  order: 2;
+  flex-basis: 100%;
+}
+
+/* Inside an app, a button is the app's own size (13px), like everything else in it; the phone's
+   15px is for its own screens. Otherwise "Choose Items…" stands a size above the chips by it. */
+[data-shell='mobile'] .m-body .btn {
+  font-size: 13px;
+}
+
+/* Downloader: Choose Items and Download share a line of their own, under where it saves. */
+[data-shell='mobile'] .dlr-options > .tb-spacer {
+  flex-basis: 100%;
+  height: 0;
+}
+
+[data-shell='mobile'] .dlr-options > .btn {
+  flex: 1 1 0;
+  height: 36px;
+  justify-content: center;
+}
+
+[data-shell='mobile'] .dlr-options .segmented button {
+  white-space: nowrap;
+}
+
+/* A download's name and what's known of it are read whole, on two lines if need be. */
+[data-shell='mobile'] .dlr-main strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+[data-shell='mobile'] .dlr-main small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+/* Choosing from a profile: its tabs share the width, by name. */
+[data-shell='mobile'] .dlb-tabs {
+  margin: 6px 12px 0;
+}
+
+[data-shell='mobile'] .dlb-tabs button {
+  flex: 1 0 auto;
+  justify-content: center;
+  padding: 0 8px;
+}
+
+[data-shell='mobile'] .dlb-tabs button > svg {
+  display: none;
+}
+
+[data-shell='mobile'] .dlb-bar,
+[data-shell='mobile'] .dlb-foot {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+[data-shell='mobile'] .dls-row .btn ~ .btn,
+[data-shell='mobile'] .dls-row .btn ~ button {
+  margin-left: 0;
+}

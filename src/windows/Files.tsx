@@ -66,6 +66,8 @@ import { MOD } from '../lib/platform'
 import { useSettings, type FilesSortKey, type FilesView } from '../lib/settings'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
+import { useMobileBack } from '../lib/mobileBack'
+import { SHELL } from '../lib/shell'
 import { KIND_COLOR, KIND_ICON } from '../lib/fileKinds'
 
 
@@ -298,6 +300,12 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     select([])
     setRenaming(null)
   }
+  // On a phone, its back button goes back through the folders first.
+  useMobileBack(() => {
+    if (index === 0) return false
+    step(-1)
+    return true
+  })
   const canOpen = (entry: FileEntry) => virtual !== 'trash' && (entry.kind === 'folder' || isMedia(entry) || isTextFile(entry.name))
   const opened = (p: string) => void api.addRecentFile(p).catch(() => {})
   const openEntry = (entry: FileEntry) => {
@@ -714,6 +722,12 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
     title: entry.name,
     onClick: (e: MouseEvent) => {
       e.stopPropagation()
+      // A finger opens with one tap, as phones do; choosing several is in the long-press menu.
+      if (SHELL === 'mobile' && !e.shiftKey && !e.metaKey && !e.ctrlKey && selected.size <= 1) {
+        select([keyOf(entry)])
+        openEntry(entry)
+        return
+      }
       clickEntry(e, entry)
     },
     onDoubleClick: () => openEntry(entry),
@@ -917,7 +931,7 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
         <UploadsPanel jobs={uploads.jobs} busy={uploads.busy} onCancel={uploads.cancelAll} onClear={uploads.clear} />
 
         <WindowToolbar>
-          <div className="tb-group">
+          <div className="tb-group files-nav">
             <button className="tb-btn" onClick={() => step(-1)} disabled={index === 0} aria-label={tr('Back')} title={tr('Back')}>
               <ChevronLeft size={18} />
             </button>

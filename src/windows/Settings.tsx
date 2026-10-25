@@ -66,6 +66,7 @@ import {
 } from '../components/settings/ServerSections'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { language, tr } from '../lib/i18n'
+import { useMobileBack } from '../lib/mobileBack'
 
 export type SettingsSection =
   | 'general'
@@ -134,11 +135,13 @@ const SECTIONS: SectionInfo[] = [
   { id: 'sharing', label: tr('Sharing'), icon: Share2, color: ['#a1a1a8', '#5d5d63'], keywords: 'smb samba share remote desktop', inGeneral: true },
 ]
 const byId = Object.fromEntries(SECTIONS.map(s => [s.id, s])) as Record<Section, SectionInfo>
+/** For the phone's list of sections. */
+export const SETTINGS_INFO = byId
 // The sidebar in groups (separated by a gap), as on a desktop's own settings.
-const SIDEBAR: Section[][] = [['network', 'adblock', 'remote', 'backup', 'power', 'apps'], ['general', 'accessibility', 'appearance', 'dock', 'menubar', 'wallpaper'], ['lockscreen', 'users', 'account', 'privacy'], ['keyboard']]
-const GENERAL_LIST: Section[][] = [['about', 'updates', 'storage'], ['datetime', 'language', 'startup', 'sharing']]
+export const SIDEBAR: Section[][] = [['network', 'adblock', 'remote', 'backup', 'power', 'apps'], ['general', 'accessibility', 'appearance', 'dock', 'menubar', 'wallpaper'], ['lockscreen', 'users', 'account', 'privacy'], ['keyboard']]
+export const GENERAL_LIST: Section[][] = [['about', 'updates', 'storage'], ['datetime', 'language', 'startup', 'sharing']]
 
-function SectionIcon({ info, size = 20 }: { info: SectionInfo; size?: number }) {
+export function SectionIcon({ info, size = 20 }: { info: SectionInfo; size?: number }) {
   const Icon = info.icon
   return (
     <span className="set-icon" style={{ width: size, height: size, background: `linear-gradient(160deg, ${info.color[0]}, ${info.color[1]})` }}>
@@ -292,6 +295,12 @@ export function Settings({ stats, section, onSectionChange, onOpenWindow, onPowe
   const go = (id: Section) => (id === section ? openSub(null) : onSectionChange(id))
   const canBack = history.current.at > 0
   const canForward = history.current.at < history.current.list.length - 1
+  // On a phone, its back button walks these pages before leaving Settings.
+  useMobileBack(() => {
+    if (!canBack) return false
+    walk(-1)
+    return true
+  })
 
   useAppMenus(() => [
     {

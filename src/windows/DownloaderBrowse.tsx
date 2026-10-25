@@ -25,6 +25,7 @@ import { api, ApiError } from '../api'
 import { useMediaTools } from '../components/MediaTools'
 import type { BrowseEntry, BrowseList, DownloadMode } from '../api/types'
 import { tr } from '../lib/i18n'
+import { SHELL } from '../lib/shell'
 import { formatTime } from '../lib/media'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 
@@ -177,7 +178,7 @@ export function MediaBrowser({ url, mode: startMode, quality: startQuality, qual
   return (
     <div className="dlb" onKeyDown={e => e.key === 'Escape' && onBack()}>
       <WindowToolbar>
-        <div className="tb-group">
+        <div className="tb-group dlb-nav">
           <button className="tb-btn" onClick={onBack} aria-label={tr('Back')} title={tr('Back')}>
             <ChevronLeft size={17} />
           </button>
@@ -273,7 +274,7 @@ export function MediaBrowser({ url, mode: startMode, quality: startQuality, qual
             )}
             <span className="dlb-count">{list ? tr('{0} items', entries.length) + (list.more ? '+' : '') : ''}</span>
             <span className="tb-spacer" />
-            <span className="dlb-count">{total ? tr('{0} chosen', total) : tr('Click to choose; Shift-click for a run of them')}</span>
+            <span className="dlb-count">{total ? tr('{0} chosen', total) : SHELL === 'mobile' ? tr('Tap to choose') : tr('Click to choose; Shift-click for a run of them')}</span>
             <button className="btn" onClick={pickAll} disabled={!visible.length}>
               {allPicked ? tr('Choose None') : tr('Choose All')}
             </button>

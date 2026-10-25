@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ContextMenu, type MenuAnchor, type MenuItem } from '../components/ContextMenu'
+import { ActionSheet } from '../mobile/ActionSheet'
 import { tr } from './i18n'
+import { SHELL } from './shell'
 
 type PointerLike = { clientX: number; clientY: number; preventDefault: () => void }
 
@@ -96,7 +98,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     <ContextMenuContext.Provider value={api}>
       {children}
       {/* Keyed so per-menu state (like an armed confirm item) resets for every new menu. */}
-      {menu && <ContextMenu key={menu.id} items={menu.items} anchor={menu.anchor} onClose={close} />}
+      {menu &&
+        (SHELL === 'mobile' ? (
+          // On a phone, a sheet from the bottom instead of a menu at the finger.
+          <ActionSheet key={menu.id} items={menu.items} onClose={close} />
+        ) : (
+          <ContextMenu key={menu.id} items={menu.items} anchor={menu.anchor} onClose={close} />
+        ))}
     </ContextMenuContext.Provider>
   )
 }
