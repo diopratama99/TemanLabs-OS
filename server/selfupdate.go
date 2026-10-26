@@ -81,6 +81,8 @@ func semver(v string) (parts [3]int, ok bool) {
 }
 
 // newer: latest is a higher version than current; builds without a version always can update.
+// A pre-release comes before its release (v1.2.0-beta < v1.2.0), and pre-releases of one version
+// go by their numbers (beta.2 < beta.10).
 func newer(latest, current string) bool {
 	l, okL := semver(latest)
 	c, okC := semver(current)
@@ -95,7 +97,51 @@ func newer(latest, current string) bool {
 			return l[i] > c[i]
 		}
 	}
-	return false
+	lp, cp := prerelease(latest), prerelease(current)
+	switch {
+	case lp == cp:
+		return false
+	case lp == "":
+		return true
+	case cp == "":
+		return false
+	}
+	return prereleaseLess(cp, lp)
+}
+
+// prerelease is what follows the version's "-" ("beta.2" in "v1.2.0-beta.2"), without build info.
+func prerelease(v string) string {
+	v = strings.TrimSpace(v)
+	if i := strings.IndexByte(v, '+'); i >= 0 {
+		v = v[:i]
+	}
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		return v[i+1:]
+	}
+	return ""
+}
+
+// prereleaseLess orders pre-release labels as semver does: dot by dot, numbers by value, numbers
+// before words, and a shorter label first when it's the other's start.
+func prereleaseLess(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if as[i] == bs[i] {
+			continue
+		}
+		an, aErr := strconv.Atoi(as[i])
+		bn, bErr := strconv.Atoi(bs[i])
+		switch {
+		case aErr == nil && bErr == nil:
+			return an < bn
+		case aErr == nil:
+			return true
+		case bErr == nil:
+			return false
+		}
+		return as[i] < bs[i]
+	}
+	return len(as) < len(bs)
 }
 
 func (s *server) checkRelease(ctx context.Context) releaseStatus {

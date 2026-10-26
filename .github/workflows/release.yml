@@ -43,7 +43,15 @@ jobs:
           cp deploy/install.sh release/install-service.sh
           cd release && sha256sum temanlabsos-linux-* install.sh install-service.sh > SHA256SUMS
 
+      # The tag's section of CHANGELOG.md ("## v1.2.3" up to the next "## ") is the release's notes.
+      - name: Release notes
+        run: |
+          awk -v tag="$GITHUB_REF_NAME" '/^## /{ if (on) exit; on = ($2 == tag); next } on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "No notes for $GITHUB_REF_NAME in CHANGELOG.md." > notes.md
+          cat notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
+          body_path: notes.md
           generate_release_notes: true
