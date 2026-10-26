@@ -4,6 +4,8 @@ How to install TemanLabsOS on a server, change its configuration, run the develo
 
 **English** &nbsp;|&nbsp; [Bahasa Indonesia](installation.id.md)
 
+Coming from TrueNAS SCALE? [Moving from TrueNAS SCALE](migrate-truenas.md) shows how to bring your ZFS pool, shares and apps over safely.
+
 ---
 
 ## Contents

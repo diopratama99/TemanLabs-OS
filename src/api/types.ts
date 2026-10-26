@@ -54,6 +54,9 @@ export interface Disk {
   total: number
   /** A cloud drive (rclone); widgets leave it out. */
   cloud?: boolean
+  /** The ZFS pool it is, and the pool's state (ONLINE, DEGRADED…). */
+  pool?: string
+  health?: string
 }
 
 export interface NetworkAddresses {
@@ -663,6 +666,174 @@ export interface BlockDevice {
   smart?: SmartInfo
   /** Where /etc/fstab mounts it at startup. */
   startup?: string
+}
+
+/** A device in a ZFS pool's layout (the pool, a mirror or raidz group, a drive). */
+export interface ZfsVdev {
+  name: string
+  state?: string
+  read?: string
+  write?: string
+  cksum?: string
+  /** e.g. "was /dev/sdc1" for a missing drive. */
+  note?: string
+  children?: ZfsVdev[]
+}
+
+export interface ZfsPool {
+  name: string
+  /** ONLINE, DEGRADED, FAULTED, SUSPENDED… */
+  state: string
+  status?: string
+  action?: string
+  /** zpool status' scan line: the last or current scrub or resilver. */
+  scan?: string
+  errors?: string
+  scrubbing: boolean
+  used: number
+  free: number
+  mount?: string
+  readOnly: boolean
+  vdevs: ZfsVdev[]
+  /** Encrypted datasets that need their key. */
+  locked: string[]
+  /** Datasets left unmounted, with where they'd have gone. */
+  skipped: string[]
+  auto: { daily: boolean; keep: number }
+  trueNasApps: boolean
+}
+
+export interface ZfsImportable {
+  name: string
+  id: string
+  state: string
+  status?: string
+  action?: string
+  vdevs: ZfsVdev[]
+  /** Why it can't be imported, if it can't. */
+  blocked?: string
+}
+
+export interface ZfsInfo {
+  installed: boolean
+  pools: ZfsPool[]
+  importable: ZfsImportable[]
+  error?: string
+}
+
+export interface ZfsSnapshot {
+  name: string
+  created: string
+  used: number
+  datasets: number
+  /** The snapshot's files, read-only, in the pool's top folder. */
+  browse?: string
+  auto?: boolean
+}
+
+/** An app found on a pool from TrueNAS. */
+export interface TrueNasApp {
+  name: string
+  title: string
+  icon?: string
+  version?: string
+  /** compose: TrueNAS 24.10 and later; kubernetes: earlier TrueNAS SCALE. */
+  kind: 'compose' | 'kubernetes'
+  compose?: string
+  port?: number
+  scheme?: string
+  path?: string
+  data?: string
+  /** Folders its compose file uses that this server doesn't have. */
+  missing: string[]
+}
+
+/** Modem (from the ISP), router, access point (or mesh node), or something else on the way. */
+export type RouterKind = 'modem' | 'router' | 'ap' | 'other'
+/** How it's restarted: over SSH (MikroTik, or any Linux-based router), or by its smart plug. */
+export type RouterMethod = '' | 'mikrotik' | 'ssh' | 'tasmota' | 'shelly'
+
+export interface RouterRestart {
+  method: RouterMethod
+  username?: string
+  /** Sent only to change it; the server never sends it back. */
+  password?: string
+  port?: number
+  /** For ssh: the command that restarts it (reboot). */
+  command?: string
+  /** The smart plug's address. */
+  plug?: string
+}
+
+export interface RouterInput {
+  name: string
+  host: string
+  kind: RouterKind
+  /** The router it connects through; empty for the one facing the internet. */
+  parent?: string
+  adminUrl?: string
+  restart: RouterRestart
+  autoRestart: boolean
+}
+
+export interface RouterEvent {
+  time: string
+  text: string
+  bad?: boolean
+}
+
+export interface Router extends RouterInput {
+  id: string
+  added: string
+  hasPassword: boolean
+  /** affected: it's behind a router that's down. */
+  status: 'up' | 'down' | 'affected' | 'unknown'
+  latency?: number
+  since?: string
+  checked?: string
+  /** This server reaches the internet through it. */
+  gateway: boolean
+  uptime24h: number
+  uptime7d: number
+  incidents: AppIncident[]
+  events: RouterEvent[]
+  restarting: boolean
+  /** Restarting by itself didn't help; it's left to be checked by hand. */
+  gaveUp: boolean
+}
+
+/** A router found on the network, ready to add. */
+export interface FoundRouter {
+  host: string
+  name: string
+  kind: RouterKind
+  brand?: string
+  /** The host of the router it connects through. */
+  parent?: string
+  /** How it can probably be restarted. */
+  method?: RouterMethod
+  gateway: boolean
+  /** What gave it away: "This server’s gateway", "Serves a TP-Link admin page"… */
+  why: string[]
+}
+
+export interface FoundPlug {
+  host: string
+  type: 'tasmota' | 'shelly'
+  name?: string
+}
+
+export interface RouterSearch {
+  routers: FoundRouter[]
+  plugs: FoundPlug[]
+  gateway: string
+}
+
+export interface RoutersInfo {
+  routers: Router[]
+  /** This server's default gateway. */
+  gateway: string
+  internet: { up: boolean | null; since?: string; latency?: number; uptime24h: number; incidents: AppIncident[] }
 }
 
 export interface DiskUsage {

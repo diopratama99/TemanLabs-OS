@@ -167,7 +167,7 @@ const OPEN_LABEL: Partial<Record<FileKind, string>> = {
 const openLabel = (entry: FileEntry) => OPEN_LABEL[entry.kind] ?? (isTextFile(entry.name) ? 'Open in Code' : 'Open')
 
 export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, onConvert, onGetInfo, open }: Props) {
-  const { root } = useAuth()
+  const { root, home } = useAuth()
   const { favorites, locations } = usePlaces()
   const insideRoot = (p: string) => root === '/' || p === root || p.startsWith(`${root}/`)
   // Start in /DATA like CasaOS, even when the whole filesystem is browsable.
@@ -219,6 +219,11 @@ export function Files({ onOpenFile, onOpenFolder, onOpenMedia, onShareFolder, on
       })
       .catch((err: Error) => {
         if (!alive) return
+        // A server without /DATA opens at home (or the root) instead of on an error.
+        if (path === DATA_ROOT && history.length === 1) {
+          const start = home && insideRoot(home) ? home : root
+          if (start !== DATA_ROOT) return setHistory([start])
+        }
         setEntries([])
         setListed(path)
         setLoadError(err.message)

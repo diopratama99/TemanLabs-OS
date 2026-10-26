@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -42,6 +42,45 @@ interface Props {
   onOpen: (app: InstalledApp) => void
   /** The small Get / Open button for a related app's card. */
   renderGet: (entry: StoreEntry) => ReactNode
+}
+
+/** The screenshots in a row, with arrows to page through them (a mouse wheel only scrolls down). */
+function ShotStrip({ shots, onOpen }: { shots: string[]; onOpen: (i: number) => void }) {
+  const strip = useRef<HTMLDivElement>(null)
+  const [ends, setEnds] = useState({ left: false, right: false })
+  const measure = () => {
+    const el = strip.current
+    if (el) setEnds({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 })
+  }
+  useEffect(() => {
+    const el = strip.current
+    if (!el) return
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const page = (dir: number) => strip.current?.scrollBy({ left: dir * strip.current.clientWidth * 0.8, behavior: 'smooth' })
+  return (
+    <div className="ap-strip">
+      <div className="ap-shots" ref={strip} onScroll={measure}>
+        {shots.map((src, i) => (
+          <button key={src} className="ap-shot" onClick={() => onOpen(i)} aria-label={tr('Screenshot {0}', i + 1)}>
+            <img src={src} alt="" loading="lazy" onLoad={measure} />
+          </button>
+        ))}
+      </div>
+      {ends.left && (
+        <button className="ap-page is-left" onClick={() => page(-1)} aria-label={tr('Previous')}>
+          <ChevronLeft size={18} />
+        </button>
+      )}
+      {ends.right && (
+        <button className="ap-page is-right" onClick={() => page(1)} aria-label={tr('Next')}>
+          <ChevronRight size={18} />
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function StoreAppPage({ entry, installed, related, backLabel, covered, onBack, onSelect, onGet, onOpen, renderGet }: Props) {
@@ -152,13 +191,7 @@ export function StoreAppPage({ entry, installed, related, backLabel, covered, on
       {shots.length > 0 && (
         <section className="ap-section">
           <h2>{tr('Preview')}</h2>
-          <div className="ap-shots">
-            {shots.map((src, i) => (
-              <button key={src} className="ap-shot" onClick={() => setShot(i)} aria-label={tr('Screenshot {0}', i + 1)}>
-                <img src={src} alt="" loading="lazy" />
-              </button>
-            ))}
-          </div>
+          <ShotStrip shots={shots} onOpen={setShot} />
         </section>
       )}
 

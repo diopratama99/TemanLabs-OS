@@ -37,6 +37,12 @@ import type {
   CloudInfo,
   FormatFS,
   StorageInfo,
+  TrueNasApp,
+  RouterInput,
+  RoutersInfo,
+  RouterSearch,
+  ZfsInfo,
+  ZfsSnapshot,
   StoreAppDetails,
   StoreListing,
   AppConfig,
@@ -253,6 +259,17 @@ export const httpApi = {
     request<{ job: string; target: string }>('POST', '/api/disks/format', { json: body }),
   ejectDisk: (device: string) => request<void>('POST', '/api/disks/eject', { json: { device } }),
   storage: () => request<StorageInfo>('GET', '/api/storage'),
+  zfs: () => request<ZfsInfo>('GET', '/api/zfs'),
+  installZfs: () => request<{ job: string }>('POST', '/api/zfs/install'),
+  importPool: (id: string, name: string, readOnly: boolean) => request<{ job: string }>('POST', '/api/zfs/import', { json: { id, name, readOnly } }),
+  poolReadWrite: (pool: string) => request<{ job: string }>('POST', `/api/zfs/${encodeURIComponent(pool)}/readwrite`),
+  scrubPool: (pool: string, stop = false) => request<void>('POST', `/api/zfs/${encodeURIComponent(pool)}/scrub`, { json: { stop } }),
+  unlockDataset: (pool: string, dataset: string, key: string) =>
+    request<{ log: string[] }>('POST', `/api/zfs/${encodeURIComponent(pool)}/unlock`, { json: { dataset, key } }),
+  poolSnapshots: (pool: string) => request<{ snapshots: ZfsSnapshot[]; total: number }>('GET', `/api/zfs/${encodeURIComponent(pool)}/snapshots`),
+  snapshotPool: (pool: string) => request<{ snapshot: string }>('POST', `/api/zfs/${encodeURIComponent(pool)}/snapshots`),
+  setPoolAuto: (pool: string, auto: { daily: boolean; keep: number }) => request<void>('PUT', `/api/zfs/${encodeURIComponent(pool)}/auto`, { json: auto }),
+  trueNasApps: (pool: string) => request<TrueNasApp[]>('GET', `/api/zfs/${encodeURIComponent(pool)}/truenas-apps`),
   mergeStorage: (name: string, branches: string[]) => request<void>('POST', '/api/storage/merge', { json: { name, branches } }),
   unmergeStorage: (name: string) => request<void>('DELETE', `/api/storage/merge/${encodeURIComponent(name)}`),
   installMergerfs: () => request<{ job: string }>('POST', '/api/storage/mergerfs'),
@@ -297,6 +314,16 @@ export const httpApi = {
   wakeDevice: (id: string) => request<void>('POST', `/api/devices/${encodeURIComponent(id)}/wake`),
   /** Sweeps the local network for computers (about ten seconds). */
   discoverDevices: () => request<FoundDevice[]>('GET', '/api/devices/discover'),
+  routers: () => request<RoutersInfo>('GET', '/api/routers'),
+  /** Looks for routers, access points and smart plugs on the network (takes a few seconds). */
+  findRouters: () => request<RouterSearch>('GET', '/api/routers/find'),
+  saveRouter: (r: RouterInput, id?: string) =>
+    request<{ id: string }>(id ? 'PUT' : 'POST', id ? `/api/routers/${encodeURIComponent(id)}` : '/api/routers', { json: r }),
+  deleteRouter: (id: string) => request<void>('DELETE', `/api/routers/${encodeURIComponent(id)}`),
+  /** Checks the restart sign-in without restarting: of the saved router, or of the form (id "new" before it's saved). */
+  testRouter: (id: string, form?: RouterInput) =>
+    request<{ message: string }>('POST', `/api/routers/${encodeURIComponent(id)}/test`, form ? { json: form } : {}),
+  restartRouter: (id: string) => request<void>('POST', `/api/routers/${encodeURIComponent(id)}/restart`),
   /** A switched-on device's MAC address, from its IP. */
   lookupMac: (host: string) => request<{ mac: string }>('GET', `/api/devices/mac${query({ host })}`),
   /** Downloads and starts the remote desktop engine in the background. */

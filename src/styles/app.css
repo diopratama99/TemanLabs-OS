@@ -1623,6 +1623,20 @@ body:has(.menu) .dock-item .dock-tooltip {
   color: var(--text);
 }
 
+/* Tabs in the middle of the window (not of the space beside the title), once there's room. The
+   toolbar starts after the window buttons (82px in) and ends 10px from the edge, hence the 36px. */
+.window-toolbar:has(> .tb-segmented.is-centered) {
+  container-type: inline-size;
+}
+
+@container (min-width: 760px) {
+  .tb-segmented.is-centered {
+    position: absolute;
+    left: calc(50% - 36px);
+    transform: translateX(-50%);
+  }
+}
+
 .tb-segmented {
   flex: none;
   height: 32px;
@@ -6760,6 +6774,11 @@ body:has(.menu) .dock-item .dock-tooltip {
   border-bottom: 1px solid var(--separator);
 }
 
+/* The level colours the verdict only; the global .is-ok/.is-bad would colour every row. */
+.du-health.du-health {
+  color: var(--text);
+}
+
 .du-health.is-ok .du-verdict {
   color: var(--green);
 }
@@ -8681,6 +8700,48 @@ select option {
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--field-bg);
+}
+
+.about-notes {
+  align-self: stretch;
+  max-height: 180px;
+  overflow: auto;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--text-2);
+}
+
+.about-notes h5 {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.about-notes h5:first-child {
+  margin-top: 0;
+}
+
+.about-notes ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.about-notes li + li {
+  margin-top: 3px;
+}
+
+.about-notes p {
+  margin: 0 0 4px;
+}
+
+.about-notes code {
+  padding: 0 4px;
+  border-radius: 4px;
+  font: 11px var(--mono);
+  background: rgba(127, 127, 127, 0.18);
 }
 
 .about-new pre {
@@ -11552,6 +11613,37 @@ button.menubar-clock.is-active {
   margin: 0 0 10px;
   font-size: 18px;
   font-weight: 700;
+}
+
+.ap-strip {
+  position: relative;
+}
+
+.ap-page {
+  position: absolute;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin-top: -21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.ap-page:hover {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.ap-page.is-left {
+  left: 8px;
+}
+
+.ap-page.is-right {
+  right: 8px;
 }
 
 .ap-shots {
@@ -15363,4 +15455,538 @@ a.btn {
 
 .rs {
   position: relative;
+}
+
+/* ----- ZFS pools (Disk Manager) ----- */
+
+.zfs-safe {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 28%, transparent);
+}
+
+.zfs-safe.is-info {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.zfs-safe > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--green);
+}
+
+.zfs-safe.is-info > svg {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+.zfs-safe > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.zfs-safe small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.zfs-state {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
+.zfs-state.is-warn {
+  color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
+}
+
+.zfs-state.is-bad {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+.zfs-tree {
+  padding: 4px 0;
+}
+
+.zfs-vdev {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 14px;
+  font-size: 12.5px;
+}
+
+.zfs-vdev + .zfs-vdev {
+  border-top: 1px solid var(--separator);
+}
+
+.zfs-vdev-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.zfs-vdev-name small,
+.zfs-vdev-errors {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.zfs-vdev-errors {
+  color: var(--orange);
+}
+
+.zfs-text {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.zfs-import,
+.zfs-unlock {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+}
+
+.zfs-import .zfs-text,
+.zfs-unlock .zfs-text {
+  padding: 6px 0;
+}
+
+.zfs-import .zfs-tree {
+  margin: 6px 0 0;
+  box-shadow: inset 0 0 0 1px var(--separator);
+}
+
+.zfs-import-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.zfs-import-head > svg {
+  color: var(--accent);
+}
+
+.zfs-unlock {
+  margin-top: 12px;
+}
+
+.zfs-unlock-row {
+  display: flex;
+  gap: 8px;
+}
+
+.zfs-unlock-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.zfs-snaps {
+  padding: 4px 0;
+}
+
+.zfs-snap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.zfs-snap + .zfs-snap {
+  border-top: 1px solid var(--separator);
+}
+
+.zfs-snap > svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.zfs-snap > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+}
+
+.zfs-snap strong {
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.zfs-snap small {
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.zfs-snaps .sh-empty,
+.zfs-snaps .form-hint {
+  padding: 8px 14px;
+}
+
+.zfs-app-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.zfs-job {
+  margin-top: 14px;
+}
+
+.du .du-startup select {
+  flex: none;
+}
+
+.disk-health {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--orange);
+}
+
+.link-btn {
+  padding: 0;
+  font: inherit;
+  color: var(--accent-text);
+  background: none;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+/* ----- Routers ----- */
+
+.dv.rt {
+  container-type: inline-size;
+}
+
+.rt-internet {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--group-bg);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.rt-internet > svg {
+  flex: none;
+  color: var(--green);
+}
+
+.rt-internet.is-down > svg {
+  color: var(--red);
+}
+
+.rt-internet.is-unknown > svg {
+  color: var(--text-3);
+}
+
+.rt-internet > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rt-internet strong {
+  font-size: 14px;
+}
+
+.rt-internet.is-down strong {
+  color: var(--red);
+}
+
+.rt-internet small,
+.rt-uptime small {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.rt-uptime {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 52px;
+  font-size: 13px;
+}
+
+.rt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rt-card {
+  margin-left: calc(var(--depth, 0) * 26px);
+  border-radius: 14px;
+  background: var(--group-bg);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.rt-card.is-down,
+.rt-card.is-nonet {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--red) 40%, transparent),
+    inset 3px 0 0 var(--red);
+}
+
+.rt-card.is-nonet {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--orange) 40%, transparent),
+    inset 3px 0 0 var(--orange);
+}
+
+.rt-card.is-affected {
+  opacity: 0.75;
+}
+
+.rt-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.rt-top .dv-card-name strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rt-badge {
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.rt-state {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 230px;
+  font-size: 12px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.rt-card.is-down .rt-state {
+  color: var(--red);
+}
+
+.rt-card.is-nonet .rt-state {
+  color: var(--orange);
+}
+
+.rt-buttons {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rt-buttons a.icon-btn {
+  color: var(--text-2);
+}
+
+.rt-note {
+  margin: 0;
+  padding: 0 14px 10px;
+}
+
+.rt-details {
+  padding: 2px 14px 14px 68px;
+}
+
+.rt-advice {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.rt-advice strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rt-advice ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.rt-how {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.rt-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.rt-lists h5 {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rt-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.rt-line small {
+  flex: none;
+  color: var(--text-3);
+}
+
+.rt-line.is-bad span {
+  color: var(--red);
+}
+
+.rt-found {
+  cursor: pointer;
+}
+
+.rt-found.is-added {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rt-found .dv-found-name strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dv-found-name small.rt-why {
+  color: var(--text-3);
+  white-space: normal;
+}
+
+.rt-plugs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rt-plugs .pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rt-plugs .pill-btn.is-on {
+  color: #fff;
+  background: var(--accent);
+}
+
+.rt-methods {
+  flex-wrap: wrap;
+}
+
+.rt-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rt-test .form-hint,
+.rt-test .form-error {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}
+
+@container (max-width: 640px) {
+  .rt-card {
+    margin-left: calc(var(--depth, 0) * 10px);
+  }
+
+  .rt-top {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* The name gets the row beside the icon; status, uptime and buttons go below. */
+  .rt-top .dv-card-name {
+    flex: 1 1 calc(100% - 60px);
+  }
+
+  .rt-state {
+    flex: 1;
+    max-width: none;
+    text-align: left;
+  }
+
+  .rt-state > span {
+    white-space: nowrap;
+  }
+
+  .rt-details {
+    padding-left: 14px;
+  }
+
+  .rt-lists {
+    grid-template-columns: 1fr;
+  }
 }

@@ -43,6 +43,7 @@ type server struct {
 	health   *healthStore
 	dl       *downloader
 	recorder *recorderStore
+	routers  *routerStore
 	owner    *owner
 }
 
@@ -79,12 +80,13 @@ func lookupOwner(name string) (*owner, error) {
 }
 
 func newServer(cfg *Config) (*server, error) {
-	if _, err := os.Stat(cfg.Root); err != nil {
-		return nil, fmt.Errorf("files root %s: %w", cfg.Root, err)
-	}
 	o, err := lookupOwner(cfg.User)
 	if err != nil {
 		return nil, fmt.Errorf("user %q: %w", cfg.User, err)
+	}
+	ensureDataRoot(o)
+	if _, err := os.Stat(cfg.Root); err != nil {
+		return nil, fmt.Errorf("files root %s: %w", cfg.Root, err)
 	}
 	docker := newDockerClient()
 	s := &server{
@@ -118,6 +120,7 @@ func newServer(cfg *Config) (*server, error) {
 	s.health = newHealthStore(cfg.StateDir)
 	s.dl = newDownloader(cfg.StateDir)
 	s.recorder = newRecorder(cfg.StateDir)
+	s.routers = newRouterStore(cfg.StateDir)
 	s.frames = newFrameProxies(s)
 	go s.stats.run()
 	go s.pruneTrash()
@@ -126,6 +129,8 @@ func newServer(cfg *Config) (*server, error) {
 	go s.runHealth()
 	go s.runDownloads()
 	go s.runRecorder()
+	go s.runZFSSnapshots()
+	go s.runRouters()
 	return s, nil
 }
 
@@ -201,6 +206,16 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("DELETE /api/storage/merge/{name}", s.handleUnmerge)
 	api.HandleFunc("POST /api/storage/mergerfs", s.handleInstallMergerfs)
 	api.HandleFunc("PUT /api/storage/usb", s.handleUSBSetting)
+	api.HandleFunc("GET /api/zfs", s.handleZFS)
+	api.HandleFunc("POST /api/zfs/install", s.handleInstallZFS)
+	api.HandleFunc("POST /api/zfs/import", s.handleZFSImport)
+	api.HandleFunc("POST /api/zfs/{pool}/readwrite", s.handleZFSReadWrite)
+	api.HandleFunc("POST /api/zfs/{pool}/scrub", s.handleZFSScrub)
+	api.HandleFunc("POST /api/zfs/{pool}/unlock", s.handleZFSUnlock)
+	api.HandleFunc("GET /api/zfs/{pool}/snapshots", s.handleZFSSnapshots)
+	api.HandleFunc("POST /api/zfs/{pool}/snapshots", s.handleZFSSnapshot)
+	api.HandleFunc("PUT /api/zfs/{pool}/auto", s.handleZFSAuto)
+	api.HandleFunc("GET /api/zfs/{pool}/truenas-apps", s.handleTrueNASApps)
 	api.HandleFunc("GET /api/cloud", s.handleCloud)
 	api.HandleFunc("GET /api/system/hardware", s.handleHardware)
 	api.HandleFunc("GET /api/system/history", s.handleHistory)
@@ -237,6 +252,13 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("POST /api/adblock/test", s.handleAdblockTest)
 	api.HandleFunc("POST /api/adblock/list", s.handleAdblockList)
 	api.HandleFunc("DELETE /api/adblock", s.handleAdblockRemove)
+	api.HandleFunc("GET /api/routers", s.handleRouters)
+	api.HandleFunc("GET /api/routers/find", s.handleFindRouters)
+	api.HandleFunc("POST /api/routers", s.handleSaveRouter)
+	api.HandleFunc("PUT /api/routers/{id}", s.handleSaveRouter)
+	api.HandleFunc("DELETE /api/routers/{id}", s.handleDeleteRouter)
+	api.HandleFunc("POST /api/routers/{id}/test", s.handleTestRouter)
+	api.HandleFunc("POST /api/routers/{id}/restart", s.handleRestartRouter)
 	api.HandleFunc("GET /api/devices", s.handleListDevices)
 	api.HandleFunc("POST /api/devices", s.handleCreateDevice)
 	api.HandleFunc("GET /api/devices/status", s.handleDeviceStatus)

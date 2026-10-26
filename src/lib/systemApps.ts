@@ -28,6 +28,8 @@ export const SYSTEM_APPS: SystemApp[] = [
   { id: 'settings', label: tr('Settings'), icon: 'settings', color: ['#a1a1a8', '#55555b'] },
   // The other computers: wake them, and use their screens in a window.
   { id: 'devices', label: tr('Devices'), icon: 'devices', color: ['#7cc8ff', '#3b5bfd'], dock: false },
+  // The modems, routers and access points: watched, and restarted when they hang.
+  { id: 'routers', label: tr('Routers'), icon: 'router', color: ['#6ee7b7', '#0f9f6e'], dock: false },
   // Server utilities: in Launcher → Utilities, in the Dock only while open.
   { id: 'sharing', label: tr('File Sharing'), icon: 'share', color: ['#5ee0d0', '#0d8f88'], dock: false, utility: true },
   { id: 'updates', label: tr('System Updates'), icon: 'updates', color: ['#8e8e93', '#48484a'], dock: false, utility: true },

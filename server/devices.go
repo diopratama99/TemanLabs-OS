@@ -454,55 +454,18 @@ var discoverPorts = []int{22, 135, 445, 548, 3389, 5900, 5000, 7000, 62078}
 func (s *server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
-	var self []string
-	var hosts []net.IP
-	for _, n := range lanNetworks() {
-		self = append(self, n.IP.String())
-		ones, bits := n.Mask.Size()
-		if bits != 32 || ones < 22 {
-			// Large networks would take too long to sweep; stay on the server's own /24.
-			n = &net.IPNet{IP: n.IP, Mask: net.CIDRMask(24, 32)}
-		}
-		base := n.IP.Mask(n.Mask).To4()
-		size := 1 << (32 - maskOnes(n.Mask))
-		for i := 1; i < size-1; i++ {
-			v := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
-			v += uint32(i)
-			hosts = append(hosts, net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v)).To4())
-		}
-	}
-
-	// First a knock on every address, which makes the kernel ask for each one's MAC address; the
-	// ones that answer end up in the neighbour table, whatever their firewall does.
-	knock := func(ip string, port int, timeout time.Duration) bool {
-		c, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		conn, err := (&net.Dialer{}).DialContext(c, "tcp", net.JoinHostPort(ip, strconv.Itoa(port)))
-		if err == nil {
-			conn.Close()
-		}
-		return err == nil
-	}
-	var wg sync.WaitGroup
-	for _, ip := range hosts {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			knock(ip.String(), 9, 600*time.Millisecond)
-		}()
-	}
-	wg.Wait()
-	neighbours := readNeighbours()
+	self, neighbours := sweepLAN(ctx)
 
 	// Then, for the computers that are there, which services they offer.
 	open := map[string][]int{}
 	var mu sync.Mutex
+	var wg sync.WaitGroup
 	for _, nb := range neighbours {
 		for _, port := range discoverPorts {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if knock(nb.ip, port, 800*time.Millisecond) {
+				if knockPort(ctx, nb.ip, port, 800*time.Millisecond) {
 					mu.Lock()
 					open[nb.ip] = append(open[nb.ip], port)
 					mu.Unlock()
@@ -539,6 +502,50 @@ func (s *server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 		found = append([]foundDevice{{IP: ip, Kind: "linux", Name: hostname(), Self: true}}, found...)
 	}
 	writeJSON(w, http.StatusOK, found)
+}
+
+// sweepLAN knocks on every address of the server's networks (its own /24 on bigger ones), which
+// makes the kernel ask for each one's MAC address: the ones that answer end up in the neighbour
+// table, whatever their firewall does. It returns the server's own addresses and that table.
+func sweepLAN(ctx context.Context) (self []string, neighbours []neighbour) {
+	var hosts []net.IP
+	for _, n := range lanNetworks() {
+		self = append(self, n.IP.String())
+		ones, bits := n.Mask.Size()
+		if bits != 32 || ones < 22 {
+			// Large networks would take too long to sweep; stay on the server's own /24.
+			n = &net.IPNet{IP: n.IP, Mask: net.CIDRMask(24, 32)}
+		}
+		base := n.IP.Mask(n.Mask).To4()
+		size := 1 << (32 - maskOnes(n.Mask))
+		for i := 1; i < size-1; i++ {
+			v := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
+			v += uint32(i)
+			hosts = append(hosts, net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v)).To4())
+		}
+	}
+
+	var wg sync.WaitGroup
+	for _, ip := range hosts {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			knockPort(ctx, ip.String(), 9, 600*time.Millisecond)
+		}()
+	}
+	wg.Wait()
+	return self, readNeighbours()
+}
+
+// knockPort: does host accept a connection on port within timeout?
+func knockPort(ctx context.Context, host string, port int, timeout time.Duration) bool {
+	c, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(c, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err == nil {
+		conn.Close()
+	}
+	return err == nil
 }
 
 func maskOnes(m net.IPMask) int {

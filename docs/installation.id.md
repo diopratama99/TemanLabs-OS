@@ -4,6 +4,8 @@ Panduan memasang TemanLabsOS di server, mengubah konfigurasi, menjalankan versi 
 
 [English](installation.md) &nbsp;|&nbsp; **Bahasa Indonesia**
 
+Pindahan dari TrueNAS SCALE? [Pindah dari TrueNAS SCALE](migrate-truenas.id.md) menjelaskan cara membawa pool ZFS, share, dan app-mu dengan aman.
+
 ---
 
 ## Daftar isi

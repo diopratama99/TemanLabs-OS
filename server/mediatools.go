@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
@@ -137,12 +138,8 @@ func (s *server) handleInstallMediaTools(w http.ResponseWriter, r *http.Request)
 			if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 				return err
 			}
-			if out, err := exec.CommandContext(ctx, "python3", "-m", "venv", dir).CombinedOutput(); err != nil {
-				msg := lastLines(string(out), 3)
-				if strings.Contains(msg, "ensurepip") {
-					msg += " (install it with: sudo apt install python3-venv)"
-				}
-				return &toolError{msg}
+			if err := makeVenv(ctx, dir, logf); err != nil {
+				return err
 			}
 		}
 		logf("Downloading yt-dlp, gallery-dl, streamlink and deno…")
@@ -182,6 +179,55 @@ func (s *server) handleInstallMediaTools(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"job": mediaToolsJob})
+}
+
+// makeVenv creates the Python environment. Debian and Ubuntu ship Python without venv's pip
+// (ensurepip), so when that's missing python3-venv is installed and the environment made again.
+func makeVenv(ctx context.Context, dir string, logf func(string, ...any)) error {
+	out, err := venv(ctx, dir)
+	if err != nil && strings.Contains(out, "ensurepip") {
+		if _, aptErr := exec.LookPath("apt-get"); aptErr != nil {
+			return &toolError{"Python can't make environments here: install python3-venv (or your system's equivalent) first"}
+		}
+		logf("Installing python3-venv…")
+		if err := aptInstall(ctx, "python3-venv"); err != nil {
+			return &toolError{"couldn't install python3-venv: " + err.Error()}
+		}
+		out, err = venv(ctx, dir)
+	}
+	if err != nil {
+		return &toolError{lastLines(out, 3)}
+	}
+	return nil
+}
+
+// venv makes dir a Python environment from scratch; a half-made one from a failed try is removed.
+func venv(ctx context.Context, dir string) (string, error) {
+	_ = os.RemoveAll(dir)
+	out, err := exec.CommandContext(ctx, "python3", "-m", "venv", dir).CombinedOutput()
+	if err != nil {
+		_ = os.RemoveAll(dir)
+	}
+	return string(out), err
+}
+
+// aptInstall installs packages, refreshing the package lists first when apt doesn't know them.
+func aptInstall(ctx context.Context, pkgs ...string) error {
+	install := func() (string, error) {
+		cmd := exec.CommandContext(ctx, "apt-get", append([]string{"install", "-y"}, pkgs...)...)
+		cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	out, err := install()
+	if err != nil && strings.Contains(out, "Unable to locate package") {
+		_ = exec.CommandContext(ctx, "apt-get", "update").Run()
+		out, err = install()
+	}
+	if err != nil {
+		return errors.New(lastLines(out, 2))
+	}
+	return nil
 }
 
 type toolError struct{ msg string }

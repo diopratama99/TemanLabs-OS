@@ -27,7 +27,7 @@ Manage Docker, files, backups, storage, services, the network and the other comp
   <a href="https://github.com/diopratama99/TemanLabs-OS/stargazers"><img src="https://img.shields.io/github/stars/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Stars" /></a>
 </p>
 
-[**Install**](docs/installation.md) &nbsp;•&nbsp; [**Features**](#features) &nbsp;•&nbsp; [**Screenshots**](#screenshots) &nbsp;•&nbsp; [**Architecture**](docs/architecture.md) &nbsp;•&nbsp; [**API**](docs/architecture.md#api-endpoints)
+[**Install**](docs/installation.md) &nbsp;•&nbsp; [**From TrueNAS**](docs/migrate-truenas.md) &nbsp;•&nbsp; [**Features**](#features) &nbsp;•&nbsp; [**Screenshots**](#screenshots) &nbsp;•&nbsp; [**Architecture**](docs/architecture.md) &nbsp;•&nbsp; [**API**](docs/architecture.md#api-endpoints)
 
 <br />
 
@@ -161,10 +161,11 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 | **Devices** | The other computers on your network: on/off status, **Wake-on-LAN** to switch them on from anywhere, a network scan that finds them by name, and their **screens in a window** over VNC or RDP. The remote desktop engine runs in a small container that only the server itself can reach. |
 | **Terminal** | A full shell in the browser (xterm.js + PTY). |
 | **Commands** | Hundreds of terminal commands for Ubuntu and the tools you have (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), commands for every installed app, your shell history and your own saved commands. Search in plain words (“see which ports are open”), fill in the blanks and send it to the Terminal. |
-| **Disk Manager** | Drives, partitions, SMART health, mounting and **mount at startup**, **formatting** (ext4, xfs, btrfs, exFAT, NTFS), space analysis, **merged storage** (mergerfs), USB auto-mount and eject, and **cloud drives** through rclone. |
+| **Disk Manager** | Drives, partitions, SMART health, mounting and **mount at startup**, **formatting** (ext4, xfs, btrfs, exFAT, NTFS), space analysis, **merged storage** (mergerfs), USB auto-mount and eject, **cloud drives** through rclone, and **ZFS pools**: import one from TrueNAS (read-only first), its health, scrubs and daily snapshots. See [Moving from TrueNAS SCALE](docs/migrate-truenas.md). |
 | **System Updates** | `apt` updates with a live log and a notice when a restart is needed. |
 | **Log Viewer** | The systemd journal by category or by service. |
 | **Network Tools** | Interfaces, ping, traceroute, DNS, active connections and the firewall (ufw). |
+| **Routers** | The modem, routers and access points, checked every 30 seconds: which one is down, whether the internet is, uptime and outages. Restart one over SSH (MikroTik, OpenWrt) or with its smart plug (Tasmota, Shelly), by hand or by itself, with what to check by hand when that doesn't help. |
 | **Scheduled Tasks** | Per-user cron jobs and systemd timers. |
 | **Settings** | Laid out like a desktop's own settings: network, ad blocking, remote access, backup, power, applications, general (about, software update, storage, date and time, language, startup apps, sharing), appearance, Dock, menu bar, wallpaper, lock screen, Linux users and groups, and your login. |
 

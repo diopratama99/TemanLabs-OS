@@ -29,6 +29,14 @@ import type {
   K8sWorkload,
   AptUpdate,
   BlockDevice,
+  TrueNasApp,
+  Router,
+  RouterInput,
+  RoutersInfo,
+  RouterSearch,
+  ZfsInfo,
+  ZfsPool,
+  ZfsSnapshot,
   Crontab,
   FirewallRule,
   Job,
@@ -127,6 +135,135 @@ const disks: BlockDevice[] = [
       { name: 'sda1', path: '/dev/sda1', size: 500e9, type: 'part', fstype: 'ext4', label: 'HDD_DATA', mountpoints: ['/mnt/HDD_DATA'], rota: true, rm: false, fsused: 1e9, fsavail: 456e9 },
     ],
   },
+  // Two drives of a mirror pool brought over from TrueNAS.
+  ...['sdb', 'sdc'].map(
+    (name, i): BlockDevice => ({
+      name,
+      path: `/dev/${name}`,
+      size: 4e12,
+      type: 'disk',
+      model: 'WDC WD40EFRX-68N32N0',
+      serial: `WD-WCC7K${i}TXL4E${i}`,
+      tran: 'sata',
+      rota: true,
+      rm: false,
+      smart: { passed: true, temperature: 35 + i, powerOnHours: 30211 + i * 17, powerCycles: 88 },
+      children: [{ name: `${name}1`, path: `/dev/${name}1`, size: 4e12, type: 'part', fstype: 'zfs_member', label: 'tank', rota: true, rm: false }],
+    }),
+  ),
+]
+
+// The pool on those drives: importable until it's imported.
+const tankVdevs = (state: string) => [
+  {
+    name: 'tank',
+    state,
+    read: '0',
+    write: '0',
+    cksum: '0',
+    children: [
+      {
+        name: 'mirror-0',
+        state,
+        read: '0',
+        write: '0',
+        cksum: '0',
+        children: [
+          { name: '/dev/sdb1', state: 'ONLINE', read: '0', write: '0', cksum: '0' },
+          { name: '/dev/sdc1', state: 'ONLINE', read: '0', write: '0', cksum: '0' },
+        ],
+      },
+    ],
+  },
+]
+let mockTank: ZfsPool | null = null
+
+// A home network: the ISP's fibre modem, the main router behind it, and two access points, one
+// of which has stopped answering.
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3600e3).toISOString()
+const routerBase = { incidents: [], events: [], restarting: false, gaveUp: false, hasPassword: false, uptime24h: 1, uptime7d: 1, added: hoursAgo(24 * 20) }
+let mockRouters: Router[] = [
+  {
+    ...routerBase,
+    id: 'modem',
+    name: 'Fibre Modem',
+    host: '192.168.100.1',
+    kind: 'modem',
+    restart: { method: 'tasmota', plug: '192.168.1.40' },
+    autoRestart: true,
+    status: 'up',
+    latency: 2,
+    since: hoursAgo(70),
+    gateway: false,
+    uptime7d: 0.996,
+    incidents: [{ start: hoursAgo(70.6), end: hoursAgo(70), reason: 'Not answering' }],
+    events: [{ time: hoursAgo(70.1), text: 'Restarted by itself, because the internet was down.' }],
+  },
+  {
+    ...routerBase,
+    id: 'main',
+    name: 'MikroTik hAP ax²',
+    host: '192.168.1.1',
+    kind: 'router',
+    parent: 'modem',
+    restart: { method: 'mikrotik', username: 'admin', port: 22 },
+    hasPassword: true,
+    autoRestart: true,
+    status: 'up',
+    latency: 1,
+    since: hoursAgo(300),
+    gateway: true,
+  },
+  {
+    ...routerBase,
+    id: 'ap1',
+    name: 'Living Room AP',
+    host: '192.168.1.2',
+    kind: 'ap',
+    parent: 'main',
+    restart: { method: 'ssh', username: 'root', port: 22, command: 'reboot' },
+    hasPassword: true,
+    autoRestart: false,
+    status: 'up',
+    latency: 3,
+    since: hoursAgo(48),
+    gateway: false,
+  },
+  {
+    ...routerBase,
+    id: 'ap2',
+    name: 'Upstairs AP',
+    host: '192.168.1.3',
+    kind: 'ap',
+    parent: 'main',
+    restart: { method: '' },
+    autoRestart: false,
+    status: 'down',
+    since: hoursAgo(0.4),
+    gateway: false,
+    uptime24h: 0.983,
+    uptime7d: 0.991,
+    incidents: [{ start: hoursAgo(0.4), reason: 'Not answering' }],
+  },
+]
+const mockSnaps: ZfsSnapshot[] = [
+  { name: 'auto-2026-10-25_00-00', created: new Date(Date.now() - 2 * 86400e3).toISOString(), used: 1.2e9, datasets: 4, browse: '/tank/.zfs/snapshot/auto-2026-10-25_00-00' },
+  { name: 'auto-2026-10-18_00-00', created: new Date(Date.now() - 9 * 86400e3).toISOString(), used: 3.4e9, datasets: 4, browse: '/tank/.zfs/snapshot/auto-2026-10-18_00-00' },
+]
+const mockTrueNasApps: TrueNasApp[] = [
+  {
+    name: 'jellyfin',
+    title: 'Jellyfin',
+    version: '1.1.12',
+    kind: 'compose',
+    port: 30013,
+    scheme: 'http',
+    path: '/',
+    data: '/.ix-apps/app_mounts/jellyfin',
+    missing: [],
+    compose: 'services:\n  jellyfin:\n    image: jellyfin/jellyfin:10.10.3\n    ports:\n      - "30013:30013"\n    volumes:\n      - /mnt/.ix-apps/app_mounts/jellyfin/config:/config\n      - /mnt/tank/media:/media\n',
+  },
+  { name: 'nextcloud', title: 'Nextcloud', kind: 'kubernetes', data: '/tank/ix-applications/releases/nextcloud/volumes', missing: [] },
 ]
 
 const mockConverts: ConvertTask[] = []
@@ -264,7 +401,7 @@ export const mockSystem = {
   },
   remoteUrl: (): string | null => null,
   async job(kind: string) {
-    return kind === 'apt' ? aptJob : { kind, running: false, log: [] }
+    return kind === aptJob.kind ? aptJob : { kind, running: false, log: [] }
   },
   async updates() {
     return { updates, lastChecked: new Date(now() - 3600e3).toISOString(), rebootRequired: true, rebootFor: ['linux-image-6.8.0-147-generic'] }
@@ -303,6 +440,116 @@ export const mockSystem = {
 
   async disks() {
     return disks
+  },
+  async zfs(): Promise<ZfsInfo> {
+    return {
+      installed: true,
+      pools: mockTank ? [{ ...mockTank }] : [],
+      importable: mockTank
+        ? []
+        : [
+            {
+              name: 'tank',
+              id: '15378461712423906371',
+              state: 'ONLINE',
+              status: 'The pool was last accessed by another system.',
+              action: "The pool can be imported using its name or numeric identifier and the '-f' flag.",
+              vdevs: tankVdevs('ONLINE').map(({ name, state, children }) => ({ name, state, children })),
+            },
+          ],
+    }
+  },
+  async installZfs() {
+    return { job: 'zfs' }
+  },
+  async importPool(_id: string, name: string, readOnly: boolean) {
+    mockTank = {
+      name,
+      state: 'ONLINE',
+      scan: 'scrub repaired 0B in 05:12:44 with 0 errors on Sun Oct 12 05:36:45 2026',
+      errors: 'No known data errors',
+      scrubbing: false,
+      used: 2.31e12,
+      free: 1.25e12,
+      mount: '/tank',
+      readOnly,
+      vdevs: tankVdevs('ONLINE'),
+      locked: [],
+      skipped: [],
+      auto: { daily: false, keep: 14 },
+      trueNasApps: true,
+    }
+    if (!readOnly) mockSnaps.unshift({ name: 'temanlabs-imported-20261026-2240', created: new Date().toISOString(), used: 0, datasets: 4, browse: '/tank/.zfs/snapshot/temanlabs-imported-20261026-2240' })
+    aptJob = { kind: 'zfs', title: `Importing ${name}`, running: false, exit: 0, log: [`Importing ${name}…`, 'Mounted 4 datasets.', 'Done.'] }
+    return { job: 'zfs' }
+  },
+  async poolReadWrite(pool: string) {
+    return mockSystem.importPool('1', pool, false)
+  },
+  async scrubPool(_pool: string, stop = false) {
+    if (mockTank) mockTank = { ...mockTank, scrubbing: !stop, scan: stop ? 'scrub canceled on Mon Oct 26 22:41:02 2026' : 'scrub in progress since Mon Oct 26 22:40:00 2026 — 312G / 2.31T scanned, 13.5% done, 04:32:10 to go' }
+  },
+  async unlockDataset() {
+    return { log: [] }
+  },
+  async poolSnapshots() {
+    return { snapshots: mockSnaps, total: mockSnaps.length }
+  },
+  async snapshotPool(pool: string) {
+    const name = `temanlabs-manual-${Date.now()}`
+    mockSnaps.unshift({ name, created: new Date().toISOString(), used: 0, datasets: 4, browse: `/tank/.zfs/snapshot/${name}` })
+    return { snapshot: `${pool}@${name}` }
+  },
+  async setPoolAuto(_pool: string, auto: { daily: boolean; keep: number }) {
+    if (mockTank) mockTank = { ...mockTank, auto }
+  },
+  async trueNasApps() {
+    return mockTrueNasApps
+  },
+  async routers(): Promise<RoutersInfo> {
+    return {
+      routers: mockRouters.map(r => ({ ...r })),
+      gateway: '192.168.1.1',
+      internet: { up: true, since: hoursAgo(70), latency: 9, uptime24h: 1, incidents: [{ start: hoursAgo(70.6), end: hoursAgo(70), reason: 'No answer from the internet' }] },
+    }
+  },
+  async saveRouter(r: RouterInput, id?: string) {
+    const restart = { ...r.restart, password: undefined }
+    if (id) {
+      mockRouters = mockRouters.map(x => (x.id === id ? { ...x, ...r, restart, hasPassword: x.hasPassword || !!r.restart.password } : x))
+      return { id }
+    }
+    const added: Router = { ...routerBase, ...r, restart, id: `r${Date.now()}`, hasPassword: !!r.restart.password, status: 'unknown', gateway: false, added: new Date().toISOString() }
+    mockRouters = [...mockRouters, added]
+    return { id: added.id }
+  },
+  async deleteRouter(id: string) {
+    mockRouters = mockRouters.filter(r => r.id !== id).map(r => (r.parent === id ? { ...r, parent: '' } : r))
+  },
+  async findRouters(): Promise<RouterSearch> {
+    await delay(2500)
+    return {
+      gateway: '192.168.1.1',
+      routers: [
+        { host: '192.168.100.1', name: 'ZTE F670L', kind: 'modem', brand: 'ZTE', gateway: false, why: ['On the way to the internet'] },
+        { host: '192.168.1.1', name: 'MikroTik hAP ax²', kind: 'router', brand: 'MikroTik', method: 'mikrotik', parent: '192.168.100.1', gateway: true, why: ['This server’s gateway'] },
+        { host: '192.168.1.2', name: 'Living Room AP', kind: 'ap', brand: 'OpenWrt', method: 'ssh', parent: '192.168.1.1', gateway: false, why: ['OpenWrt admin page'] },
+        { host: '192.168.1.6', name: 'TP-Link Access Point', kind: 'ap', brand: 'TP-Link', parent: '192.168.1.1', gateway: false, why: ['TP-Link admin page'] },
+      ],
+      plugs: [
+        { host: '192.168.1.40', type: 'tasmota', name: 'Tasmota' },
+        { host: '192.168.1.41', type: 'shelly', name: 'Shelly Plus Plug S' },
+      ],
+    }
+  },
+  async testRouter(_id: string, form?: RouterInput) {
+    await delay(700)
+    const method = form?.restart.method
+    return { message: method === 'tasmota' || method === 'shelly' ? 'The plug answers and is on. Restarting switches it off for 10 seconds; the plug switches itself back on.' : 'Signed in over SSH. The router can be restarted from here.' }
+  },
+  async restartRouter(id: string) {
+    await delay(1200)
+    mockRouters = mockRouters.map(r => (r.id === id ? { ...r, events: [{ time: new Date().toISOString(), text: 'Restarted by hand.' }, ...r.events] } : r))
   },
   async mountDisk() {
     return { message: 'Done' }
@@ -523,7 +770,7 @@ export const mockSystem = {
     return { vendor: 'Lenovo', model: 'ThinkCentre M710q', modelNumber: '10MQS31W00', kind: 'mini', serial: 'MJ0ABCDE', year: '2017' }
   },
   async releaseStatus() {
-    return { current: 'v0.9.0', latest: 'v1.0.0', available: true, notes: '- App Center with the CasaOS app stores\n- Cloud drives and merged storage', arch: 'amd64', checked: new Date().toISOString() }
+    return { current: 'v0.9.0', latest: 'v1.0.0', available: true, notes: '### New\n- App Center with the CasaOS app stores\n- Cloud drives and merged storage\n\n### Fixed\n- The installer uses port 80, so the desktop opens at `http://<server-ip>`.\n\n**Full Changelog**: https://github.com/diopratama99/TemanLabs-OS/compare/v0.9.0...v1.0.0', arch: 'amd64', checked: new Date().toISOString() }
   },
   async installRelease() {
     return { job: 'self-update' }

@@ -27,7 +27,7 @@ Kelola Docker, file, backup, storage, layanan, jaringan, dan komputer lain di ru
   <a href="https://github.com/diopratama99/TemanLabs-OS/stargazers"><img src="https://img.shields.io/github/stars/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Stars" /></a>
 </p>
 
-[**Instalasi**](docs/installation.id.md) &nbsp;•&nbsp; [**Fitur**](#fitur) &nbsp;•&nbsp; [**Tampilan**](#tampilan) &nbsp;•&nbsp; [**Arsitektur**](docs/architecture.id.md) &nbsp;•&nbsp; [**API**](docs/architecture.id.md#daftar-endpoint-api)
+[**Instalasi**](docs/installation.id.md) &nbsp;•&nbsp; [**Dari TrueNAS**](docs/migrate-truenas.id.md) &nbsp;•&nbsp; [**Fitur**](#fitur) &nbsp;•&nbsp; [**Tampilan**](#tampilan) &nbsp;•&nbsp; [**Arsitektur**](docs/architecture.id.md) &nbsp;•&nbsp; [**API**](docs/architecture.id.md#daftar-endpoint-api)
 
 <br />
 
@@ -161,10 +161,11 @@ Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting)
 | **Devices** | Komputer lain di jaringanmu: status menyala/mati, **Wake-on-LAN** untuk menyalakannya dari mana saja, pemindaian jaringan yang menemukannya beserta namanya, dan **layarnya di sebuah jendela** lewat VNC atau RDP. Mesin remote desktop-nya berjalan di container kecil yang hanya bisa diakses server sendiri. |
 | **Terminal** | Shell penuh di browser (xterm.js + PTY). |
 | **Commands** | Ratusan perintah terminal untuk Ubuntu dan tool yang terpasang (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), perintah untuk setiap app terpasang, riwayat shell, dan perintah simpananmu sendiri. Cari dengan kalimat biasa (“cara lihat port yang terbuka”), isi bagian yang kosong, lalu kirim ke Terminal. |
-| **Disk Manager** | Drive, partisi, kesehatan SMART, mount dan **mount saat startup**, **format** (ext4, xfs, btrfs, exFAT, NTFS), analisis ruang, **merged storage** (mergerfs), auto-mount dan eject USB, serta **cloud drive** lewat rclone. |
+| **Disk Manager** | Drive, partisi, kesehatan SMART, mount dan **mount saat startup**, **format** (ext4, xfs, btrfs, exFAT, NTFS), analisis ruang, **merged storage** (mergerfs), auto-mount dan eject USB, **cloud drive** lewat rclone, serta **pool ZFS**: import dari TrueNAS (baca-saja dulu), kesehatannya, scrub, dan snapshot harian. Lihat [Pindah dari TrueNAS SCALE](docs/migrate-truenas.id.md). |
 | **System Updates** | Update paket `apt` dengan log langsung dan pemberitahuan kalau perlu restart. |
 | **Log Viewer** | Journal systemd per kategori atau per service. |
 | **Network Tools** | Interface, ping, traceroute, DNS, koneksi aktif, dan firewall (ufw). |
+| **Router** | Modem, router, dan access point dicek setiap 30 detik: mana yang mati, apakah internetnya putus, uptime, dan riwayat gangguan. Restart lewat SSH (MikroTik, OpenWrt) atau smart plug (Tasmota, Shelly), manual maupun otomatis, lengkap dengan apa yang perlu dicek sendiri kalau restart tidak membantu. |
 | **Scheduled Tasks** | Cron job per user dan timer systemd. |
 | **Pengaturan** | Tertata seperti pengaturan desktop: jaringan, blokir iklan, akses jarak jauh, backup, daya, aplikasi, umum (tentang, pembaruan software, storage, tanggal & waktu, bahasa, app saat mulai, berbagi), tampilan, Dock, bar menu, wallpaper, kunci layar, user & grup Linux, dan login-mu. |
 

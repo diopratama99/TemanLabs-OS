@@ -32,7 +32,7 @@ export function NetworkTools() {
       <WindowToolbar>
         <ToolbarTitle title={tr('Network Tools')} />
         <span className="tb-spacer" />
-        <div className="tb-segmented">
+        <div className="tb-segmented is-centered">
           {TABS.map(t => (
             <button key={t.id} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>
               {t.label}

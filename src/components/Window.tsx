@@ -27,6 +27,7 @@ export type SystemWindowId =
   | 'remux'
   | 'commands'
   | 'devices'
+  | 'routers'
   | 'settings'
   | 'about'
   | 'downloader'

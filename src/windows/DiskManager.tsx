@@ -6,6 +6,8 @@ import {
   Cloud,
   ExternalLink,
   Combine,
+  Database,
+  DatabaseZap,
   Eraser,
   Folder,
   HardDrive,
@@ -20,7 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '../api'
-import type { BlockDevice, CloudInfo, CloudProvider, DiskUsage, FormatFS, Job, StorageInfo } from '../api/types'
+import type { BlockDevice, CloudInfo, CloudProvider, DiskUsage, FormatFS, Job, StorageInfo, ZfsInfo } from '../api/types'
 import { Switch } from '../components/Switch'
 import { usePresence } from '../hooks/usePresence'
 import { useAppMenus } from '../lib/appMenus'
@@ -28,6 +30,7 @@ import { formatBytes } from '../lib/format'
 import { displayName, joinPath, parentOf } from '../lib/paths'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
+import { poolKey, poolLevel, ZFS_IMPORT, ZfsImportPane, ZfsPoolPane } from './ZfsPanes'
 
 type Tab = 'info' | 'usage'
 
@@ -42,7 +45,11 @@ function health(d: BlockDevice): { level: 'ok' | 'warn' | 'bad' | 'unknown'; tex
   return { level: 'ok', text: tr('Healthy') }
 }
 
-const isVolume = (d: BlockDevice) => !!d.fstype && d.fstype !== 'LVM2_member' && d.fstype !== 'swap'
+// A ZFS pool's drives are shown as the pool, under ZFS Pools.
+const isVolume = (d: BlockDevice) => !!d.fstype && d.fstype !== 'LVM2_member' && d.fstype !== 'swap' && d.fstype !== 'zfs_member'
+/** The ZFS pool a drive (or one of its partitions) belongs to. */
+const zfsPoolOf = (d: BlockDevice): string | undefined =>
+  d.fstype === 'zfs_member' ? d.label || '?' : (d.children ?? []).map(zfsPoolOf).find(Boolean)
 const SYSTEM_MOUNTS = ['/', '/boot', '/boot/efi', '[SWAP]']
 const MERGED = 'storage:merged'
 const CLOUD = 'storage:cloud'
@@ -54,6 +61,8 @@ function eraseBlocker(d: BlockDevice): string | null {
     if (m) return SYSTEM_MOUNTS.includes(m) ? `${x.name} holds the system` : `${x.name} is mounted at ${m}; unmount it first`
     if (x.fstype === 'LVM2_member') return `${x.name} is part of an LVM volume group`
     if (x.fstype === 'linux_raid_member') return `${x.name} is part of a RAID array`
+    if (x.fstype === 'zfs_member') return tr('{0} is part of the ZFS pool {1}: formatting it would destroy the pool’s files', x.name, x.label || '?')
+    if (x.fstype === 'crypto_LUKS') return `${x.name} is an encrypted volume`
     for (const c of x.children ?? []) {
       const why = walk(c)
       if (why) return why
@@ -67,7 +76,7 @@ const mainMount = (v: BlockDevice) => (v.mountpoints?.includes('/') ? '/' : v.mo
 const volumeName = (v: BlockDevice) => v.label || mainMount(v) || v.name
 
 /** Disk Manager: drives, partitions, health, mounting, and what takes up space. */
-export function DiskManager() {
+export function DiskManager({ onShowInFiles }: { onShowInFiles: (path: string) => void }) {
   const [disks, setDisks] = useState<BlockDevice[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -76,12 +85,14 @@ export function DiskManager() {
   const [note, setNote] = useState<string | null>(null)
   const [storage, setStorage] = useState<StorageInfo | null>(null)
   const [formatting, setFormatting] = useState<BlockDevice | null>(null)
+  const [zfs, setZfs] = useState<ZfsInfo | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const [list, info] = await Promise.all([api.disks(), api.storage().catch(() => null)])
+      const [list, info, pools] = await Promise.all([api.disks(), api.storage().catch(() => null), api.zfs().catch(() => null)])
       setDisks(list)
       setStorage(info)
+      setZfs(pools)
       setError(null)
       setSelected(s => s ?? list[0]?.path ?? null)
     } catch (err) {
@@ -97,6 +108,9 @@ export function DiskManager() {
   const item = all.find(d => d.path === selected) ?? null
   const disk = (disks ?? []).find(d => d.path === selected || (d.children ?? []).some(c => c.path === selected || (c.children ?? []).some(g => g.path === selected))) ?? null
   const mount = item ? mainMount(item) : undefined
+  const pool = zfs?.pools.find(p => poolKey(p.name) === selected) ?? null
+  const showZfs = !!zfs?.pools.length || !!zfs?.importable.length || (disks ?? []).some(d => zfsPoolOf(d))
+  const memberOf = disk ? zfsPoolOf(disk) : undefined
 
   const toggleMount = async () => {
     if (!item) return
@@ -171,24 +185,47 @@ export function DiskManager() {
         <button className={`sidebar-item ${selected === CLOUD ? 'is-active' : ''}`} onClick={() => setSelected(CLOUD)}>
           <Cloud size={15} /> {tr('Cloud Drives')}
         </button>
+        {showZfs && (
+          <>
+            <div className="sidebar-group">{tr('ZFS Pools')}</div>
+            {(zfs?.pools ?? []).map(p => (
+              <button key={p.name} className={`sidebar-item ${selected === poolKey(p.name) ? 'is-active' : ''}`} onClick={() => setSelected(poolKey(p.name))}>
+                <Database size={15} /> <span className="du-side-name">{p.name}</span>
+                {poolLevel(p.state) !== 'ok' && <TriangleAlert size={12} className={`du-warn is-${poolLevel(p.state)}`} />}
+              </button>
+            ))}
+            <button className={`sidebar-item ${selected === ZFS_IMPORT ? 'is-active' : ''}`} onClick={() => setSelected(ZFS_IMPORT)}>
+              <DatabaseZap size={15} /> {tr('Import Pools')}
+              {zfs?.importable.length ? <span className="sidebar-badge">{zfs.importable.length}</span> : null}
+            </button>
+          </>
+        )}
         {error && <p className="form-error">{error}</p>}
       </aside>
 
       <div className="pane du">
         <WindowToolbar>
           <ToolbarTitle
-            title={item ? (item === disk ? disk.model || disk.name : volumeName(item)) : tr('Disk Manager')}
-            subtitle={item ? `${formatBytes(item.size)} ${item.fstype ? item.fstype.toUpperCase() : item.tran?.toUpperCase() ?? ''}` : undefined}
+            title={pool ? pool.name : selected === ZFS_IMPORT ? tr('Import Pools') : item ? (item === disk ? disk.model || disk.name : volumeName(item)) : tr('Disk Manager')}
+            subtitle={
+              pool
+                ? tr('ZFS pool · {0}', formatBytes(pool.used + pool.free))
+                : item
+                  ? `${formatBytes(item.size)} ${item.fstype ? item.fstype.toUpperCase() : item.tran?.toUpperCase() ?? ''}`
+                  : undefined
+            }
           />
           <span className="tb-spacer" />
-          <div className="tb-segmented">
-            <button className={tab === 'info' ? 'is-active' : ''} onClick={() => setTab('info')}>
-              {tr('Info')}
-            </button>
-            <button className={tab === 'usage' ? 'is-active' : ''} onClick={() => setTab('usage')} disabled={!mount && !disk}>
-              {tr('Space Usage')}
-            </button>
-          </div>
+          {item && (
+            <div className="tb-segmented">
+              <button className={tab === 'info' ? 'is-active' : ''} onClick={() => setTab('info')}>
+                {tr('Info')}
+              </button>
+              <button className={tab === 'usage' ? 'is-active' : ''} onClick={() => setTab('usage')} disabled={!mount && !disk}>
+                {tr('Space Usage')}
+              </button>
+            </div>
+          )}
           <div className="tb-group">
             <button className="tb-btn" onClick={() => void refresh()} aria-label={tr('Refresh')} title={tr('Refresh')}>
               <RotateCw size={14} />
@@ -196,7 +233,11 @@ export function DiskManager() {
           </div>
         </WindowToolbar>
 
-        {selected === CLOUD ? (
+        {selected === ZFS_IMPORT ? (
+          <ZfsImportPane info={zfs} onChanged={() => void refresh()} />
+        ) : pool ? (
+          <ZfsPoolPane pool={pool} onChanged={() => void refresh()} onShowInFiles={onShowInFiles} />
+        ) : selected === CLOUD ? (
           <CloudPane />
         ) : selected === MERGED ? (
           <MergedPane disks={disks ?? []} storage={storage} onChanged={refresh} />
@@ -233,6 +274,7 @@ export function DiskManager() {
                   <Row label={tr('Connection')} value={disk.tran?.toUpperCase()} />
                   <Row label={tr('Type')} value={disk.rota ? tr('Hard disk (spinning)') : tr('Solid-state')} />
                   <Row label={tr('Device')} value={disk.path} />
+                  <Row label={tr('ZFS pool')} value={memberOf} />
                 </>
               ) : (
                 <>
@@ -287,6 +329,11 @@ export function DiskManager() {
 
             <div className="du-actions">
               {note && <span className="form-hint">{note}</span>}
+              {memberOf && (
+                <button className="btn" onClick={() => setSelected(zfs?.pools.some(p => p.name === memberOf) ? poolKey(memberOf) : ZFS_IMPORT)}>
+                  <Database size={13} /> {zfs?.pools.some(p => p.name === memberOf) ? tr('Show Pool') : tr('Import Pool…')}
+                </button>
+              )}
               {removable && item === disk && (
                 <button className="btn" onClick={() => void run(() => api.ejectDisk(disk.path), 'Ejected: you can unplug it now.')} disabled={busy}>
                   <Power size={13} /> {tr('Eject')}

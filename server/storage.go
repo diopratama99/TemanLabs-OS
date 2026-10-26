@@ -91,6 +91,14 @@ func inUse(d *lsblkRaw) string {
 			return x.Name + " is part of an LVM volume group"
 		case "linux_raid_member":
 			return x.Name + " is part of a RAID array"
+		case "zfs_member":
+			// A pool's drive, imported or not (a TrueNAS pool before it's imported looks unused).
+			if pool := str(x.Label); pool != "" {
+				return x.Name + " is part of the ZFS pool " + pool + "; formatting it would destroy the pool's data"
+			}
+			return x.Name + " is part of a ZFS pool; formatting it would destroy the pool's data"
+		case "crypto_LUKS":
+			return x.Name + " is an encrypted volume"
 		case "swap":
 			return x.Name + " is swap space"
 		}

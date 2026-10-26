@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -30,6 +32,9 @@ type disk struct {
 	Total uint64 `json:"total"`
 	// A cloud drive (rclone): its size is whatever the provider reports, so widgets skip it.
 	Cloud bool `json:"cloud,omitempty"`
+	// The ZFS pool it is, and the pool's state (ONLINE, DEGRADED…).
+	Pool   string `json:"pool,omitempty"`
+	Health string `json:"health,omitempty"`
 }
 
 type lanAddress struct {
@@ -229,21 +234,49 @@ var realFilesystems = map[string]bool{
 }
 
 // diskUsage lists mounted filesystems that hold data: real filesystems, minus boot partitions
-// and the bind mounts Docker and snap create.
+// and the bind mounts Docker and snap create. A ZFS pool is one entry, however many datasets
+// (each its own mount) it has.
 func diskUsage() []disk {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
+	disks := listDisks(f, statSpace, zfsPoolSpace)
+	for i := range disks {
+		if disks[i].Pool != "" {
+			disks[i].Health = zfsHealth(disks[i].Pool)
+		}
+	}
+	return disks
+}
+
+// fsSpace is a filesystem's size, used and free (for unprivileged users) space in bytes.
+type fsSpace struct{ total, used, free uint64 }
+
+func statSpace(mount string) (fsSpace, bool) {
+	var st syscall.Statfs_t
+	if syscall.Statfs(mount, &st) != nil || st.Blocks == 0 {
+		return fsSpace{}, false
+	}
+	b := uint64(st.Bsize)
+	return fsSpace{total: st.Blocks * b, used: (st.Blocks - st.Bfree) * b, free: st.Bavail * b}, true
+}
+
+// listDisks reads mounts in /proc/mounts' format; stat and poolSpace measure them.
+func listDisks(mounts io.Reader, stat func(string) (fsSpace, bool), poolSpace func(string) (used, free uint64, ok bool)) []disk {
 	seen := map[string]bool{}
 	var disks []disk
-	sc := bufio.NewScanner(f)
+	pools := map[string]int{} // pool name → its entry in disks
+	sc := bufio.NewScanner(mounts)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
+		if len(fields) < 3 {
+			continue
+		}
 		// Merged storage (mergerfs) and cloud drives (rclone) are folders people use like drives.
 		fuse := fields[2] == "fuse.mergerfs" || fields[2] == "fuse.rclone"
-		if len(fields) < 3 || (!realFilesystems[fields[2]] && !fuse) || seen[fields[0]] {
+		if (!realFilesystems[fields[2]] && !fuse) || seen[fields[0]] {
 			continue
 		}
 		mount := unescapeMount(fields[1])
@@ -251,12 +284,31 @@ func diskUsage() []disk {
 			strings.HasPrefix(mount, "/var/lib/docker") || strings.HasPrefix(mount, "/run") {
 			continue
 		}
-		var fsStat syscall.Statfs_t
-		if syscall.Statfs(mount, &fsStat) != nil || fsStat.Blocks == 0 {
+		space, ok := stat(mount)
+		if !ok {
 			continue
 		}
 		seen[fields[0]] = true
-		bsize := uint64(fsStat.Bsize)
+		used := space.used
+		if fields[2] == "zfs" {
+			// Datasets share the pool's free space: add up what they use, and the pool's entry
+			// goes by its topmost mount.
+			pool, _, _ := strings.Cut(fields[0], "/")
+			free := space.free
+			if i, ok := pools[pool]; ok {
+				d := &disks[i]
+				prevFree := d.Total - d.Used
+				d.Used += used
+				d.Total = d.Used + max(free, prevFree)
+				if len(mount) < len(d.Mount) {
+					d.Mount = mount
+				}
+				continue
+			}
+			pools[pool] = len(disks)
+			disks = append(disks, disk{Name: pool, Mount: mount, Used: used, Total: used + free, Pool: pool})
+			continue
+		}
 		name := filepath.Base(mount)
 		if mount == "/" {
 			name = "System"
@@ -264,12 +316,61 @@ func diskUsage() []disk {
 		disks = append(disks, disk{
 			Name:  name,
 			Mount: mount,
-			Total: fsStat.Blocks * bsize,
-			Used:  (fsStat.Blocks - fsStat.Bfree) * bsize,
+			Total: space.total,
+			Used:  used,
 			Cloud: fields[2] == "fuse.rclone",
 		})
 	}
+	for pool, i := range pools {
+		d := &disks[i]
+		if used, free, ok := poolSpace(pool); ok {
+			d.Used, d.Total = used, used+free
+		}
+		if d.Mount == "/" {
+			d.Name = "System"
+		}
+	}
 	return disks
+}
+
+// zfsPoolSpace is what a pool's datasets use (snapshots and unmounted ones too) and what's left,
+// from zfs itself; read at most every 30 seconds, as the stats are polled often.
+func zfsPoolSpace(pool string) (used, free uint64, ok bool) {
+	zfsSpace.Lock()
+	defer zfsSpace.Unlock()
+	if time.Since(zfsSpace.at) > 30*time.Second {
+		zfsSpace.at = time.Now()
+		zfsSpace.pools = map[string][2]uint64{}
+		zfsSpace.health = zfsPoolHealth()
+		out, _ := exec.Command("zfs", "list", "-Hp", "-d", "0", "-o", "name,used,avail").Output()
+		for _, line := range strings.Split(string(out), "\n") {
+			f := strings.Fields(line)
+			if len(f) != 3 {
+				continue
+			}
+			u, err1 := strconv.ParseUint(f[1], 10, 64)
+			a, err2 := strconv.ParseUint(f[2], 10, 64)
+			if err1 == nil && err2 == nil {
+				zfsSpace.pools[f[0]] = [2]uint64{u, a}
+			}
+		}
+	}
+	space, ok := zfsSpace.pools[pool]
+	return space[0], space[1], ok
+}
+
+// zfsHealth is the pool's state from the same reading as zfsPoolSpace.
+func zfsHealth(pool string) string {
+	zfsSpace.Lock()
+	defer zfsSpace.Unlock()
+	return zfsSpace.health[pool]
+}
+
+var zfsSpace struct {
+	sync.Mutex
+	at     time.Time
+	pools  map[string][2]uint64
+	health map[string]string
 }
 
 // unescapeMount decodes the octal escapes /proc/mounts uses for spaces and tabs.

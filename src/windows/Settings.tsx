@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Accessibility,
   CalendarClock,
@@ -475,6 +475,49 @@ export function Settings({ stats, section, onSectionChange, onOpenWindow, onPowe
 }
 
 /** Version and self-update from GitHub releases. */
+/** A release's notes (the Markdown from CHANGELOG.md and GitHub) as headings and lists. */
+function ReleaseNotes({ notes }: { notes: string }) {
+  const blocks: ReactNode[] = []
+  let items: string[] = []
+  const flush = () => {
+    if (items.length) blocks.push(<ul key={blocks.length}>{items.map((t, i) => <li key={i}>{inline(t)}</li>)}</ul>)
+    items = []
+  }
+  for (const raw of notes.split('\n')) {
+    const line = raw.trim()
+    // GitHub's compare link and empty lines carry nothing to read here.
+    if (!line || /^\*\*Full Changelog\*\*/.test(line)) {
+      flush()
+      continue
+    }
+    const item = line.match(/^[-*]\s+(.*)/)
+    if (item) {
+      items.push(item[1])
+      continue
+    }
+    flush()
+    const heading = line.match(/^#{1,6}\s+(.*)/)
+    blocks.push(heading ? <h5 key={blocks.length}>{heading[1]}</h5> : <p key={blocks.length}>{inline(line)}</p>)
+  }
+  flush()
+  return <div className="about-notes">{blocks}</div>
+}
+
+/** `code`, **bold** and [links](…) in a line of notes; links keep only their text. */
+function inline(text: string): ReactNode[] {
+  return text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/).map((part, i) =>
+    part.startsWith('`') ? (
+      <code key={i}>{part.slice(1, -1)}</code>
+    ) : part.startsWith('**') ? (
+      <b key={i}>{part.slice(2, -2)}</b>
+    ) : part.startsWith('[') ? (
+      part.slice(1, part.indexOf(']'))
+    ) : (
+      part
+    ),
+  )
+}
+
 function AboutUpdate() {
   const [status, setStatus] = useState<ReleaseStatus | null>(null)
   const [checking, setChecking] = useState(false)
@@ -541,7 +584,7 @@ function AboutUpdate() {
       ) : status?.available ? (
         <div className="about-new">
           <strong>{status.latest} {tr('is available')}</strong>
-          {status.notes && <pre>{status.notes.slice(0, 600)}</pre>}
+          {status.notes && <ReleaseNotes notes={status.notes} />}
           <button className="btn btn-primary" onClick={() => void install()}>
             {tr('Update to')} {status.latest}
           </button>

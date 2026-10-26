@@ -18,6 +18,7 @@ import { MusicPlayer } from '../windows/MusicPlayer'
 import { NetworkTools } from '../windows/NetworkTools'
 import { PhotoViewer } from '../windows/PhotoViewer'
 import { Remux } from '../windows/Remux'
+import { Routers } from '../windows/Routers'
 import { ScheduledTasks } from '../windows/ScheduledTasks'
 import { Settings, type SettingsSection } from '../windows/Settings'
 import { Sharing, type ShareRequest } from '../windows/Sharing'
@@ -50,6 +51,7 @@ export const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: numb
   remux: { title: tr('Remux'), width: 980, height: 640 },
   commands: { title: tr('Commands'), width: 1040, height: 680 },
   devices: { title: tr('Devices'), width: 900, height: 600 },
+  routers: { title: tr('Routers'), width: 900, height: 640 },
   about: { title: tr('About This Server'), width: 300, height: 430 },
   downloader: { title: tr('Downloader'), width: 820, height: 600 },
   recorder: { title: tr('Live Recorder'), width: 900, height: 640 },
@@ -72,6 +74,7 @@ export const WINDOW_VARIANT: Partial<Record<SystemWindowId, 'sidebar' | 'compact
   music: 'compact',
   remux: 'compact',
   devices: 'compact',
+  routers: 'compact',
   about: 'compact',
   commands: 'sidebar',
 }
@@ -176,6 +179,8 @@ export function renderSystemWindow(id: SystemWindowId, h: WindowHost) {
       return <VideoPlayer request={h.mediaRequests.video ?? null} onTitle={t => h.setWindowTitle('video', t)} onConvert={h.openRemux} />
     case 'devices':
       return <Devices onConnect={h.openRemote} />
+    case 'routers':
+      return <Routers />
     case 'downloader':
       return <Downloader onOpenMedia={h.openMedia} onShowInFiles={h.openFilesAt} />
     case 'recorder':
@@ -193,7 +198,7 @@ export function renderSystemWindow(id: SystemWindowId, h: WindowHost) {
     case 'console':
       return <LogViewer />
     case 'disks':
-      return <DiskManager />
+      return <DiskManager onShowInFiles={h.openFilesAt} />
     case 'network':
       return <NetworkTools />
     case 'scheduler':

@@ -364,6 +364,7 @@ function StorageWidget({ size, options, data }: { size: WidgetSize; options: Wid
               <div className="disk-row">
                 <span>
                   {disk.name} <small>{disk.mount}</small>
+                  {disk.health && disk.health !== 'ONLINE' && <b className="disk-health">{disk.health}</b>}
                 </span>
                 <span>{Math.round(pctOf(disk.used, disk.total))}%</span>
               </div>
