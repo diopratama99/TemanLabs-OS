@@ -55,7 +55,7 @@ const id: Content = {
   },
   hosts: {
     title: 'Jalan di perangkat yang sudah kamu punya.',
-    lead: 'Apa pun yang menjalankan Ubuntu 22.04 / 24.04 atau Debian dengan systemd, di prosesor amd64 atau arm64.',
+    lead: 'Apa pun yang menjalankan Ubuntu (22.04, 24.04, atau 26.04) atau Debian dengan systemd, di prosesor amd64 atau arm64.',
     items: [
       { icon: 'cloud', title: 'VPS', text: 'Server cloud yang kamu sewa. Tentang Server Ini tahu kalau ia server virtual.', arch: 'amd64 · arm64' },
       { icon: 'server', title: 'Dedicated server', text: 'Satu mesin utuh di data center, atau rak di kantor.', arch: 'amd64 · arm64' },
@@ -189,7 +189,7 @@ const id: Content = {
     version: `Versi ${VERSION}`,
     rows: [
       ['Berjalan sebagai', 'Satu binary Go, layanan systemd'],
-      ['Kebutuhan', 'Ubuntu 22.04 / 24.04 atau Debian'],
+      ['Kebutuhan', 'Ubuntu 22.04, 24.04, 26.04, atau Debian'],
       ['Prosesor', 'amd64 dan arm64'],
       ['Bekerja dengan', 'Docker, systemd, apt, ufw, Samba'],
       ['Di HP', 'Tampilan sendiri, terpasang seperti app'],
@@ -218,25 +218,25 @@ const id: Content = {
     window: 'Memulai',
     steps: [
       { title: 'Jalankan installer', text: 'Di server, sebagai user dengan sudo.' },
-      { title: 'Buka desktopnya', text: 'Buka http://<ip-server>:7700 dari browser mana pun di rumah.' },
+      { title: 'Buka desktopnya', text: 'Buka http://<ip-server> dari browser mana pun di rumah. Tanpa perlu menulis port.' },
       { title: 'Masuk', text: 'Dengan INITIAL_PASSWORD yang ditampilkan installer, lalu ganti di Pengaturan → Akun.' },
     ],
     terminal: [
       '==> Downloading TemanLabsOS (latest, amd64)…',
       '==> Installing for user admin…',
       'INITIAL_PASSWORD=k3Xr9•••••••',
-      '==> TemanLabsOS is running: http://192.168.1.20:7700',
+      '==> TemanLabsOS is running: http://192.168.1.20',
       '==> Sign in with the INITIAL_PASSWORD above (first install), then change it in Settings → Account.',
     ],
     guide: 'Panduan instalasi',
-    requirements: 'Ubuntu 22.04 / 24.04 atau Debian dengan systemd, di amd64 atau arm64. Docker dipasangkan untukmu.',
+    requirements: 'Ubuntu (22.04, 24.04, atau 26.04) atau Debian dengan systemd, di amd64 atau arm64. Docker dipasangkan untukmu.',
   },
   faq: {
     window: 'Pertanyaan',
     title: 'Perlu diketahui',
     items: [
       { q: 'Apakah TemanLabsOS gratis?', a: 'Ya. Open source dengan Lisensi MIT, tanpa versi berbayar, tanpa akun, dan tanpa iklan. App dan tool yang dipasangnya tetap memakai lisensinya masing-masing.' },
-      { q: 'Apa yang dibutuhkan untuk menjalankannya?', a: 'Server atau komputer bekas dengan Ubuntu 22.04 / 24.04 atau Debian dan systemd, di prosesor amd64 atau arm64. Installer memasang Docker kalau belum ada.' },
+      { q: 'Apa yang dibutuhkan untuk menjalankannya?', a: 'Server atau komputer bekas dengan Ubuntu (22.04, 24.04, atau 26.04) atau Debian dan systemd, di prosesor amd64 atau arm64. Installer memasang Docker kalau belum ada.' },
       { q: 'Apakah bisa dipakai dengan app yang sudah jalan?', a: 'Bisa. Ia menemukan setiap container Docker di server, bagaimanapun cara menjalankannya: dari Pusat Aplikasi, file compose-mu sendiri, atau docker run. Kalau ada CasaOS, app-nya juga terbaca.' },
       { q: 'Bisakah dibuka dari luar rumah?', a: 'Bisa, lewat Tailscale: Pengaturan → Akses Jarak Jauh memandu langkahnya. Jangan buka port-nya langsung ke internet, karena ia punya kendali penuh atas server.' },
       { q: 'Apakah dataku dikirim ke mana-mana?', a: 'Tidak. TemanLabsOS tidak mengirim analitik atau data penggunaan. Ia hanya terhubung keluar untuk fitur yang kamu pakai, seperti Pusat Aplikasi atau backup ke cloud, dan Pengaturan → Privasi & Ketentuan mencantumkan semuanya.' },

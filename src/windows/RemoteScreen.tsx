@@ -1,5 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import { ClipboardCopy, Expand, Keyboard as KeyboardIcon, LoaderCircle, MonitorOff, RotateCw, Shrink, TriangleAlert } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  ClipboardCopy,
+  Expand,
+  Hand,
+  Keyboard as KeyboardIcon,
+  LoaderCircle,
+  MonitorOff,
+  MousePointer2,
+  RotateCw,
+  Shrink,
+  TriangleAlert,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react'
 // The package's ES build exports the whole Guacamole namespace as its default export.
 import Guacamole, { type Client, type Status } from 'guacamole-common-js'
 import { api } from '../api'
@@ -10,9 +23,12 @@ import { KIND_ICON } from './Devices'
 
 // A device's screen in a window. The server opens the VNC or RDP session (with the saved
 // password) through the remote desktop engine and relays it here; this only draws the picture
-// and sends keys, clicks and copied text.
+// and sends keys, clicks and copied text. On a touch screen it works like a remote desktop app on
+// a phone: the finger drives a pointer (touchpad) or clicks where it lands (touch), a keyboard
+// comes up on screen, and the picture zooms.
 
 type Phase = 'connecting' | 'connected' | 'error' | 'closed'
+type TouchMode = 'touchpad' | 'touch'
 
 // X11 keysyms for the modifier keys.
 const CTRL_L = 0xffe3
@@ -20,16 +36,39 @@ const CTRL_R = 0xffe4
 const META_L = 0xffe7
 const META_R = 0xffe8
 const ALT_L = 0xffe9
+const SUPER_L = 0xffeb
 const DELETE = 0xffff
+const BACKSPACE = 0xff08
+const RETURN = 0xff0d
+const TAB = 0xff09
+const ESCAPE = 0xff1b
 const KEY_V = [0x76, 0x56]
 // How long to wait for the browser's paste event after Ctrl+V before sending the key anyway.
 const PASTE_WAIT_MS = 200
 const RESIZE_DEBOUNCE_MS = 300
+// Zoom steps on a touch screen, over the picture fitted to the window.
+const ZOOMS = [1, 1.5, 2, 3, 4]
+// How close to the edge the pointer may come before a zoomed picture follows it.
+const FOLLOW_MARGIN = 48
+// A remote desktop's size when asked from a phone: a desktop's, zoomed into, rather than one the
+// shape of a phone.
+const TOUCH_SIZE = { width: 1600, height: 900 }
+// What the hidden text field holds, so a backspace always has something to delete.
+const SENTINEL = '  '
 
 const localIsMac = /Mac|iPhone|iPad/.test(navigator.platform)
+const touchScreen = matchMedia('(pointer: coarse)').matches
 
 const swapKey = (keysym: number) =>
   keysym === CTRL_L ? META_L : keysym === CTRL_R ? META_R : keysym === META_L ? CTRL_L : keysym === META_R ? CTRL_R : keysym
+
+// A typed character as a keysym: Latin-1 as itself, anything else by its code point.
+const charKeysym = (ch: string) => {
+  if (ch === '\n') return RETURN
+  if (ch === '\t') return TAB
+  const code = ch.codePointAt(0)!
+  return code < 0x100 ? code : 0x01000000 | code
+}
 
 function readSwap(device: Device) {
   try {
@@ -40,6 +79,14 @@ function readSwap(device: Device) {
   }
   // The shortcut key differs (Ctrl here, Command there, or the other way round).
   return localIsMac !== (device.kind === 'mac')
+}
+
+function readMode(): TouchMode {
+  try {
+    return localStorage.getItem('remote.touchMode') === 'touch' ? 'touch' : 'touchpad'
+  } catch {
+    return 'touchpad'
+  }
 }
 
 // The server's own failures come as keys; the rest are guacd's.
@@ -76,6 +123,7 @@ function errorText(status: Status, device: Device) {
 export function RemoteScreen({ device, active }: { device: Device; active: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const surface = useRef<HTMLDivElement>(null)
+  const typing = useRef<HTMLTextAreaElement>(null)
   const clientRef = useRef<Client | null>(null)
   const [phase, setPhase] = useState<Phase>('connecting')
   const [error, setError] = useState<string | null>(null)
@@ -84,12 +132,25 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [remoteText, setRemoteText] = useState<string | null>(null)
   const [swap, setSwap] = useState(() => readSwap(device))
+  const [mode, setMode] = useState<TouchMode>(readMode)
+  const [zoom, setZoom] = useState(1)
+  const [keysOpen, setKeysOpen] = useState(false)
+  // Modifiers held for the next key from the on-screen keys.
+  const [held, setHeld] = useState<number[]>([])
   const swapRef = useRef(swap)
   swapRef.current = swap
   const fitRef = useRef(fit)
   fitRef.current = fit
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const heldRef = useRef(held)
+  heldRef.current = held
+  const keysOpenRef = useRef(keysOpen)
+  keysOpenRef.current = keysOpen
 
-  // Scales the picture to the window (or shows it 1:1 with scroll bars).
+  // Scales the picture to the window (or shows it 1:1 with scroll bars), then zoomed.
   const rescale = () => {
     const client = clientRef.current
     const el = host.current
@@ -98,8 +159,45 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     const w = display.getWidth()
     const h = display.getHeight()
     if (!w || !h) return
-    const scale = fitRef.current ? Math.min(el.clientWidth / w, el.clientHeight / h) : 1 / (window.devicePixelRatio || 1)
-    display.scale(scale)
+    const base = fitRef.current ? Math.min(el.clientWidth / w, el.clientHeight / h) : 1 / (window.devicePixelRatio || 1)
+    display.scale(base * zoomRef.current)
+  }
+
+  // Zooms to a step, keeping the point under (x, y) in the window where it was.
+  const zoomTo = (next: number, x?: number, y?: number) => {
+    const el = host.current
+    const client = clientRef.current
+    if (!el || !client) return
+    const before = client.getDisplay().getScale()
+    const cx = x ?? el.clientWidth / 2
+    const cy = y ?? el.clientHeight / 2
+    const px = (el.scrollLeft + cx) / before
+    const py = (el.scrollTop + cy) / before
+    zoomRef.current = next
+    setZoom(next)
+    rescale()
+    const after = client.getDisplay().getScale()
+    el.scrollLeft = px * after - cx
+    el.scrollTop = py * after - cy
+  }
+  // The next step up or down from wherever a pinch left it.
+  const stepZoom = (dir: 1 | -1) => {
+    const now = zoomRef.current
+    const next = dir > 0 ? ZOOMS.find(z => z > now + 0.01) : [...ZOOMS].reverse().find(z => z < now - 0.01)
+    if (next !== undefined) zoomTo(next)
+  }
+
+  // A key press and release, with any held modifiers around it.
+  const tapKey = (keysym: number) => {
+    const client = clientRef.current
+    if (!client) return
+    const mods = heldRef.current
+    const send = (pressed: 0 | 1, k: number) => client.sendKeyEvent(pressed, swapRef.current ? swapKey(k) : k)
+    for (const m of mods) send(1, m)
+    send(1, keysym)
+    send(0, keysym)
+    for (const m of [...mods].reverse()) send(0, m)
+    if (mods.length) setHeld([])
   }
 
   useEffect(() => {
@@ -126,7 +224,8 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     client.onstatechange = state => {
       if (state === Guacamole.Client.State.CONNECTED) {
         setPhase('connected')
-        el.focus({ preventScroll: true })
+        if (!touchScreen) el.focus({ preventScroll: true })
+        display.showCursor(touchScreen && modeRef.current === 'touchpad')
       } else if (state === Guacamole.Client.State.DISCONNECTED && !failed) setPhase('closed')
     }
     client.onerror = status => {
@@ -163,9 +262,74 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
       writer.sendEnd()
     }
 
+    type MouseEvent = { state: InstanceType<typeof Guacamole.Mouse.State> }
     const mouse = new Guacamole.Mouse(view)
-    mouse.onEach(['mousedown', 'mousemove', 'mouseup'], e => client.sendMouseState((e as unknown as { state: InstanceType<typeof Guacamole.Mouse.State> }).state, true))
+    mouse.onEach(['mousedown', 'mousemove', 'mouseup'], e => client.sendMouseState((e as unknown as MouseEvent).state, true))
     display.oncursor = (canvas, x, y) => mouse.setCursor(canvas, x, y)
+
+    // Touch: a touchpad (the finger moves a pointer; tap to click, two fingers to right-click or
+    // scroll, tap then drag to drag) or a touch screen (it clicks where it lands; hold to
+    // right-click). Both listen all the time; the chosen one is the one that's heard.
+    const cleanups: (() => void)[] = []
+    if (touchScreen) {
+      const pad = new Guacamole.Mouse.Touchpad(view)
+      pad.onEach(['mousedown', 'mousemove', 'mouseup'], e => {
+        if (modeRef.current !== 'touchpad') return
+        const state = (e as unknown as MouseEvent).state
+        client.sendMouseState(state, true)
+        const scale = display.getScale()
+        display.moveCursor(state.x / scale, state.y / scale)
+        // A zoomed picture follows the pointer.
+        const left = view.offsetLeft + state.x - el.scrollLeft
+        const top = view.offsetTop + state.y - el.scrollTop
+        if (left < FOLLOW_MARGIN) el.scrollLeft -= FOLLOW_MARGIN - left
+        else if (left > el.clientWidth - FOLLOW_MARGIN) el.scrollLeft += left - (el.clientWidth - FOLLOW_MARGIN)
+        if (top < FOLLOW_MARGIN) el.scrollTop -= FOLLOW_MARGIN - top
+        else if (top > el.clientHeight - FOLLOW_MARGIN) el.scrollTop += top - (el.clientHeight - FOLLOW_MARGIN)
+      })
+      const screen = new Guacamole.Mouse.Touchscreen(view)
+      screen.onEach(['mousedown', 'mousemove', 'mouseup'], e => {
+        if (modeRef.current === 'touch') client.sendMouseState((e as unknown as MouseEvent).state, true)
+      })
+
+      // Touch mode: two fingers pinch to zoom and drag to look around. (In touchpad mode two
+      // fingers scroll the other computer, and the pointer leads the way.)
+      let pinch: { dist: number; zoom: number; x: number; y: number } | null = null
+      const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+      const middle = (t: TouchList) => {
+        const r = el.getBoundingClientRect()
+        return { x: (t[0].clientX + t[1].clientX) / 2 - r.left, y: (t[0].clientY + t[1].clientY) / 2 - r.top }
+      }
+      const onStart = (e: TouchEvent) => {
+        if (modeRef.current !== 'touch' || e.touches.length !== 2) return
+        const m = middle(e.touches)
+        pinch = { dist: spread(e.touches) || 1, zoom: zoomRef.current, ...m }
+      }
+      const onMove = (e: TouchEvent) => {
+        if (!pinch || e.touches.length !== 2) return
+        e.preventDefault()
+        const m = middle(e.touches)
+        el.scrollLeft -= m.x - pinch.x
+        el.scrollTop -= m.y - pinch.y
+        pinch.x = m.x
+        pinch.y = m.y
+        const next = Math.min(ZOOMS.at(-1)!, Math.max(1, (pinch.zoom * spread(e.touches)) / pinch.dist))
+        if (Math.abs(next - zoomRef.current) > 0.01) zoomTo(next, m.x, m.y)
+      }
+      const onEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) pinch = null
+      }
+      el.addEventListener('touchstart', onStart, { passive: true })
+      el.addEventListener('touchmove', onMove, { passive: false })
+      el.addEventListener('touchend', onEnd)
+      el.addEventListener('touchcancel', onEnd)
+      cleanups.push(() => {
+        el.removeEventListener('touchstart', onStart)
+        el.removeEventListener('touchmove', onMove)
+        el.removeEventListener('touchend', onEnd)
+        el.removeEventListener('touchcancel', onEnd)
+      })
+    }
 
     const keyboard = new Guacamole.Keyboard(el)
     const key = (pressed: boolean, keysym: number) => client.sendKeyEvent(pressed ? 1 : 0, swapRef.current ? swapKey(keysym) : keysym)
@@ -204,11 +368,13 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     const release = () => keyboard.reset()
     el.addEventListener('blur', release)
 
-    // Remote desktops (RDP) take the window's size; VNC keeps its own and is scaled.
+    // Remote desktops (RDP) take the window's size; VNC keeps its own and is scaled. From a phone
+    // the size stays a desktop's: the keyboard coming up shouldn't reshape the other screen.
     let resizeTimer = 0
     const observer = new ResizeObserver(() => {
       rescale()
       clearTimeout(resizeTimer)
+      if (touchScreen) return
       resizeTimer = window.setTimeout(() => {
         if (device.protocol === 'rdp' && client.getDisplay().getWidth()) client.sendSize(Math.round(el.clientWidth * dpr), Math.round(el.clientHeight * dpr))
       }, RESIZE_DEBOUNCE_MS)
@@ -216,15 +382,16 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     observer.observe(el)
 
     const params = new URLSearchParams({
-      width: String(Math.round(el.clientWidth * dpr)),
-      height: String(Math.round(el.clientHeight * dpr)),
-      dpi: String(Math.round(96 * dpr)),
+      width: String(touchScreen ? TOUCH_SIZE.width : Math.round(el.clientWidth * dpr)),
+      height: String(touchScreen ? TOUCH_SIZE.height : Math.round(el.clientHeight * dpr)),
+      dpi: String(touchScreen ? 96 : Math.round(96 * dpr)),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     })
     client.connect(params.toString())
 
     return () => {
       observer.disconnect()
+      cleanups.forEach(f => f())
       clearTimeout(resizeTimer)
       clearTimeout(pasteTimer)
       el.removeEventListener('paste', onPaste)
@@ -246,9 +413,14 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
 
   useEffect(rescale, [fit])
 
+  // The pointer is drawn on the picture only in touchpad mode.
+  useEffect(() => {
+    if (phase === 'connected') clientRef.current?.getDisplay().showCursor(touchScreen && mode === 'touchpad')
+  }, [mode, phase])
+
   // Typing goes to the screen while its window is in front.
   useEffect(() => {
-    if (active && phase === 'connected') host.current?.focus({ preventScroll: true })
+    if (active && phase === 'connected' && !touchScreen) host.current?.focus({ preventScroll: true })
   }, [active, phase])
 
   const toggleSwap = () => {
@@ -262,14 +434,74 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     })
   }
 
+  const chooseMode = (next: TouchMode) => {
+    setMode(next)
+    try {
+      localStorage.setItem('remote.touchMode', next)
+    } catch {
+      // Not remembered; fine.
+    }
+  }
+
   const ctrlAltDel = () => {
     const client = clientRef.current
     if (!client) return
     for (const k of [CTRL_L, ALT_L, DELETE]) client.sendKeyEvent(1, k)
     for (const k of [DELETE, ALT_L, CTRL_L]) client.sendKeyEvent(0, k)
-    host.current?.focus()
+    if (!touchScreen) host.current?.focus()
   }
 
+  // ----- The on-screen keyboard -----
+  // A hidden text field brings up the phone's own keyboard. What it types (and what autocorrect
+  // changes) is compared with what was there, and sent as backspaces and characters.
+  const typed = useRef(SENTINEL)
+  const composing = useRef(false)
+  const openKeys = () => {
+    const field = typing.current
+    if (!field) return
+    if (keysOpenRef.current && document.activeElement === field) {
+      field.blur()
+      setKeysOpen(false)
+      return
+    }
+    field.value = SENTINEL
+    typed.current = SENTINEL
+    field.focus({ preventScroll: true })
+    field.setSelectionRange(SENTINEL.length, SENTINEL.length)
+    setKeysOpen(true)
+  }
+  const onTyped = (e: FormEvent<HTMLTextAreaElement>) => {
+    const field = e.currentTarget
+    const before = typed.current
+    const now = field.value
+    let same = 0
+    while (same < before.length && same < now.length && before[same] === now[same]) same++
+    for (let i = same; i < before.length; i++) tapKey(BACKSPACE)
+    for (const ch of now.slice(same)) tapKey(charKeysym(ch))
+    typed.current = now
+    if (!composing.current) {
+      field.value = SENTINEL
+      typed.current = SENTINEL
+    }
+  }
+
+  const modifier = (keysym: number) => setHeld(h => (h.includes(keysym) ? h.filter(k => k !== keysym) : [...h, keysym]))
+  const extraKeys: { label: string; keysym?: number; mod?: number; wide?: boolean }[] = [
+    { label: 'Esc', keysym: ESCAPE },
+    { label: 'Tab', keysym: TAB },
+    { label: 'Ctrl', mod: CTRL_L },
+    { label: 'Alt', mod: ALT_L },
+    { label: device.kind === 'mac' ? '⌘' : '⊞', mod: device.kind === 'mac' ? META_L : SUPER_L },
+    { label: '←', keysym: 0xff51 },
+    { label: '↑', keysym: 0xff52 },
+    { label: '↓', keysym: 0xff54 },
+    { label: '→', keysym: 0xff53 },
+    { label: 'Del', keysym: DELETE },
+    { label: 'Home', keysym: 0xff50 },
+    { label: 'End', keysym: 0xff57 },
+  ]
+
+  const zoomed = zoom > 1
   const Icon = KIND_ICON[device.kind]
   return (
     <div className="rs">
@@ -291,7 +523,28 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
             <ClipboardCopy size={12} /> {tr('Copy text from {0}', device.name)}
           </button>
         )}
-        {phase === 'connected' && (
+        {phase === 'connected' && touchScreen && (
+          <>
+            <div className="segmented rs-modes" role="radiogroup" aria-label={tr('Touch input')}>
+              <button type="button" role="radio" aria-checked={mode === 'touchpad'} className={mode === 'touchpad' ? 'is-active' : ''} onClick={() => chooseMode('touchpad')} title={tr('Touchpad')}>
+                <MousePointer2 size={14} /> <span>{tr('Touchpad')}</span>
+              </button>
+              <button type="button" role="radio" aria-checked={mode === 'touch'} className={mode === 'touch' ? 'is-active' : ''} onClick={() => chooseMode('touch')} title={tr('Touch')}>
+                <Hand size={14} /> <span>{tr('Touch')}</span>
+              </button>
+            </div>
+            <button className="icon-btn" onClick={() => stepZoom(-1)} disabled={!zoomed} aria-label={tr('Zoom out')} title={tr('Zoom out')}>
+              <ZoomOut size={15} />
+            </button>
+            <button className="icon-btn" onClick={() => stepZoom(1)} disabled={zoom >= ZOOMS.at(-1)!} aria-label={tr('Zoom in')} title={tr('Zoom in')}>
+              <ZoomIn size={15} />
+            </button>
+            <button className={`icon-btn ${keysOpen ? 'is-on' : ''}`} onPointerDown={e => e.preventDefault()} onClick={openKeys} aria-label={tr('Keyboard')} title={tr('Keyboard')}>
+              <KeyboardIcon size={15} />
+            </button>
+          </>
+        )}
+        {phase === 'connected' && !touchScreen && (
           <>
             {(localIsMac || device.kind === 'mac') && (
               <button className={`pill-btn ${swap ? 'is-on' : ''}`} onClick={toggleSwap} title={tr('Swap the Ctrl and Command keys')}>
@@ -312,7 +565,12 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
           <RotateCw size={14} />
         </button>
       </div>
-      <div ref={host} className={`rs-view ${fit ? 'is-fit' : ''}`} tabIndex={0} onPointerDown={() => host.current?.focus({ preventScroll: true })}>
+      <div
+        ref={host}
+        className={`rs-view ${fit && !zoomed ? 'is-fit' : ''} ${touchScreen ? `is-touch is-${mode}` : ''}`}
+        tabIndex={0}
+        onPointerDown={() => !touchScreen && host.current?.focus({ preventScroll: true })}
+      >
         <div ref={surface} className="rs-surface" />
         {phase !== 'connected' && (
           <div className="rs-overlay">
@@ -343,6 +601,52 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
           </div>
         )}
       </div>
+      {touchScreen && phase === 'connected' && keysOpen && (
+        <div className="rs-keys" onPointerDown={e => e.preventDefault()}>
+          {extraKeys.map(k => (
+            <button
+              key={k.label}
+              type="button"
+              className={k.mod && held.includes(k.mod) ? 'is-on' : ''}
+              onClick={() => (k.mod ? modifier(k.mod) : k.keysym && tapKey(k.keysym))}
+            >
+              {k.label}
+            </button>
+          ))}
+          {device.kind === 'windows' && (
+            <button type="button" onClick={ctrlAltDel}>
+              Ctrl+Alt+Del
+            </button>
+          )}
+        </div>
+      )}
+      {touchScreen && (
+        <textarea
+          ref={typing}
+          className="rs-typing"
+          aria-label={tr('Type on {0}', device.name)}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          onInput={onTyped}
+          onCompositionStart={() => (composing.current = true)}
+          onCompositionEnd={e => {
+            composing.current = false
+            onTyped(e as unknown as FormEvent<HTMLTextAreaElement>)
+          }}
+          onKeyDown={e => {
+            e.stopPropagation()
+            // Keys a phone keyboard sends as keys rather than text.
+            const special: Record<string, number> = { Enter: RETURN, Backspace: BACKSPACE, Tab: TAB, Escape: ESCAPE }
+            if (e.key in special && e.currentTarget.value === SENTINEL && !composing.current) {
+              e.preventDefault()
+              tapKey(special[e.key])
+            }
+          }}
+          onBlur={() => setKeysOpen(false)}
+        />
+      )}
     </div>
   )
 }

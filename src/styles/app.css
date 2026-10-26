@@ -15260,3 +15260,107 @@ a.btn {
     touch-action: none;
   }
 }
+
+/* ----- Remote screen on a touch screen ----- */
+
+/* The fingers belong to the other computer: no page scrolling or zooming here. */
+.rs-view.is-touch {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.rs-bar {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.rs-modes {
+  flex: none;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.rs-modes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #c7c7cc;
+  white-space: nowrap;
+}
+
+.rs-modes button.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.rs-bar .icon-btn.is-on {
+  color: #fff !important;
+  background: var(--accent);
+}
+
+.rs-modes button {
+  padding: 0 9px;
+}
+
+/* A narrow phone: the modes by their icons alone. */
+@media (max-width: 440px) {
+  .rs-modes button span {
+    display: none;
+  }
+}
+
+/* Keys a phone keyboard lacks, over it. */
+.rs-keys {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #1c1c1f;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rs-keys::-webkit-scrollbar {
+  display: none;
+}
+
+.rs-keys button {
+  flex: none;
+  min-width: 40px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e5ea;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.rs-keys button.is-on {
+  color: #fff;
+  background: var(--accent);
+}
+
+/* The field that brings up the phone's keyboard: there, but not seen. */
+.rs-typing {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  resize: none;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.rs {
+  position: relative;
+}

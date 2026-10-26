@@ -153,25 +153,102 @@ export function PhotoViewer({ request, onTitle }: Props) {
     step(e.deltaY < 0 ? 1 : -1)
   }
   // ----- Touch, like a phone's gallery: swipe to the next photo, pinch or double tap to zoom -----
+  // A touch zoom is a transform on the fitted photo (smooth, drawn by the GPU), kept apart from
+  // the desktop's zoom steps: s is its scale, x and y where its top left corner moved to.
+  const imgRef = useRef<HTMLImageElement>(null)
+  const tz = useRef({ s: 1, x: 0, y: 0 })
   const fingers = useRef(new Map<number, { x: number; y: number }>())
   const swipe = useRef<{ x: number; y: number; at: number; axis: 'x' | 'y' | null } | null>(null)
-  const pinch = useRef<{ dist: number; zoom: number; fit: number } | null>(null)
+  // A pinch: the scale and corner it began from, the spot of the photo between the fingers, and
+  // the photo's fitted box.
+  const pinch = useRef<{ dist: number; s: number; ux: number; uy: number; base: DOMRect } | null>(null)
+  const drag = useRef<{ x: number; y: number } | null>(null)
   // Where this touch began, and whether a second finger joined it (then it's no tap or swipe).
   const gesture = useRef<{ x: number; y: number; multi: boolean } | null>(null)
   const lastTap = useRef(0)
   const touchedAt = useRef(0)
   const [dragX, setDragX] = useState(0)
+  const [touchZoomed, setTouchZoomed] = useState(false)
+  const settle = useRef(0)
+
   // The scale the photo is drawn at when it fits the stage.
   const fitScale = () => {
-    const img = stage.current?.querySelector<HTMLImageElement>('.pv-image')
+    const img = imgRef.current
     const el = stage.current
     if (!img?.naturalWidth || !el) return 1
     return Math.min(1, el.clientWidth / img.naturalWidth, el.clientHeight / img.naturalHeight)
+  }
+  // As far as a touch zoom goes: twice the photo's own pixels, and at least 4×.
+  const maxTouch = () => Math.max(4, 2 / fitScale())
+  // Screen pixels per CSS pixel of the photo: the phone's layout draws apps a little larger, and a
+  // translate is in CSS pixels while fingers are on the screen.
+  const cssScale = useRef(1)
+  // The photo's fitted box on screen, without the touch zoom.
+  const fittedBox = () => {
+    const img = imgRef.current!
+    const r = img.getBoundingClientRect()
+    const { s, x, y } = tz.current
+    if (img.offsetWidth) cssScale.current = r.width / s / img.offsetWidth
+    return new DOMRect(r.left - x, r.top - y, r.width / s, r.height / s)
+  }
+  const midpoint = () => {
+    const [a, b] = [...fingers.current.values()]
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   }
   const spread = () => {
     const [a, b] = [...fingers.current.values()]
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
   }
+  // Keeps a zoomed photo over the stage: no empty edge where there's more photo to see, and
+  // centred along a side that's smaller than the stage.
+  const bounded = (s: number, x: number, y: number, base: DOMRect) => {
+    const st = stage.current!.getBoundingClientRect()
+    const along = (pos: number, start: number, size: number, stStart: number, stSize: number) => {
+      const scaled = size * s
+      if (scaled <= stSize) return stStart + (stSize - scaled) / 2 - start
+      return Math.min(stStart - start, Math.max(stStart + stSize - scaled - start, pos))
+    }
+    return { s, x: along(x, base.left, base.width, st.left, st.width), y: along(y, base.top, base.height, st.top, st.height) }
+  }
+  const showTouch = (animate = false) => {
+    const img = imgRef.current
+    if (!img) return
+    const { s, x, y } = tz.current
+    const resting = s === 1 && !x && !y
+    // Under the fingers it follows at once; settling (and swiping between photos) eases.
+    clearTimeout(settle.current)
+    if (animate) {
+      img.style.transition = 'transform 0.28s cubic-bezier(0.2, 0.9, 0.25, 1)'
+      settle.current = window.setTimeout(() => (img.style.transition = resting ? '' : 'none'), 300)
+    } else img.style.transition = resting ? '' : 'none'
+    if (resting) {
+      img.style.transformOrigin = ''
+      img.style.transform = rotation ? `rotate(${rotation}deg)` : ''
+    } else {
+      img.style.transformOrigin = '0 0'
+      const k = cssScale.current || 1
+      img.style.transform = `translate(${x / k}px, ${y / k}px) scale(${s})`
+    }
+    setTouchZoomed(s > 1.01)
+  }
+  const resetTouch = (animate = false) => {
+    tz.current = { s: 1, x: 0, y: 0 }
+    showTouch(animate)
+  }
+  // Zooms to s around a point on screen (a double tap), within bounds.
+  const touchZoomAt = (s: number, px: number, py: number) => {
+    const base = fittedBox()
+    const { s: s0, x: x0, y: y0 } = tz.current
+    const ux = (px - base.left - x0) / s0
+    const uy = (py - base.top - y0) / s0
+    tz.current = bounded(s, px - base.left - ux * s, py - base.top - uy * s, base)
+    showTouch(true)
+  }
+  // A new photo, or a turn, starts unzoomed.
+  useEffect(() => {
+    tz.current = { s: 1, x: 0, y: 0 }
+    setTouchZoomed(false)
+  }, [current, rotation])
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     const el = stage.current
@@ -181,16 +258,19 @@ export function PhotoViewer({ request, onTitle }: Props) {
       e.currentTarget.setPointerCapture(e.pointerId)
       if (fingers.current.size === 1) gesture.current = { x: e.clientX, y: e.clientY, multi: false }
       else if (gesture.current) gesture.current.multi = true
-      if (fingers.current.size === 2) {
-        const fit = fitScale()
+      if (fingers.current.size === 2 && imgRef.current && zoom === null) {
         swipe.current = null
-        pan.current = null
+        drag.current = null
         setDragX(0)
-        pinch.current = { dist: spread() || 1, zoom: zoom ?? fit, fit }
+        const base = fittedBox()
+        const m = midpoint()
+        const { s, x, y } = tz.current
+        pinch.current = { dist: spread() || 1, s, ux: (m.x - base.left - x) / s, uy: (m.y - base.top - y) / s, base }
         return
       }
-      if (zoom === null) {
-        swipe.current = { x: e.clientX, y: e.clientY, at: performance.now(), axis: null }
+      if (fingers.current.size === 1 && zoom === null) {
+        if (tz.current.s > 1.01) drag.current = { x: e.clientX, y: e.clientY }
+        else swipe.current = { x: e.clientX, y: e.clientY, at: performance.now(), axis: null }
         return
       }
     }
@@ -205,16 +285,29 @@ export function PhotoViewer({ request, onTitle }: Props) {
       fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
       const p = pinch.current
       if (p && fingers.current.size >= 2) {
-        const z = (p.zoom * spread()) / p.dist
-        setZoom(z <= p.fit * 1.02 ? null : Math.min(ZOOM_STEPS.at(-1)!, z))
+        // The spot between the fingers stays under them while they spread and move; a little
+        // past fit gives way, and springs back on letting go.
+        const m = midpoint()
+        const s = Math.min(maxTouch(), Math.max(0.8, (p.s * spread()) / p.dist))
+        tz.current = { s, x: m.x - p.base.left - p.ux * s, y: m.y - p.base.top - p.uy * s }
+        showTouch()
         return
       }
-      const s = swipe.current
-      if (s) {
-        const dx = e.clientX - s.x
-        const dy = e.clientY - s.y
-        if (!s.axis && Math.hypot(dx, dy) > 10) s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
-        if (s.axis === 'x' && list.length > 1) setDragX(dx)
+      const d = drag.current
+      if (d) {
+        const { s, x, y } = tz.current
+        tz.current = bounded(s, x + e.clientX - d.x, y + e.clientY - d.y, fittedBox())
+        d.x = e.clientX
+        d.y = e.clientY
+        showTouch()
+        return
+      }
+      const sw = swipe.current
+      if (sw) {
+        const dx = e.clientX - sw.x
+        const dy = e.clientY - sw.y
+        if (!sw.axis && Math.hypot(dx, dy) > 10) sw.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+        if (sw.axis === 'x' && list.length > 1) setDragX(dx)
         return
       }
     }
@@ -228,25 +321,42 @@ export function PhotoViewer({ request, onTitle }: Props) {
     // The browser's own double click after a double tap is left to the tap code above.
     touchedAt.current = performance.now()
     fingers.current.delete(e.pointerId)
-    if (fingers.current.size < 2) pinch.current = null
+    if (pinch.current && fingers.current.size < 2) {
+      const { s, x, y } = tz.current
+      pinch.current = null
+      // Back to fit when let go near it, otherwise settled within bounds.
+      if (s < 1.05) resetTouch(true)
+      else {
+        tz.current = bounded(s, x, y, fittedBox())
+        showTouch(true)
+      }
+      // The finger still down carries on as a drag.
+      const left = [...fingers.current.values()][0]
+      if (left && tz.current.s > 1.01) drag.current = { x: left.x, y: left.y }
+    }
     const g = gesture.current
-    if (fingers.current.size === 0) gesture.current = null
-    const s = swipe.current
+    if (fingers.current.size === 0) {
+      gesture.current = null
+      drag.current = null
+    }
+    const sw = swipe.current
     swipe.current = null
     setDragX(0)
     if (cancelled || !g || g.multi) return
-    if (s?.axis === 'x') {
-      const dx = e.clientX - s.x
-      const speed = Math.abs(dx) / Math.max(1, performance.now() - s.at)
+    if (sw?.axis === 'x') {
+      const dx = e.clientX - sw.x
+      const speed = Math.abs(dx) / Math.max(1, performance.now() - sw.at)
       if (Math.abs(dx) > SWIPE_PX || speed > SWIPE_FLICK) go(dx < 0 ? 1 : -1)
       return
     }
-    if (s?.axis === 'y' || Math.hypot(e.clientX - g.x, e.clientY - g.y) > 10) return
-    // A double tap zooms in on the photo, or back out to fit.
+    if (sw?.axis === 'y' || Math.hypot(e.clientX - g.x, e.clientY - g.y) > 10) return
+    // A double tap zooms in where it lands, or back out to fit.
     const now = performance.now()
     if (now - lastTap.current < DOUBLE_TAP_MS) {
       lastTap.current = 0
-      setZoom(z => (z === null ? Math.min(ZOOM_STEPS.at(-1)!, fitScale() * TAP_ZOOM) : null))
+      if (zoom !== null) setZoom(null)
+      else if (tz.current.s > 1.01) resetTouch(true)
+      else touchZoomAt(Math.min(maxTouch(), TAP_ZOOM), e.clientX, e.clientY)
     } else lastTap.current = now
   }
 
@@ -301,7 +411,7 @@ export function PhotoViewer({ request, onTitle }: Props) {
       <div
         ref={stage}
         tabIndex={0}
-        className={`pv-stage ${zoom === null ? 'is-fit' : 'is-zoomed'}`}
+        className={`pv-stage ${zoom === null ? 'is-fit' : 'is-zoomed'} ${touchZoomed ? 'is-touch-zoomed' : ''}`}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -319,6 +429,7 @@ export function PhotoViewer({ request, onTitle }: Props) {
           </div>
         ) : (
           <img
+            ref={imgRef}
             key={current}
             className={`pv-image ${dragX ? 'is-dragging' : ''} ${enter ? `is-enter-${enter}` : ''}`}
             src={api.rawFileUrl(current)}

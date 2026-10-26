@@ -55,7 +55,7 @@ const en: Content = {
   },
   hosts: {
     title: 'Runs on what you already have.',
-    lead: 'Anything with Ubuntu 22.04 / 24.04 or Debian and systemd, on an amd64 or arm64 processor.',
+    lead: 'Anything with Ubuntu (22.04, 24.04 or 26.04) or Debian and systemd, on an amd64 or arm64 processor.',
     items: [
       { icon: 'cloud', title: 'VPS', text: 'A cloud server you rent. About This Server knows it’s a virtual one.', arch: 'amd64 · arm64' },
       { icon: 'server', title: 'Dedicated server', text: 'A whole machine in a data center, or the rack at the office.', arch: 'amd64 · arm64' },
@@ -189,7 +189,7 @@ const en: Content = {
     version: `Version ${VERSION}`,
     rows: [
       ['Runs as', 'One Go binary, a systemd service'],
-      ['Needs', 'Ubuntu 22.04 / 24.04 or Debian'],
+      ['Needs', 'Ubuntu 22.04, 24.04, 26.04 or Debian'],
       ['Processors', 'amd64 and arm64'],
       ['Works with', 'Docker, systemd, apt, ufw, Samba'],
       ['On a phone', 'Its own interface, installs as an app'],
@@ -218,25 +218,25 @@ const en: Content = {
     window: 'Getting Started',
     steps: [
       { title: 'Run the installer', text: 'On the server, as a user with sudo.' },
-      { title: 'Open the desktop', text: 'Go to http://<server-ip>:7700 from any browser at home.' },
+      { title: 'Open the desktop', text: 'Go to http://<server-ip> from any browser at home. No port to type.' },
       { title: 'Sign in', text: 'With the INITIAL_PASSWORD the installer prints, then change it in Settings → Account.' },
     ],
     terminal: [
       '==> Downloading TemanLabsOS (latest, amd64)…',
       '==> Installing for user admin…',
       'INITIAL_PASSWORD=k3Xr9•••••••',
-      '==> TemanLabsOS is running: http://192.168.1.20:7700',
+      '==> TemanLabsOS is running: http://192.168.1.20',
       '==> Sign in with the INITIAL_PASSWORD above (first install), then change it in Settings → Account.',
     ],
     guide: 'Installation guide',
-    requirements: 'Ubuntu 22.04 / 24.04 or Debian with systemd, on amd64 or arm64. Docker is installed for you.',
+    requirements: 'Ubuntu (22.04, 24.04 or 26.04) or Debian with systemd, on amd64 or arm64. Docker is installed for you.',
   },
   faq: {
     window: 'Questions',
     title: 'Good to know',
     items: [
       { q: 'Is TemanLabsOS free?', a: 'Yes. It’s open source under the MIT License, with no paid tier, no account and no ads. The apps and tools it installs keep their own licenses.' },
-      { q: 'What do I need to run it?', a: 'A server or an old computer with Ubuntu 22.04 / 24.04 or Debian and systemd, on an amd64 or arm64 processor. The installer adds Docker if it’s missing.' },
+      { q: 'What do I need to run it?', a: 'A server or an old computer with Ubuntu (22.04, 24.04 or 26.04) or Debian and systemd, on an amd64 or arm64 processor. The installer adds Docker if it’s missing.' },
       { q: 'Does it work with the apps I already run?', a: 'Yes. It finds every Docker container on the server, however it was started: from its App Center, your own compose files or docker run. If CasaOS is installed, its apps are read too.' },
       { q: 'Can I reach it from outside my home?', a: 'Yes, through Tailscale: Settings → Remote Access walks you through it. Don’t open its port to the internet directly; it has full control of the server.' },
       { q: 'Does it send my data anywhere?', a: 'No. TemanLabsOS sends no analytics or usage data. It only connects out for a feature you use, like the App Center or a cloud backup, and Settings → Privacy & Terms lists each one.' },
