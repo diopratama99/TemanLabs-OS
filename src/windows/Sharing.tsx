@@ -68,7 +68,9 @@ export function Sharing({ stats, request }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      setInfo(await api.smbInfo())
+      // An older server sends null for an empty list.
+      const next = await api.smbInfo()
+      setInfo({ ...next, shares: next.shares ?? [], users: next.users ?? [], people: next.people ?? [] })
       setLoadError(null)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err))
@@ -83,7 +85,7 @@ export function Sharing({ stats, request }: Props) {
     const load = () =>
       api.smbStatus().then(
         s => {
-          setSessions(s.sessions)
+          setSessions((s.sessions ?? []).map(se => ({ ...se, shares: se.shares ?? [] })))
           setOpenFiles(s.openFiles ?? 0)
         },
         () => {},

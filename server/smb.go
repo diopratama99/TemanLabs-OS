@@ -119,7 +119,7 @@ func shareFrom(name string, kv map[string]string, source string) smbShare {
 }
 
 func listShares() []smbShare {
-	var shares []smbShare
+	shares := []smbShare{}
 	order, sections, casaFile := iniSections(smbConf)
 	for _, name := range order {
 		if !reservedShares[strings.ToLower(name)] {
@@ -141,11 +141,11 @@ func listShares() []smbShare {
 }
 
 func listSmbUsers(ctx context.Context) []smbUser {
+	users := []smbUser{}
 	out, err := exec.CommandContext(ctx, "pdbedit", "-L", "-v").Output()
 	if err != nil {
-		return nil
+		return users
 	}
-	var users []smbUser
 	var cur *smbUser
 	for _, line := range strings.Split(string(out), "\n") {
 		k, v, ok := strings.Cut(line, ":")
@@ -270,7 +270,7 @@ func (s *server) handleSmb(w http.ResponseWriter, r *http.Request) {
 		version = strings.TrimPrefix(strings.TrimSpace(string(out)), "Version ")
 	}
 	// People who can log in on this machine, for the share and user pickers.
-	var people []string
+	people := []string{}
 	if data, err := os.ReadFile("/etc/passwd"); err == nil {
 		for _, line := range strings.Split(string(data), "\n") {
 			f := strings.Split(line, ":")
@@ -519,7 +519,7 @@ func (s *server) handleSmbStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	byID := map[string]*session{}
 	for _, se := range raw.Sessions {
-		byID[se.ID] = &session{User: se.Username, Machine: se.RemoteMachine, Protocol: se.Dialect}
+		byID[se.ID] = &session{User: se.Username, Machine: se.RemoteMachine, Protocol: se.Dialect, Shares: []string{}}
 	}
 	for _, t := range raw.Tcons {
 		if se := byID[t.SessionID]; se != nil {
