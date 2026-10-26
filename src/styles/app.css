@@ -2564,9 +2564,15 @@ body:has(.menu) .dock-item .dock-tooltip {
 }
 
 .pane-note {
-  margin: -6px 0 12px;
+  margin: 0 0 12px;
   font-size: 12.5px;
   color: var(--text-2);
+}
+
+/* Tucked up under a heading it explains; anywhere else (first in a pane) it keeps its place, or it
+   would slide under the title bar. */
+:is(h3, h4, [class$='-heading'], [class*='-heading ']) + .pane-note {
+  margin-top: -2px;
 }
 
 /* ---------- Code editor (VS Code layout inside a glass window) ---------- */
