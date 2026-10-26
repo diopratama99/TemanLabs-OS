@@ -59,7 +59,7 @@ Options are environment variables, for example `curl … | sudo TEMANLABS_VERSIO
 |---|---|
 | `TEMANLABS_VERSION` | Install this release instead of the latest |
 | `TEMANLABS_USER` | Linux user for the Terminal and owner of new files (default: the user running sudo) |
-| `TEMANLABS_PORT` | Port of the web desktop, on the first install only (default 7700) |
+| `TEMANLABS_PORT` | Port of the web desktop, on the first install only (default 80 if nothing else uses it, else 7700) |
 | `TEMANLABS_SKIP_DOCKER` | `1` = don't install Docker |
 
 ### Manual: build it yourself
@@ -92,14 +92,14 @@ The installer:
 - on the first install, makes a **random password** and prints it once as `INITIAL_PASSWORD=…`. Keep it somewhere safe.
 
 Optional variables:
-- `TEMANLABS_PORT=7700`
+- `TEMANLABS_PORT=8080`
 - `TEMANLABS_ROOT=/DATA`, to limit Files to the data folder (the default is `/`, the whole filesystem).
 
 For example: `sudo TEMANLABS_ROOT=/DATA ./install.sh ./temanlabsos-linux-amd64 <linux-user>`. These are only used on the first install, when `config.json` is created. After that, change them in the [configuration](#configuration).
 
 #### 3. Open it
 
-Open `http://<server-ip>:7700` and sign in with that password. Change it in **Settings → Login & Password**.
+Open the address the installer prints (`http://<server-ip>`, or `http://<server-ip>:7700` when port 80 was taken) and sign in with that password. Change it in **Settings → Login & Password**.
 
 ---
 
@@ -130,7 +130,7 @@ File: `/var/lib/temanlabsos/config.json`
 
 | Key | Default | Meaning |
 |---|---|---|
-| `addr` | `:7700` | Address and port to listen on. Set `:80` to open it without a port (`http://<server-ip>/`), as long as nothing else uses port 80. |
+| `addr` | `:80` (`:7700` if port 80 was taken at install) | Address and port to listen on. `:80` opens it without a port (`http://<server-ip>/`), as long as nothing else uses port 80. |
 | `redirectFrom` | (empty) | Old addresses that redirect to `addr`, for example `[":7700"]` after moving to `:80`, so old bookmarks keep working. |
 | `root` | `/` | Top folder for Files and Code. Set `/DATA` to limit it. |
 | `user` | (from the installer) | Linux user for the Terminal and owner of new files. |
@@ -191,7 +191,7 @@ How the code works, and every API endpoint, is in [architecture.md](architecture
 | Problem | Fix |
 |---|---|
 | Forgot the password | `sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password` |
-| The page doesn't open | `systemctl status temanlabsos`, then `journalctl -u temanlabsos -n 50`. Make sure TemanLabsOS's port (7700 by default, or 80) is allowed by the firewall and not used by another program. |
+| The page doesn't open | `systemctl status temanlabsos`, then `journalctl -u temanlabsos -n 50`. Make sure TemanLabsOS's port (80, or 7700 when port 80 was taken at install) is allowed by the firewall and not used by another program. |
 | `scp` fails: *text file busy* | Upload under another name, then `mv` (see [Updating](#updating)). |
 | An app won't show in its window | Use **Open in New Tab**. Some apps refuse to be shown inside a frame. |
 | A window says *Something went wrong in this window* | Click **Reload Window**. The rest of the desktop keeps working; the message under it says what failed. |

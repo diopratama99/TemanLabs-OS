@@ -59,7 +59,7 @@ Opsi lewat variabel lingkungan, misalnya `curl … | sudo TEMANLABS_VERSION=v1.0
 |---|---|
 | `TEMANLABS_VERSION` | Pasang rilis tertentu, bukan yang terbaru |
 | `TEMANLABS_USER` | User Linux untuk Terminal dan pemilik file baru (bawaan: user yang memakai sudo) |
-| `TEMANLABS_PORT` | Port web desktop, hanya saat instalasi pertama (bawaan 7700) |
+| `TEMANLABS_PORT` | Port web desktop, hanya saat instalasi pertama (bawaan 80 kalau tidak dipakai program lain, selain itu 7700) |
 | `TEMANLABS_SKIP_DOCKER` | `1` = jangan pasang Docker |
 
 ### Cara manual: build sendiri
@@ -92,14 +92,14 @@ Installer akan:
 - pada instalasi pertama, membuat **password acak** dan mencetaknya sekali sebagai `INITIAL_PASSWORD=…`. Simpan baik-baik.
 
 Variabel opsional:
-- `TEMANLABS_PORT=7700`
+- `TEMANLABS_PORT=8080`
 - `TEMANLABS_ROOT=/DATA`, untuk membatasi Files ke folder data saja (bawaannya `/`, seluruh filesystem).
 
 Contoh: `sudo TEMANLABS_ROOT=/DATA ./install.sh ./temanlabsos-linux-amd64 <linux-user>`. Variabel ini hanya dipakai saat instalasi pertama, ketika `config.json` dibuat. Setelah itu, ubah lewat [Konfigurasi](#konfigurasi).
 
 #### 3. Buka
 
-Buka `http://<ip-server>:7700`, lalu login dengan password tadi. Password bisa diganti di **Pengaturan → Login & Kata Sandi**.
+Buka alamat yang dicetak installer (`http://<ip-server>`, atau `http://<ip-server>:7700` kalau port 80 sudah terpakai), lalu login dengan password tadi. Password bisa diganti di **Pengaturan → Login & Kata Sandi**.
 
 ---
 
@@ -130,7 +130,7 @@ File: `/var/lib/temanlabsos/config.json`
 
 | Kunci | Bawaan | Arti |
 |---|---|---|
-| `addr` | `:7700` | Alamat dan port yang didengarkan. Isi `:80` supaya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. |
+| `addr` | `:80` (`:7700` kalau port 80 terpakai saat instalasi) | Alamat dan port yang didengarkan. `:80` membuatnya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. |
 | `redirectFrom` | (kosong) | Alamat lama yang diarahkan ke `addr`, misalnya `[":7700"]` setelah pindah ke `:80`, supaya bookmark lama tetap jalan. |
 | `root` | `/` | Folder teratas untuk Files dan Code. Isi `/DATA` untuk membatasi. |
 | `user` | (dari installer) | User Linux untuk Terminal dan pemilik file baru. |
@@ -191,7 +191,7 @@ Cara kerja kode dan daftar endpoint API ada di [architecture.id.md](architecture
 | Masalah | Solusi |
 |---|---|
 | Lupa password | `sudo /opt/temanlabsos/temanlabsos -config /var/lib/temanlabsos/config.json set-password` |
-| Halaman tidak terbuka | `systemctl status temanlabsos`, lalu `journalctl -u temanlabsos -n 50`. Pastikan port TemanLabsOS (bawaan 7700, atau 80) diizinkan di firewall dan tidak dipakai program lain. |
+| Halaman tidak terbuka | `systemctl status temanlabsos`, lalu `journalctl -u temanlabsos -n 50`. Pastikan port TemanLabsOS (80, atau 7700 kalau port 80 terpakai saat instalasi) diizinkan di firewall dan tidak dipakai program lain. |
 | `scp` gagal: *text file busy* | Upload dengan nama lain lalu `mv` (lihat [Update](#update)). |
 | App tidak bisa dibuka di jendela | Pakai tombol **Buka di Tab Baru**. Beberapa app menolak ditampilkan di dalam frame. |
 | Jendela menampilkan *Ada yang error di jendela ini* | Klik **Muat Ulang Jendela**. Bagian desktop lain tetap jalan; pesan di bawahnya menjelaskan apa yang gagal. |

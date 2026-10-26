@@ -110,7 +110,7 @@ Satu perintah di server Ubuntu/Debian (amd64 atau arm64):
 curl -fsSL https://github.com/diopratama99/TemanLabs-OS/releases/latest/download/install.sh | sudo bash
 ```
 
-Installer mengunduh rilis terbaru, mencocokkan checksum, memasang Docker kalau belum ada, lalu menjalankan TemanLabsOS sebagai service. Buka `http://<ip-server>:7700` dan login dengan `INITIAL_PASSWORD` yang dicetak installer. Supaya bisa dibuka tanpa port (`http://<ip-server>/`), isi `"addr": ":80"` di konfigurasi. Versi berikutnya bisa dipasang dari **Pengaturan → Umum → Pembaruan Software**.
+Installer mengunduh rilis terbaru, mencocokkan checksum, memasang Docker kalau belum ada, lalu menjalankan TemanLabsOS sebagai service. Buka alamat yang dicetak installer, `http://<ip-server>`, dan login dengan `INITIAL_PASSWORD` yang juga dicetaknya. TemanLabsOS memakai port 80 supaya tidak perlu menulis port; kalau port 80 sudah dipakai program lain (CasaOS, nginx…), ia memakai `:7700`. Versi berikutnya bisa dipasang dari **Pengaturan → Umum → Pembaruan Software**.
 
 Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting) ada di **[docs/installation.id.md](docs/installation.id.md)**.
 

@@ -6,7 +6,7 @@
 # Options (environment variables):
 #   TEMANLABS_VERSION=v1.2.0   install that release instead of the latest
 #   TEMANLABS_USER=name        Linux user for the Terminal and new files (default: the sudo user)
-#   TEMANLABS_PORT=7700        port for the web desktop (first install only)
+#   TEMANLABS_PORT=8080        port for the web desktop (first install only; default 80 if free, else 7700)
 #   TEMANLABS_SKIP_DOCKER=1    don't install Docker when it's missing
 set -euo pipefail
 
@@ -64,5 +64,7 @@ bash ./install-service.sh "./temanlabsos-linux-$ARCH" "$APP_USER"
 
 IP="$(hostname -I 2>/dev/null | awk '{ print $1 }')"
 PORT="$(grep -o '"addr": *"[^"]*"' /var/lib/temanlabsos/config.json 2>/dev/null | grep -o '[0-9]*"$' | tr -d '"')"
-say "TemanLabsOS is running: http://${IP:-<server-ip>}:${PORT:-7700}"
+URL="http://${IP:-<server-ip>}"
+[ "${PORT:-80}" = 80 ] || URL="$URL:$PORT"
+say "TemanLabsOS is running: $URL"
 say "Sign in with the INITIAL_PASSWORD above (first install), then change it in Settings → Account."

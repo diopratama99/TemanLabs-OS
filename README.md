@@ -110,7 +110,7 @@ One command on an Ubuntu or Debian server (amd64 or arm64):
 curl -fsSL https://github.com/diopratama99/TemanLabs-OS/releases/latest/download/install.sh | sudo bash
 ```
 
-The installer downloads the latest release, checks its checksum, installs Docker if it's missing and runs TemanLabsOS as a service. Open `http://<server-ip>:7700` and sign in with the `INITIAL_PASSWORD` the installer prints. To open it without a port (`http://<server-ip>/`), set `"addr": ":80"` in the config. Later versions install from **Settings → General → Software Update**.
+The installer downloads the latest release, checks its checksum, installs Docker if it's missing and runs TemanLabsOS as a service. Open the address it prints, `http://<server-ip>`, and sign in with the `INITIAL_PASSWORD` it prints too. It takes port 80 so no port is needed; if something else already has port 80 (CasaOS, nginx…), it uses `:7700` instead. Later versions install from **Settings → General → Software Update**.
 
 The full guide (requirements, updating, configuration, development, troubleshooting) is in **[docs/installation.md](docs/installation.md)**.
 
