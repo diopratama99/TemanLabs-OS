@@ -129,6 +129,17 @@ async function save(page, lang, name) {
   await page.close()
 }
 
+// Just the window in front, for the highlights' tiles: <name>-win.webp.
+async function saveWindow(page, lang, name) {
+  await page.mouse.move(1, 450)
+  await wait(500)
+  const win = await page.$('.window.is-active')
+  if (!win) return console.log(`  ${lang}/${name}-win: no window`)
+  mkdirSync(join(out, lang), { recursive: true })
+  await win.screenshot({ path: join(out, lang, `${name}-win.webp`), type: 'webp', quality: 84 })
+  console.log(`  ${lang}/${name}-win`)
+}
+
 // ----- The scenes (the rest of the page is videos: scripts/demos.mjs) -----
 const PHONE_APP = { downloader: { en: 'Downloader', id: 'Pengunduh' } }
 const scenes = {
@@ -137,6 +148,7 @@ const scenes = {
     await wait(6000) // some history for the widgets' graphs
     await call(page, 'openWindow', 'store')
     await wait(2500)
+    await saveWindow(page, lang, 'store')
     await save(page, lang, 'hero')
   },
   async health(lang) {
@@ -145,6 +157,7 @@ const scenes = {
     await wait(2000)
     await inWindow(page, '.set-pane .row button, .set-pane button.row')
     await wait(2000)
+    await saveWindow(page, lang, 'health')
     await save(page, lang, 'health')
   },
   async adblock(lang) {
@@ -154,12 +167,14 @@ const scenes = {
     // The sample server starts with it off: turn it on, and wait for the statistics.
     await inWindow(page, '.set-pane .btn-primary')
     await wait(9000)
+    await saveWindow(page, lang, 'adblock')
     await save(page, lang, 'adblock')
   },
   async devices(lang) {
     const page = await desktop(lang)
     await call(page, 'openWindow', 'devices')
     await wait(2500)
+    await saveWindow(page, lang, 'devices')
     await save(page, lang, 'devices')
   },
   async commands(lang) {
@@ -189,36 +204,53 @@ const scenes = {
   },
 }
 
-// The picture shown when a link to the site is shared: public/og-<lang>.png, from the hero shot.
+// The picture shown when a link to the site is shared: public/og-<lang>.png. The site's look:
+// the logo's navy, Plus Jakarta Sans, and the desktop on a monitor and a phone.
 const OG = {
-  en: ['Your server,', 'anywhere.', 'A desktop for your home server, in any browser. Free and open source.'],
-  id: ['Akses servermu', 'di mana saja.', 'Desktop untuk server rumahmu, di browser mana pun. Gratis dan open source.'],
+  en: ['Your server,', 'anywhere.', 'A desktop for your home server, in any browser.', 'Free and open source'],
+  id: ['Akses servermu', 'di mana saja.', 'Desktop untuk server rumahmu, di browser mana pun.', 'Gratis dan open source'],
 }
 async function socialCard(lang) {
-  const hero = join(out, lang, 'hero@1x.webp')
-  if (!existsSync(hero)) return console.log(`  og-${lang}: take the hero shot first`)
-  const img = `data:image/webp;base64,${readFileSync(hero).toString('base64')}`
-  const logo = `data:image/svg+xml;base64,${readFileSync(join(here, '..', 'public', 'favicon.svg')).toString('base64')}`
-  const [a, b, c] = OG[lang]
+  const file = (...p) => join(here, '..', ...p)
+  const desk = file('public', 'shots', lang, 'hero@1x.webp')
+  const mobile = file('public', 'shots', lang, 'phone-home@1x.webp')
+  if (!existsSync(desk) || !existsSync(mobile)) return console.log(`  og-${lang}: take the hero and phone-home shots first`)
+  const data = (p, type) => `data:${type};base64,${readFileSync(p).toString('base64')}`
+  const font = data(file('node_modules', '@fontsource-variable', 'plus-jakarta-sans', 'files', 'plus-jakarta-sans-latin-wght-normal.woff2'), 'font/woff2')
+  const logo = data(file('public', 'favicon.svg'), 'image/svg+xml')
+  const [a, b, c, d] = OG[lang]
   const page = await browser.newPage()
   await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 })
   await page.setContent(`<!doctype html><html><head><style>
-    body { margin: 0; width: 1200px; height: 630px; overflow: hidden; font-family: Inter, 'Segoe UI', system-ui, sans-serif; color: #eef2f8;
-      background: #04122b; }
-    .copy { position: absolute; left: 72px; top: 92px; width: 520px; }
-    .brand { display: flex; align-items: center; gap: 14px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
-    .brand img { width: 48px; height: 48px; border-radius: 12px; }
-    h1 { margin: 56px 0 0; font-size: 64px; line-height: 1.04; letter-spacing: -.045em; font-weight: 800; }
+    @font-face { font-family: Jakarta; src: url(${font}) format('woff2'); font-weight: 200 800; }
+    * { box-sizing: border-box; margin: 0; }
+    body { width: 1200px; height: 630px; overflow: hidden; position: relative; font-family: Jakarta, system-ui, sans-serif; color: #fff; background: #04122b; }
+    .copy { position: absolute; left: 76px; top: 0; bottom: 0; width: 520px; display: flex; flex-direction: column; justify-content: center; }
+    .brand { display: flex; align-items: center; gap: 14px; font-size: 26px; font-weight: 700; letter-spacing: -0.03em; }
+    .brand img { width: 50px; height: 50px; border-radius: 13px; }
+    h1 { margin-top: 52px; font-size: 68px; white-space: nowrap; line-height: 1.0; letter-spacing: -0.055em; font-weight: 700; }
     h1 span { display: block; color: #4aa3ff; }
-    p { margin: 26px 0 0; font-size: 24px; line-height: 1.45; color: #a7b0c0; }
-    .shot { position: absolute; left: 640px; top: 96px; width: 760px; border-radius: 16px; border: 1px solid rgba(255,255,255,.16);
-      box-shadow: 0 40px 100px rgba(0,0,0,.8); }
+    p { margin-top: 26px; max-width: 440px; font-size: 25px; line-height: 1.4; letter-spacing: -0.015em; color: rgba(255,255,255,0.72); }
+    .chip { margin-top: 34px; align-self: flex-start; padding: 10px 18px; border-radius: 999px; font-size: 18px; font-weight: 600; color: #9fd4ff; background: rgba(4,121,255,0.16); box-shadow: inset 0 0 0 1.5px rgba(74,163,255,0.35); }
+    .monitor { position: absolute; left: 640px; top: 118px; width: 640px; }
+    .panel { padding: 9px; border-radius: 16px; background: #0b0b0e; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12), 0 40px 90px rgba(0,0,0,0.55); }
+    .panel img { display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 8px; }
+    .neck { width: 84px; height: 62px; margin: 0 auto; background: linear-gradient(90deg,#8e939c,#d8dce2 30%,#eef0f3 50%,#c9cdd4 70%,#8a8f98); clip-path: polygon(8% 0,92% 0,100% 100%,0 100%); }
+    .phone { position: absolute; left: 596px; top: 268px; width: 160px; padding: 6px; border-radius: 26px; background: #0c0c0f; box-shadow: inset 0 0 0 2px #3a3c42, 0 30px 60px rgba(0,0,0,0.6); }
+    .phone img { display: block; width: 100%; aspect-ratio: 390/844; object-fit: cover; border-radius: 21px; }
   </style></head><body>
-    <div class="copy"><div class="brand"><img src="${logo}">TemanLabsOS</div><h1>${a}<span>${b}</span></h1><p>${c}</p></div>
-    <img class="shot" src="${img}">
+    <div class="copy">
+      <div class="brand"><img src="${logo}">TemanLabsOS</div>
+      <h1>${a}<span>${b}</span></h1>
+      <p>${c}</p>
+      <span class="chip">${d}</span>
+    </div>
+    <div class="monitor"><div class="panel"><img src="${data(desk, 'image/webp')}"></div><div class="neck"></div></div>
+    <div class="phone"><img src="${data(mobile, 'image/webp')}"></div>
   </body></html>`)
+  await page.evaluate(() => document.fonts.ready)
   await wait(300)
-  await page.screenshot({ path: join(here, '..', 'public', `og-${lang}.png`) })
+  await page.screenshot({ path: file('public', `og-${lang}.png`) })
   await page.close()
   console.log(`  og-${lang}`)
 }

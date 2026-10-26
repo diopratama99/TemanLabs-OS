@@ -7,6 +7,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Download,
+  Ellipsis,
   Film,
   Maximize,
   Minimize,
@@ -24,9 +25,11 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import { useAppMenus } from '../lib/appMenus'
+import { useContextMenu } from '../lib/contextMenu'
 import { folderOf, formatTime, siblingsOf, type MediaRequest } from '../lib/media'
 import { nameOf } from '../lib/paths'
-import { useWindowKeys } from '../lib/windowChrome'
+import { SHELL } from '../lib/shell'
+import { useWindowKeys, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -91,6 +94,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
   const idleTimer = useRef(0)
   const titleRef = useRef(onTitle)
   titleRef.current = onTitle
+  const menu = useContextMenu()
 
   useEffect(() => {
     if (!request) return
@@ -497,6 +501,17 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     { label: tr('File'), items: [{ label: tr('Download'), icon: Download, disabled: !current, onSelect: download }] },
   ])
 
+  // On a phone the bar has no room for download, picture in picture or speed: they're behind ⋯
+  // beside the title, as in a phone's own video player.
+  const moreMenu = (e: ReactMouseEvent) =>
+    menu.show(e, [
+      { label: tr('Download'), icon: Download, disabled: !current, onSelect: download },
+      ...(document.pictureInPictureEnabled ? [{ label: tr('Picture in Picture'), icon: PictureInPicture2, disabled: error, onSelect: pip }] : []),
+      { label: tr('Loop'), icon: Repeat, checked: loop, onSelect: () => setLoop(l => !l) },
+      'separator',
+      ...SPEEDS.map(s => ({ label: s === 1 ? tr('Normal') : `${s}×`, checked: speed === s, onSelect: () => setSpeed(s) })),
+    ])
+
   if (!current) {
     return (
       <div className="media-empty is-dark">
@@ -512,6 +527,13 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
 
   return (
     <div className="vp">
+      {SHELL === 'mobile' && (
+        <WindowToolbar>
+          <button className="tb-btn vp-more" onClick={moreMenu} aria-label={tr('More')} title={tr('More')}>
+            <Ellipsis size={20} />
+          </button>
+        </WindowToolbar>
+      )}
       <div
         ref={stage}
         className={`vp-stage ${shown ? '' : 'is-idle'}`}
@@ -691,7 +713,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
 
             <div className="vp-group vp-end">
               <SpeedMenu speed={speed} onChange={setSpeed} visible={shown} />
-              <button className={`vp-btn ${loop ? 'is-on' : ''}`} onClick={() => setLoop(l => !l)} aria-label={tr('Loop')} aria-pressed={loop} title={tr('Loop')}>
+              <button className={`vp-btn vp-loop ${loop ? 'is-on' : ''}`} onClick={() => setLoop(l => !l)} aria-label={tr('Loop')} aria-pressed={loop} title={tr('Loop')}>
                 <Repeat size={16} />
               </button>
               {document.pictureInPictureEnabled && (

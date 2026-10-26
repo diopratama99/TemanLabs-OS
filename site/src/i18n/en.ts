@@ -10,6 +10,7 @@ const en: Content = {
       'A desktop for your home server that opens in any browser: on your laptop, at your desk or on your phone. Install apps, manage files, back up and keep an eye on everything. Free and open source.',
   },
   menu: {
+    demo: 'Live demo',
     tour: 'Tour',
     phone: 'Phone',
     apps: 'Apps',
@@ -28,6 +29,8 @@ const en: Content = {
     lead: 'A desktop for your home server. Apps, files, backups and more, from any browser.',
     primary: 'Install TemanLabsOS',
     secondary: 'View on GitHub',
+    demo: 'Try the live demo',
+    scroll: 'Scroll',
     copy: 'Copy',
     copied: 'Copied',
     note: 'Free and open source · Ubuntu or Debian · amd64 and arm64',
@@ -61,6 +64,10 @@ const en: Content = {
       { icon: 'cpu', title: 'Single-board computer', text: 'Raspberry Pi 4 or 5, Orange Pi and other arm64 boards.', arch: 'arm64' },
       { icon: 'tv', title: 'Set-top box', text: 'An Android TV box flashed with Armbian, like the HG680P or B860H.', arch: 'arm64' },
     ],
+  },
+  how: {
+    title: 'How it works',
+    text: 'Run one command on your server. It checks the download, installs Docker if it’s missing and starts TemanLabsOS as a service. Open it in any browser, sign in, and [your apps, files and backups] are all in one desktop. When an app stops answering, [TemanLabsOS restarts it] and tells you. New versions install in one click, and nothing about you ever leaves the server.',
   },
   widgets: {
     title: 'Everything a home server needs.',

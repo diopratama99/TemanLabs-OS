@@ -7,6 +7,7 @@ import { APPS, LAUNCHER } from '../data/apps'
 import { INSTALL, REPO } from '../data/site'
 import AppIcon from './AppIcon.astro'
 import Copy from './Copy.astro'
+import DeviceArt from './DeviceArt.astro'
 import Devices from './Devices.astro'
 import Handset from './Handset.astro'
 import Window from './Window.astro'
@@ -42,6 +43,32 @@ const LOGO_PIECES = [
     from: '--dx: 27vw; --dy: 25vh; --r: -12deg; --k: 1.25',
   },
 ]
+// Each kind of host, drawn as About This Server draws it.
+const HOST_ART: Record<string, 'virtual' | 'server' | 'mini' | 'laptop' | 'board' | 'stb'> = { cloud: 'virtual', server: 'server', pc: 'mini', laptop: 'laptop', cpu: 'board', tv: 'stb' }
+// The highlights as a bento: big tiles carry the app's own window.
+// Sizes on a six-column grid: l four columns, m and s two, h three.
+// Placed by row (order): pictures beside pictures, the plain ones together.
+// The app's own window (scripts/shots.mjs takes it on its own), peeking out of the tile.
+const win = (name: string) => `/shots/${lang}/${name}-win.webp`
+const BENTO: Record<string, { size: 'l' | 'm' | 's' | 'h'; order: number; pic?: string; dark?: boolean }> = {
+  apps: { size: 'l', order: 1, pic: win('store') },
+  health: { size: 'm', order: 2, pic: win('health') },
+  docker: { size: 's', order: 3 },
+  backup: { size: 's', order: 4 },
+  share: { size: 's', order: 5 },
+  devices: { size: 'm', order: 6, pic: win('devices') },
+  adblock: { size: 'l', order: 7, pic: win('adblock') },
+  'one-binary': { size: 'h', order: 8 },
+  security: { size: 'h', order: 9 },
+}
+// The How it works paragraph, word by word; [bracketed] words are picked out.
+const say = t.how.text.split(/(\[[^\]]+\])/).flatMap(part =>
+  part
+    .replace(/[[\]]/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => ({ w, hl: part.startsWith('[') })),
+)
 const SECURITY_TINT: Record<string, [string, string]> = {
   key: ['#8e8e93', '#48484a'],
   lock: ['#4a4a4f', '#1c1c1e'],
@@ -65,6 +92,7 @@ const SECURITY_TINT: Record<string, [string, string]> = {
       <a href="#about">{t.menu.about}</a>
       <a href="#install">{t.menu.install}</a>
       <a href="#faq">{t.menu.faq}</a>
+      <a class="nav-demo" href="/demo/">{t.menu.demo}</a>
     </nav>
     <div class="nav-end">
       <button class="nav-icon" type="button" data-theme-toggle aria-label={`${t.menu.light} / ${t.menu.dark}`} title={`${t.menu.light} / ${t.menu.dark}`}>
@@ -104,16 +132,16 @@ const SECURITY_TINT: Record<string, [string, string]> = {
         <p class="hero-lead">{t.hero.lead}</p>
         <div class="actions">
           <a class="btn btn-white btn-lg" href="#install">{t.hero.primary}</a>
-          <a class="btn btn-line btn-lg" href={REPO} rel="noopener">
-            <Fragment set:html={icons.github} />
-            {t.hero.secondary}
+          <a class="btn btn-line btn-lg" href="/demo/">
+            <Fragment set:html={icons.play} />
+            {t.hero.demo}
           </a>
         </div>
         <div class="hero-command">
           <Copy text={INSTALL} copy={t.hero.copy} copied={t.hero.copied} />
         </div>
         <p class="hero-note">{t.hero.note}</p>
-        <span class="story-hint" aria-hidden="true"><i></i></span>
+        <span class="story-hint" aria-hidden="true"><small>{t.hero.scroll}</small><i></i></span>
       </div>
       <p class="story-line" aria-hidden="true">
         <span class="story-w1">{t.story[0]}</span>
@@ -188,36 +216,61 @@ const SECURITY_TINT: Record<string, [string, string]> = {
         <h2>{t.hosts.title}</h2>
         <p>{t.hosts.lead}</p>
       </div>
-      <div class="hosts">
+    </div>
+    <!-- A belt of machines moving right, twice over so it never runs out. -->
+    <div class="belt reveal">
+      <div class="belt-track">
         {
-          t.hosts.items.map(h => (
-            <article class="card host reveal">
-              <span class="host-icon" set:html={icons[h.icon]} />
-              <h3>{h.title}</h3>
-              <p>{h.text}</p>
-              <span class="host-arch">{h.arch}</span>
-            </article>
-          ))
+          [0, 1].map(copy =>
+            t.hosts.items.map(h => (
+              <article class="card host" aria-hidden={copy ? 'true' : undefined}>
+                <div class="host-art">
+                  <DeviceArt kind={HOST_ART[h.icon]} />
+                </div>
+                <h3>{h.title}</h3>
+                <p>{h.text}</p>
+                <span class="host-arch">{h.arch}</span>
+              </article>
+            )),
+          )
         }
       </div>
     </div>
   </section>
 
+  <!-- How it works, read word by word as the page scrolls. -->
+  <section class="band" id="how">
+    <div class="wrap split">
+      <h2 class="split-title reveal">{t.how.title}</h2>
+      <p class="say" data-progress="words">{say.map(x => <span class={x.hl ? 'w hl' : 'w'}>{x.w + ' '}</span>)}</p>
+    </div>
+  </section>
+
   <section class="band" id="features">
-    <div class="wrap">
+    <div class="wrap-tour">
       <div class="band-head reveal">
         <h2>{t.widgets.title}</h2>
         <p>{t.widgets.lead}</p>
       </div>
-      <div class="widgets">
+      <div class="bento">
         {
-          t.widgets.items.map(w => (
-            <article class="card widget reveal">
-              <img src={`/icons/${w.icon}.svg`} alt="" width="44" height="44" loading="lazy" />
-              <h3>{w.title}</h3>
-              <p>{w.text}</p>
-            </article>
-          ))
+          t.widgets.items.map(w => {
+            const b = BENTO[w.icon] ?? { size: 's', order: 99 }
+            return (
+              <article class={`card bt bt-${b.size} ${b.dark ? 'bt-dark' : ''} reveal`} style={`order: ${b.order}`}>
+                <div class="bt-text">
+                  <img src={`/icons/${w.icon}.svg`} alt="" width="40" height="40" loading="lazy" />
+                  <h3>{w.title}</h3>
+                  <p>{w.text}</p>
+                </div>
+                {b.pic && (
+                  <div class="bt-pic">
+                    <img src={b.pic} alt="" loading="lazy" decoding="async" />
+                  </div>
+                )}
+              </article>
+            )
+          })
         }
       </div>
     </div>
@@ -443,17 +496,15 @@ const SECURITY_TINT: Record<string, [string, string]> = {
   </section>
 
   <section class="band" id="faq">
-    <div class="wrap faq-wrap">
-      <div class="band-head reveal">
-        <h2>{t.faq.title}</h2>
-      </div>
-      <div class="card faq reveal">
+    <div class="wrap split">
+      <h2 class="split-title reveal">{t.faq.title}</h2>
+      <div class="faq reveal">
         {
           t.faq.items.map(f => (
             <details class="faq-item">
               <summary>
                 {f.q}
-                <span set:html={icons.chevron} />
+                <span class="faq-plus" aria-hidden="true" />
               </summary>
               <p>{f.a}</p>
             </details>

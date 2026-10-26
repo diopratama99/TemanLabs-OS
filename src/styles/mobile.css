@@ -1424,3 +1424,8 @@ button.m-row:active,
 [data-shell='mobile'] .dls-row .btn ~ button {
   margin-left: 0;
 }
+
+/* Video Player: Loop is in the ⋯ menu beside the title, so the controls keep their room. */
+[data-shell='mobile'] .vp-loop {
+  display: none;
+}

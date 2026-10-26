@@ -10,6 +10,7 @@ const id: Content = {
       'Desktop untuk server rumahmu yang terbuka di browser mana pun: di laptop, di meja kerja, atau di HP. Pasang app, kelola file, backup, dan pantau semuanya. Gratis dan open source.',
   },
   menu: {
+    demo: 'Demo',
     tour: 'Tur',
     phone: 'HP',
     apps: 'App',
@@ -28,6 +29,8 @@ const id: Content = {
     lead: 'Desktop untuk server rumahmu. App, file, backup, dan lainnya, dari browser mana pun.',
     primary: 'Instal TemanLabsOS',
     secondary: 'Lihat di GitHub',
+    demo: 'Coba demonya langsung',
+    scroll: 'Gulir',
     copy: 'Salin',
     copied: 'Tersalin',
     note: 'Gratis dan open source · Ubuntu atau Debian · amd64 dan arm64',
@@ -61,6 +64,10 @@ const id: Content = {
       { icon: 'cpu', title: 'Single-board computer', text: 'Raspberry Pi 4 atau 5, Orange Pi, dan board arm64 lainnya.', arch: 'arm64' },
       { icon: 'tv', title: 'STB', text: 'STB Android yang sudah di-flash Armbian, seperti HG680P atau B860H.', arch: 'arm64' },
     ],
+  },
+  how: {
+    title: 'Cara kerjanya',
+    text: 'Cukup satu perintah di servermu. Installer mengecek unduhan, memasang Docker kalau belum ada, lalu menjalankan TemanLabsOS sebagai layanan. Buka di browser mana pun, masuk, dan [app, file, serta backup-mu] ada di satu desktop. Kalau ada app yang macet, [TemanLabsOS me-restart-nya] lalu memberi tahu kamu. Versi baru tinggal sekali klik, dan tidak ada datamu yang keluar dari server.',
   },
   widgets: {
     title: 'Semua yang dibutuhkan server rumah.',

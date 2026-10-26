@@ -111,6 +111,7 @@ function scrollMotion() {
       // The opening is held on screen: its progress is how far the page has scrolled through it.
       const p = el.dataset.progress === 'story' ? clamp(-r.top / Math.max(1, r.height - h)) : clamp((h - r.top) / (h + r.height))
       el.style.setProperty('--p', p.toFixed(4))
+      if (el.dataset.progress === 'words') readWords(el, p)
     }
     tourStep()
   }
@@ -122,6 +123,13 @@ function scrollMotion() {
   addEventListener('scroll', ask, { passive: true })
   addEventListener('resize', ask)
   update()
+}
+
+// A paragraph read as it crosses the screen: its words go from faint to full, one after another.
+function readWords(el: HTMLElement, p: number) {
+  const words = el.querySelectorAll<HTMLElement>('.w')
+  const k = clamp((p - 0.22) / 0.36) * words.length
+  words.forEach((w, i) => (w.style.opacity = String(0.16 + 0.84 * clamp(k - i))))
 }
 
 // A clip plays only while it's on screen (and the tab is in front), to spare the battery.
@@ -252,4 +260,31 @@ export function start() {
   clips()
   scrollMotion()
   launcher()
+  viewer()
+}
+
+// A picture in the highlights opens large on a click; a click anywhere or Esc closes it.
+export function viewer() {
+  const pics = document.querySelectorAll<HTMLImageElement>('.bt-pic img')
+  if (!pics.length) return
+  const box = document.createElement('dialog')
+  box.className = 'viewer'
+  box.innerHTML = '<img alt="" /><button type="button" class="viewer-close" aria-label="Close">×</button>'
+  document.body.append(box)
+  const big = box.querySelector('img')!
+  const close = () => box.close()
+  box.addEventListener('click', close)
+  box.addEventListener('close', () => document.documentElement.classList.remove('is-viewing'))
+  pics.forEach(img => {
+    img.tabIndex = 0
+    img.setAttribute('role', 'button')
+    const open = () => {
+      big.src = img.currentSrc || img.src
+      big.alt = img.closest('.bt')?.querySelector('h3')?.textContent ?? ''
+      box.showModal()
+      document.documentElement.classList.add('is-viewing')
+    }
+    img.addEventListener('click', open)
+    img.addEventListener('keydown', e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open()))
+  })
 }

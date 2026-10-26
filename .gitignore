@@ -9,3 +9,4 @@ server/bin
 # The website's generated types (site/)
 site/.astro
 site/.demos
+site/demo-dist

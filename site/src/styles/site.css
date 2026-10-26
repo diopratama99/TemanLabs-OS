@@ -2433,3 +2433,655 @@ svg {
     padding: 20px 20px 22px;
   }
 }
+
+/* ----- Type and layout, plainer ----- */
+
+/* Plus Jakarta Sans, headings on the left, one quiet background for every section. */
+:root {
+  --font: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  font-feature-settings: normal;
+  letter-spacing: -0.01em;
+}
+
+.band,
+.band-alt {
+  background: var(--bg-alt);
+}
+
+.band-head {
+  max-width: 760px;
+  margin: 0 0 48px;
+  text-align: left;
+}
+
+.band-head h2 {
+  font-size: clamp(36px, 4.6vw, 60px);
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  font-weight: 700;
+}
+
+.band-head p {
+  max-width: 560px;
+  margin-top: 16px;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* A title on the left, what it's about on the right. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
+  gap: 56px;
+  align-items: start;
+}
+
+.split-title {
+  font-size: clamp(30px, 3.2vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+}
+
+/* How it works: read as the page scrolls, word by word. */
+.say {
+  font-size: clamp(24px, 2.6vw, 38px);
+  line-height: 1.38;
+  letter-spacing: -0.025em;
+  font-weight: 500;
+}
+
+.say .w {
+  transition: opacity 0.25s linear;
+}
+
+.say .hl {
+  color: var(--accent);
+}
+
+/* Questions: plain rows with a plus that turns to a cross. */
+.faq {
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  border-top: 1px solid var(--separator);
+}
+
+.faq-item,
+.faq-item + .faq-item {
+  border-top: 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.faq-item summary {
+  padding: 24px 0;
+  font-size: 17px;
+}
+
+.faq-item summary:hover {
+  background: none;
+  color: var(--accent);
+}
+
+.faq-plus {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.3s var(--ease-out);
+}
+
+.faq-plus::before,
+.faq-plus::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.faq-plus::after {
+  transform: rotate(90deg);
+}
+
+.faq-item[open] .faq-plus {
+  transform: rotate(45deg);
+}
+
+.faq-item p {
+  padding: 0 56px 24px 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .faq-item p {
+    padding-right: 24px;
+  }
+}
+
+/* The last word keeps the logo's dark blue, like the opening. */
+.band.end {
+  color: #fff;
+  background: var(--story-bg);
+}
+
+/* ----- Highlights, as a bento ----- */
+
+.bento {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-flow: dense;
+  gap: 16px;
+}
+
+.bt {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  transition:
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s;
+}
+
+.bt:hover {
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow-lg);
+}
+
+.bt-l {
+  grid-column: span 4;
+}
+
+.bt-m,
+.bt-s {
+  grid-column: span 2;
+}
+
+.bt-h {
+  grid-column: span 3;
+}
+
+.bt-text {
+  padding: 28px 28px 26px;
+}
+
+.bt-text img {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 18px;
+  filter: drop-shadow(0 6px 12px rgba(17, 24, 39, 0.16));
+}
+
+.bt h3 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.bt-l h3 {
+  font-size: 26px;
+}
+
+.bt p {
+  max-width: 440px;
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+/* The app itself, cropped, running off the tile's bottom edge. */
+.bt-pic {
+  flex: none;
+  height: 230px;
+  margin-top: auto;
+  margin: 0 0 -1px 28px;
+  overflow: hidden;
+  border-radius: 14px 0 0 0;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 10px 30px rgba(17, 24, 39, 0.12);
+}
+
+
+.bt-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.35);
+  transform-origin: var(--at, 60% 20%);
+  transition: transform 0.8s var(--ease-out);
+}
+
+.bt:hover .bt-pic img {
+  transform: scale(1.42);
+}
+
+/* "Yours alone": the logo's blue. */
+.bt-dark {
+  color: #fff;
+  background: var(--brand);
+  box-shadow: none;
+}
+
+.bt-dark p {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@media (max-width: 900px) {
+  .bento {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bt-l,
+  .bt-h {
+    grid-column: span 2;
+  }
+
+  .bt-m,
+  .bt-s {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .bento {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .bt-l,
+  .bt-m,
+  .bt-s,
+  .bt-h {
+    grid-column: auto;
+  }
+
+  .bt-text {
+    padding: 22px 22px 20px;
+  }
+
+  .bt-pic {
+    height: 180px;
+    margin-left: 22px;
+  }
+}
+
+/* ----- Where it runs, as a moving belt ----- */
+
+.belt {
+  overflow: hidden;
+  padding: 8px 0 28px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.belt-track {
+  display: flex;
+  gap: 18px;
+  width: max-content;
+  padding-left: 18px;
+  animation: belt 46s linear infinite;
+}
+
+/* Right, steadily; the second copy takes the first one's place. */
+@keyframes belt {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.belt:hover .belt-track {
+  animation-play-state: paused;
+}
+
+.belt .host {
+  flex: none;
+  width: 300px;
+  padding: 18px 18px 22px;
+}
+
+.host-art {
+  display: grid;
+  place-items: center;
+  height: 140px;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  background: var(--bg-alt);
+}
+
+.host-art .device-art {
+  width: 150px;
+  height: auto;
+  transition: transform 0.5s var(--ease-out);
+}
+
+.host:hover .device-art {
+  transform: translateY(-4px) scale(1.04);
+}
+
+.belt .host h3,
+.belt .host p,
+.belt .host .host-arch {
+  margin-left: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .belt-track {
+    animation: none;
+  }
+
+  .belt {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .belt .host {
+    width: 260px;
+  }
+
+  .belt-track {
+    animation-duration: 38s;
+  }
+}
+
+.belt .host-art {
+  align-self: stretch;
+}
+
+/* The picture fills the rest of the tile, edge to edge. */
+.bt-pic {
+  flex: 1 0 230px;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 var(--separator);
+}
+
+.bt-pic img {
+  min-height: 230px;
+}
+
+@media (max-width: 560px) {
+  .bt-pic {
+    flex-basis: 190px;
+    margin: 0;
+  }
+
+  .bt-pic img {
+    min-height: 190px;
+  }
+}
+
+/* The bar as wide as the wide sections. */
+.nav-in {
+  max-width: calc(1600px + var(--gutter) * 2);
+}
+
+/* The devices fade in over the words: they must not catch the words' clicks while they do. */
+.story-devices {
+  pointer-events: none;
+}
+
+/* The demo, picked out in the bar. */
+.nav-menu a.nav-demo {
+  margin-left: 6px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.nav.on-story .nav-menu a.nav-demo {
+  color: #fff;
+  background: rgba(4, 121, 255, 0.55);
+}
+
+.btn-line svg {
+  fill: currentColor;
+}
+
+/* The app's window peeking out of the tile: whole at its top left, running off the right and the
+   bottom edges, rising a little when the tile is pointed at. */
+.bt-pic {
+  position: relative;
+  flex: 1 0 240px;
+  padding: 4px 0 0 28px;
+  overflow: hidden;
+  background: none;
+  box-shadow: none;
+}
+
+.bt-pic img {
+  display: block;
+  width: min(125%, 820px);
+  height: auto;
+  min-height: 0;
+  max-width: none;
+  border-radius: 12px;
+  object-fit: initial;
+  transform: none;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 18px 40px rgba(17, 24, 39, 0.2);
+  transition: transform 0.6s var(--ease-out);
+}
+
+.bt:hover .bt-pic img {
+  transform: translateY(-8px);
+}
+
+@media (max-width: 560px) {
+  .bt-pic {
+    flex-basis: 200px;
+    padding-left: 22px;
+  }
+
+  .bt-pic img {
+    width: 140%;
+    min-height: 0;
+  }
+}
+
+/* The window whole, nothing cut: under the words in a narrow tile, beside them in a wide one. */
+.bt-pic {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 28px 28px;
+  overflow: visible;
+}
+
+.bt-pic img {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 10px;
+}
+
+.bt:hover .bt-pic img {
+  transform: translateY(-4px);
+}
+
+@media (min-width: 901px) {
+  .bt-l {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .bt-l .bt-text {
+    flex: 0 0 36%;
+    align-self: flex-start;
+    padding-top: 32px;
+  }
+
+  .bt-l .bt-pic {
+    flex: 1 1 auto;
+    align-items: center;
+    padding: 28px 28px 28px 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .bt-pic {
+    padding: 0 18px 18px;
+  }
+
+  .bt-pic img {
+    width: 100%;
+  }
+}
+
+/* ----- A picture, large ----- */
+
+.bt-pic img {
+  cursor: zoom-in;
+}
+
+.viewer {
+  max-width: none;
+  max-height: none;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: 4vmin;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  cursor: zoom-out;
+}
+
+.viewer:not([open]) {
+  display: none;
+}
+
+.viewer::backdrop {
+  background: rgba(4, 10, 24, 0.82);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 14px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+  animation: viewer-in 0.35s var(--ease-out);
+}
+
+@keyframes viewer-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+.viewer-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.is-viewing {
+  overflow: hidden;
+}
+
+/* Always the whole picture on screen. */
+.viewer img {
+  width: auto;
+  height: auto;
+  max-width: 92vw;
+  max-height: 88vh;
+  max-height: 88dvh;
+  object-fit: contain;
+}
+
+/* Scroll on: a word, and a thin line that fills downward in the logo's blue, over and over. */
+.story-hint {
+  bottom: 26px;
+  width: auto;
+  height: auto;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0;
+  box-shadow: none;
+  transform: translateX(-50%);
+}
+
+.story-hint small {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.story-hint i {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 2px;
+  height: 44px;
+  margin: 0;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.16);
+  animation: none;
+}
+
+.story-hint i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: #4aa3ff;
+  transform-origin: 50% 0;
+  animation: hint-fill 2s var(--ease-out) infinite;
+}
+
+@keyframes hint-fill {
+  0% {
+    transform: scaleY(0);
+    transform-origin: 50% 0;
+  }
+  55% {
+    transform: scaleY(1);
+    transform-origin: 50% 0;
+  }
+  56% {
+    transform-origin: 50% 100%;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: 50% 100%;
+  }
+}
