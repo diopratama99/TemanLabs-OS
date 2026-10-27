@@ -1,5 +1,5 @@
 // Loaded lazily (React.lazy) — Monaco is several MB, so it only downloads when Code is opened.
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Editor, { loader, type OnMount } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 // monaco-editor's package exports map `monaco-editor/<path>` to `esm/vs/<path>.js`.
@@ -9,6 +9,7 @@ import CssWorker from 'monaco-editor/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
 import { tr } from '../../lib/i18n'
+import { applyExtensions, extensionOptions, type ExtensionSettings } from './editorExtensions'
 
 // Use the bundled copy instead of @monaco-editor/react's default CDN, so the editor works on a
 // home server without internet access.
@@ -94,6 +95,8 @@ const OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   renderLineHighlight: 'all',
   scrollBeyondLastLine: false,
   automaticLayout: true,
+  // Ctrl (⌘) + wheel, and pinching a trackpad, zoom the text, as in VS Code.
+  mouseWheelZoom: true,
   // Replaced by the desktop's glass context menu (see CodeEditor).
   contextmenu: false,
 }
@@ -106,6 +109,7 @@ export interface MonacoViewProps {
   dark: boolean
   wordWrap: boolean
   minimap: boolean
+  extensions: ExtensionSettings
   onChange: (value: string) => void
   onMount: OnMount
 }
@@ -117,13 +121,21 @@ export default function MonacoView({
   dark,
   wordWrap,
   minimap,
+  extensions,
   onChange,
   onMount,
 }: MonacoViewProps) {
+  const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null)
   const options = useMemo<monaco.editor.IStandaloneEditorConstructionOptions>(
-    () => ({ ...OPTIONS, wordWrap: wordWrap ? 'on' : 'off', minimap: { ...OPTIONS.minimap, enabled: minimap } }),
-    [wordWrap, minimap],
+    () => ({ ...OPTIONS, ...extensionOptions(extensions), wordWrap: wordWrap ? 'on' : 'off', minimap: { ...OPTIONS.minimap, enabled: minimap } }),
+    [wordWrap, minimap, extensions],
   )
+  // The extensions' providers and decorations, redone when they're turned on or off.
+  useEffect(() => {
+    if (!editor) return
+    const applied = applyExtensions(monaco, editor, extensions, model => model.uri.path)
+    return () => applied.dispose()
+  }, [editor, extensions])
   return (
     <Editor
       path={path}
@@ -135,7 +147,10 @@ export default function MonacoView({
       keepCurrentModel
       loading={<div className="ce-loading">{tr('Loading editor…')}</div>}
       onChange={value => onChange(value ?? '')}
-      onMount={onMount}
+      onMount={(e, m) => {
+        setEditor(e)
+        onMount(e, m)
+      }}
     />
   )
 }

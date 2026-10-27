@@ -82,6 +82,75 @@ export const contents: Record<string, string> = {
 - TODO: move Immich thumbnails to the SSD
 - TODO: renew the Cloudflare tunnel token before December
 `,
+  '/DATA/Projects/teman-app/lib/main.dart': `import 'package:flutter/material.dart';
+
+// TODO: read the server address from settings
+const serverUrl = 'http://teman-server';
+
+void main() => runApp(const TemanApp());
+
+class TemanApp extends StatelessWidget {
+  const TemanApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Teman',
+      theme: ThemeData(colorSchemeSeed: const Color(0xFF034BB8)),
+      home: const Scaffold(body: Center(child: Text('Hello from teman-server'))),
+    );
+  }
+}
+`,
+  '/DATA/Projects/teman-app/pubspec.yaml': `name: teman_app
+description: A small app for the home server.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+`,
+  '/DATA/Projects/teman-app/.env': `# Where the app finds the server
+SERVER_URL=http://teman-server
+API_TOKEN=change-me
+`,
+  '/DATA/Projects/teman-app/.gitignore': `.dart_tool/
+build/
+.env
+`,
+  '/DATA/Projects/teman-app/LICENSE': `MIT License
+
+Copyright (c) 2026 Teman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software.
+`,
+  '/DATA/Projects/teman-app/Dockerfile': `FROM ghcr.io/cirruslabs/flutter:stable AS build
+WORKDIR /app
+COPY . .
+RUN flutter build web
+
+FROM nginx:alpine
+COPY --from=build /app/build/web /usr/share/nginx/html
+`,
+  '/DATA/Projects/teman-app/package.json': `{"name":"teman-app-tools","private":true,"scripts":{"serve":"npx serve build/web"},"devDependencies":{"serve":"^14.2.0"}}
+`,
+  '/DATA/Projects/teman-app/README.md': `# Teman App
+
+A Flutter app for **teman-server**.
+
+- [ ] Sign in
+- [x] Show the server's status
+
+\`\`\`sh
+flutter run -d chrome
+\`\`\`
+
+> FIXME: the web build needs the API token from .env
+`,
   '/DATA/Projects/README.md': `# Projects
 
 Small things running on **teman-server**.
@@ -253,7 +322,14 @@ export const files: Record<string, FileEntry[]> = {
   '/DATA/AppData': [folder('homeassistant'), folder('immich'), folder('jellyfin'), folder('nextcloud'), folder('pihole'), folder('vaultwarden')],
   '/DATA/AppData/jellyfin': [folder('config'), textFile('/DATA/AppData/jellyfin', 'docker-compose.yml', '2026-09-02')],
   '/DATA/AppData/nextcloud': [folder('html'), textFile('/DATA/AppData/nextcloud', 'docker-compose.yml', '2026-09-02')],
-  '/DATA/Projects': [folder('scripts'), folder('temanlabs-site'), textFile('/DATA/Projects', 'README.md', '2026-10-12')],
+  '/DATA/Projects': [folder('scripts'), folder('teman-app'), folder('temanlabs-site'), textFile('/DATA/Projects', 'README.md', '2026-10-12')],
+  '/DATA/Projects/teman-app': [
+    folder('lib'),
+    folder('test'),
+    ...['.env', '.gitignore', 'Dockerfile', 'LICENSE', 'package.json', 'pubspec.yaml', 'README.md'].map(n => textFile('/DATA/Projects/teman-app', n, '2026-10-24')),
+  ],
+  '/DATA/Projects/teman-app/lib': [textFile('/DATA/Projects/teman-app/lib', 'main.dart', '2026-10-24')],
+  '/DATA/Projects/teman-app/test': [],
   '/DATA/Projects/scripts': [
     textFile('/DATA/Projects/scripts', 'backup.sh', '2026-10-05'),
     textFile('/DATA/Projects/scripts', 'healthcheck.py', '2026-10-18'),

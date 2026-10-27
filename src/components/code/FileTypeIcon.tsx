@@ -1,33 +1,40 @@
-import { FileArchive, FileAudio, FileCode, FileImage, FileText, FileVideo, Folder, FolderOpen } from 'lucide-react'
-import { fileKind, languageFor } from '../../lib/fileTypes'
+import { useEffect, useState } from 'react'
+import { File, Folder, FolderOpen } from 'lucide-react'
+import { iconFor, readIconMap, type IconMap, type RawIconMap } from '../../lib/fileIcons'
+import { useSettings } from '../../lib/settings'
 
-// Roughly the colors VS Code's default icon theme uses per language.
-const LANGUAGE_COLOR: Record<string, string> = {
-  typescript: '#3178c6',
-  javascript: '#e8b500',
-  json: '#cbab2f',
-  html: '#e44d26',
-  css: '#42a5f5',
-  scss: '#cd6799',
-  less: '#2a4d80',
-  markdown: '#519aba',
-  yaml: '#cb171e',
-  shell: '#4eaa25',
-  python: '#3572a5',
-  go: '#00add8',
-  rust: '#dea584',
-  dockerfile: '#2496ed',
-  ini: '#8e8e93',
+// File and folder icons from the Material Icon Theme (see lib/fileIcons). The mapping is fetched
+// once, when the first icon shows; each SVG downloads only when it's on screen. Until then, plain
+// icons stand in.
+
+const BASE = `${import.meta.env.BASE_URL}file-icons/`
+let iconMap: IconMap | null = null
+let loading: Promise<void> | null = null
+const waiting = new Set<() => void>()
+
+function loadIcons() {
+  loading ??= fetch(`${BASE}map.json`)
+    .then(r => (r.ok ? (r.json() as Promise<RawIconMap>) : null))
+    .then(raw => {
+      if (raw) iconMap = readIconMap(raw)
+    })
+    .catch(() => {})
+    .finally(() => waiting.forEach(f => f()))
+  return loading
 }
 
-const KIND_ICON = {
-  image: FileImage,
-  video: FileVideo,
-  audio: FileAudio,
-  archive: FileArchive,
-  code: FileCode,
-  document: FileText,
-  folder: Folder,
+function useIconMap() {
+  const [, setLoaded] = useState(!!iconMap)
+  useEffect(() => {
+    if (iconMap) return
+    const done = () => setLoaded(true)
+    waiting.add(done)
+    void loadIcons()
+    return () => {
+      waiting.delete(done)
+    }
+  }, [])
+  return iconMap
 }
 
 interface Props {
@@ -38,12 +45,12 @@ interface Props {
 }
 
 export function FileTypeIcon({ name, folder, open, size = 15 }: Props) {
-  if (folder) {
-    const Icon = open ? FolderOpen : Folder
-    return <Icon size={size} className="ce-ficon" color="#6b9eff" />
+  const map = useIconMap()
+  const { settings } = useSettings()
+  if (!map) {
+    const Icon = folder ? (open ? FolderOpen : Folder) : File
+    return <Icon size={size} className="ce-ficon" color={folder ? '#6b9eff' : '#8e8e93'} />
   }
-  const kind = fileKind(name)
-  const Icon = KIND_ICON[kind]
-  const color = LANGUAGE_COLOR[languageFor(name)?.id ?? ''] ?? '#8e8e93'
-  return <Icon size={size} className="ce-ficon" color={color} />
+  const icon = iconFor(map, name, !!folder, !!open, settings.theme !== 'dark')
+  return <img src={`${BASE}${icon}.svg`} alt="" width={size} height={size} className="ce-ficon" draggable={false} decoding="async" />
 }

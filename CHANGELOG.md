@@ -4,6 +4,20 @@ What changed in each release of TemanLabsOS. The release workflow puts a version
 
 Versions with `-beta` are released like any other (the installer and Software Update offer them); the final version of the same number is offered after its beta.
 
+## v0.5.0-beta
+
+### New
+- Code shows files and folders with VS Code's most used icon theme (Material Icon Theme): Dart, LICENSE, JSON, Markdown, .env, Dockerfile, package.json, src, node_modules and some 1,200 more, with light-theme variants. Files are recognized the way VS Code does it (whole name first, then extensions such as .d.ts), and many more languages open with highlighting: Dart, Kotlin, Swift, C#, PowerShell, Terraform, GraphQL and others.
+- An Extensions view in Code with built-in versions of popular extensions, each with a switch: Prettier (and format on save), inline errors, rename paired tags, TODO highlight, rainbow indents, path completion, color swatches, Markdown and HTML preview beside the file, bracket pair colors and sticky scroll.
+- Code's layout can be adjusted like VS Code's: drag the sidebar's edge (drag it narrow to close it), drag the terminal's top, hide the minimap or turn on word wrap from the buttons at the top right, drag tabs to reorder them, and zoom the text with Ctrl (⌘) + scroll or a pinch.
+- Code's title bar works like VS Code's: Back and Forward through the files you've looked at (also Alt + ← / →), the workspace's name in the middle to go to a file, and buttons to show or hide the sidebar, the terminal and the preview. The editor's buttons sit at the end of the tabs (with a … menu), double-clicking beside the tabs makes a new file, and the path above the file starts at the workspace folder: a folder in it shows in the Explorer, the file's name opens Go to Symbol.
+
+### Changed
+- The status bar shows the open file's real indentation and line endings.
+- A setup guide in Devices for each system: Windows Pro, Home and on ARM; newer and older Macs (Intel and M-series); Ubuntu, Linux Mint, Debian, Arch and Fedora, with the commands to copy. It shows before the first device is added, from Setup Guide, and in Add Device (where Use this picks the right screen-sharing method).
+- Remote screens of computers with several screens show one screen at a time: Screen 1 to begin with, another or all of them from the top of the window (with a warning about the bigger picture). The screens are found from the picture's size, or set by hand.
+- The guide says how to make a computer share just one screen (lighter for the server and the connection), and what the server needs for smooth remote screens.
+
 ## v0.4.0-beta
 
 ### New

@@ -7,16 +7,22 @@ import {
   useState,
   type DragEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import type * as Monaco from 'monaco-editor'
 import {
   ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
   AtSign,
+  Blocks,
   ChevronRight,
   ClipboardPaste,
   Command,
   Copy,
+  Ellipsis,
+  Eye,
   FileInput,
   FilePlus,
   FileSearch,
@@ -25,6 +31,12 @@ import {
   FolderX,
   Hash,
   Map as MapIcon,
+  PanelBottom,
+  PanelBottomDashed,
+  PanelLeft,
+  PanelLeftDashed,
+  PanelRight,
+  PanelRightDashed,
   Redo2,
   Replace,
   Save,
@@ -38,6 +50,8 @@ import {
   WandSparkles,
   WrapText,
   X,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '../api'
@@ -50,6 +64,8 @@ import { FileTypeIcon } from '../components/code/FileTypeIcon'
 import { OpenDialog } from '../components/code/OpenDialog'
 import { QuickOpen } from '../components/code/QuickOpen'
 import { SearchPanel } from '../components/code/SearchPanel'
+import { ExtensionsPanel } from '../components/code/ExtensionsPanel'
+import { DEFAULT_EXTENSIONS, markdownPage, prettierSupports, type ExtensionSettings } from '../components/code/editorExtensions'
 import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { languageFor } from '../lib/fileTypes'
@@ -61,11 +77,13 @@ import { CODE_APP } from '../lib/systemApps'
 import { Terminal } from './Terminal'
 import { tr } from '../lib/i18n'
 import { SHELL } from '../lib/shell'
+import { WindowToolbar } from '../lib/windowChrome'
 
 const MonacoView = lazy(() => import('../components/code/MonacoView'))
 
 const ROOT = DATA_ROOT
 const MAX_RECENT = 6
+const MAX_HISTORY = 50
 const NOTICE_MS = 3500
 const SUGGESTED = [
   '/DATA/Projects/README.md',
@@ -81,7 +99,7 @@ interface Tab {
   value: string
 }
 
-type Panel = 'explorer' | 'search'
+type Panel = 'explorer' | 'search' | 'extensions'
 type CloseChoice = 'save' | 'discard' | 'cancel'
 
 // Lives outside the component so closing the window keeps open tabs and unsaved edits.
@@ -120,6 +138,62 @@ interface Props {
 
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files')
 
+// The layout and extensions are remembered in this browser, like VS Code's own.
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw === null
+      ? fallback
+      : ({
+          ...(typeof fallback === 'object' ? fallback : {}),
+          ...JSON.parse(raw),
+        } as T)
+  } catch {
+    return fallback
+  }
+}
+function readNumber(key: string, fallback: number) {
+  try {
+    const n = Number(localStorage.getItem(key))
+    return Number.isFinite(n) && n > 0 ? n : fallback
+  } catch {
+    return fallback
+  }
+}
+function store(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
+  } catch {
+    // Not remembered; fine.
+  }
+}
+
+const SIDEBAR_WIDTH = 248
+const SIDEBAR_MIN = 170
+const SIDEBAR_MAX = 560
+// Dragged narrower than this, the sidebar closes (it opens again from the activity bar).
+const SIDEBAR_SNAP = 110
+const TERMINAL_HEIGHT = 230
+const TERMINAL_MIN = 90
+
+/** A drag on a sash (the thin handle between two areas); onMove gets how far it went. */
+function dragSash(e: ReactPointerEvent, onMove: (dx: number, dy: number) => void, onEnd?: () => void) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  const x = e.clientX
+  const y = e.clientY
+  document.body.classList.add('is-sash-dragging')
+  const move = (ev: PointerEvent) => onMove(ev.clientX - x, ev.clientY - y)
+  const up = () => {
+    document.body.classList.remove('is-sash-dragging')
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    onEnd?.()
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+
 export function CodeEditor({ stats, request }: Props) {
   const { settings } = useSettings()
   const { show } = useContextMenu()
@@ -143,17 +217,45 @@ export function CodeEditor({ stats, request }: Props) {
   const [dragging, setDragging] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef(0)
+  const [extensions, setExtensionsState] = useState<ExtensionSettings>(() => readStored('code.extensions', DEFAULT_EXTENSIONS))
+  const setExtensions = (next: ExtensionSettings) => {
+    setExtensionsState(next)
+    store('code.extensions', next)
+  }
+  const [sidebarWidth, setSidebarWidth] = useState(() => readNumber('code.sidebarWidth', SIDEBAR_WIDTH))
+  const [terminalHeight, setTerminalHeight] = useState(() => readNumber('code.terminalHeight', TERMINAL_HEIGHT))
+  const [preview, setPreview] = useState(false)
+  const [previewPage, setPreviewPage] = useState('')
+  // The open file's indentation and line endings, as the editor has them.
+  const [format, setFormat] = useState({
+    tabSize: 2,
+    insertSpaces: true,
+    eol: 'LF',
+  })
+  const [dragTab, setDragTab] = useState<string | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
 
   const uploadInput = useRef<HTMLInputElement>(null)
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof Monaco | null>(null)
   const pendingReveal = useRef<{ line: number; column: number } | null>(null)
   // Callbacks registered with Monaco outlive a render, so they read state through this ref.
-  const latest = useRef({ tabs, active })
-  latest.current = { tabs, active }
+  const latest = useRef({ tabs, active, extensions })
+  latest.current = { tabs, active, extensions }
 
   useEffect(() => {
-    Object.assign(session, { tabs, active, root, panel, terminal, expanded, recent, recentFolders, wordWrap, minimap })
+    Object.assign(session, {
+      tabs,
+      active,
+      root,
+      panel,
+      terminal,
+      expanded,
+      recent,
+      recentFolders,
+      wordWrap,
+      minimap,
+    })
     if (panel) session.lastPanel = panel
   }, [tabs, active, root, panel, terminal, expanded, recent, recentFolders, wordWrap, minimap])
 
@@ -189,6 +291,27 @@ export function CodeEditor({ stats, request }: Props) {
     setRecent(r => [path, ...r.filter(p => p !== path)].slice(0, MAX_RECENT))
     setRevealTick(t => t + 1)
   }, [])
+
+  // Back and Forward step through the files shown, as VS Code's do (reopening a closed one).
+  const nav = useRef({ list: [] as string[], at: -1 })
+  const [, setNavTick] = useState(0)
+  useEffect(() => {
+    const n = nav.current
+    if (!active || n.list[n.at] === active) return
+    n.list = [...n.list.slice(0, n.at + 1), active].slice(-MAX_HISTORY)
+    n.at = n.list.length - 1
+    setNavTick(t => t + 1)
+  }, [active])
+  const canBack = nav.current.at > 0
+  const canForward = nav.current.at < nav.current.list.length - 1
+  const step = (by: number) => {
+    const n = nav.current
+    const path = n.list[n.at + by]
+    if (!path) return
+    n.at += by
+    setNavTick(t => t + 1)
+    openFile(path).catch(() => flash(tr('{0} is no longer there', nameOf(path))))
+  }
 
   const openFolder = useCallback((path: string) => {
     setRoot(path)
@@ -244,9 +367,29 @@ export function CodeEditor({ stats, request }: Props) {
   useEffect(() => applyReveal(), [active, revealTick])
 
   const save = useCallback(async (path?: string) => {
-    const { tabs, active } = latest.current
-    const tab = tabs.find(t => t.path === (path ?? active))
+    const { tabs, active, extensions } = latest.current
+    let tab = tabs.find(t => t.path === (path ?? active))
     if (!tab || !isDirty(tab)) return
+    // Format on Save: through the open editor (so it can be undone), for the file in front.
+    const editor = editorRef.current
+    const model = editor?.getModel()
+    if (
+      extensions.prettier &&
+      extensions.formatOnSave &&
+      editor &&
+      model &&
+      model.uri.path === tab.path &&
+      prettierSupports(model.getLanguageId(), tab.path)
+    ) {
+      try {
+        await editor.getAction('editor.action.formatDocument')?.run()
+        const formatted = model.getValue()
+        tab = { ...tab, value: formatted }
+        setTabs(ts => ts.map(t => (t.path === tab!.path ? { ...t, value: formatted } : t)))
+      } catch {
+        // A file Prettier can't parse is saved as it is.
+      }
+    }
     const { value } = tab
     await api.writeFile(tab.path, value)
     setTabs(ts => ts.map(t => (t.path === tab.path ? { ...t, saved: value } : t)))
@@ -300,6 +443,21 @@ export function CodeEditor({ stats, request }: Props) {
   }
 
   const togglePanel = (p: Panel) => setPanel(current => (current === p ? null : p))
+  const toggleSidebar = () => setPanel(current => (current ? null : session.lastPanel))
+
+  /** Shows a folder in the Explorer, with the folders down to it opened. */
+  const revealFolder = (dir: string) => {
+    if (!root || (dir !== root && !dir.startsWith(`${root}/`))) return
+    setExpanded(e => {
+      const next = new Set(e)
+      for (let p = dir; ; p = parentOf(p)) {
+        next.add(p)
+        if (p === root || p.length <= root.length) break
+      }
+      return next
+    })
+    setPanel('explorer')
+  }
 
   useAppMenus(() => {
     const noEditor = !activeTab
@@ -313,12 +471,34 @@ export function CodeEditor({ stats, request }: Props) {
       {
         label: tr('File'),
         items: [
-          { label: tr('New File'), icon: FilePlus, onSelect: () => void newFile() },
+          {
+            label: tr('New File'),
+            icon: FilePlus,
+            onSelect: () => void newFile(),
+          },
           'separator',
-          { label: tr('Open File…'), icon: FileInput, shortcut: `${MOD}O`, onSelect: () => setDialog('file') },
-          { label: tr('Open Folder…'), icon: FolderOpen, onSelect: () => setDialog('folder') },
-          { label: tr('Go to File…'), icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
-          { label: tr('Upload from Computer…'), icon: Upload, onSelect: () => uploadInput.current?.click() },
+          {
+            label: tr('Open File…'),
+            icon: FileInput,
+            shortcut: `${MOD}O`,
+            onSelect: () => setDialog('file'),
+          },
+          {
+            label: tr('Open Folder…'),
+            icon: FolderOpen,
+            onSelect: () => setDialog('folder'),
+          },
+          {
+            label: tr('Go to File…'),
+            icon: FileSearch,
+            shortcut: `${MOD}P`,
+            onSelect: () => setQuickOpen(true),
+          },
+          {
+            label: tr('Upload from Computer…'),
+            icon: Upload,
+            onSelect: () => uploadInput.current?.click(),
+          },
           'separator',
           {
             label: tr('Save'),
@@ -327,41 +507,91 @@ export function CodeEditor({ stats, request }: Props) {
             disabled: !activeTab || !isDirty(activeTab),
             onSelect: () => void save(),
           },
-          { label: tr('Save All'), disabled: dirtyCount === 0, onSelect: () => void saveAll() },
+          {
+            label: tr('Save All'),
+            disabled: dirtyCount === 0,
+            onSelect: () => void saveAll(),
+          },
           'separator',
-          { label: tr('Close Editor'), icon: X, disabled: noEditor, onSelect: () => active && requestClose([active]) },
-          { label: tr('Close All Editors'), disabled: tabs.length === 0, onSelect: () => requestClose(tabs.map(t => t.path)) },
-          { label: tr('Close Folder'), icon: FolderX, disabled: !root, onSelect: closeFolder },
+          {
+            label: tr('Close Editor'),
+            icon: X,
+            disabled: noEditor,
+            onSelect: () => active && requestClose([active]),
+          },
+          {
+            label: tr('Close All Editors'),
+            disabled: tabs.length === 0,
+            onSelect: () => requestClose(tabs.map(t => t.path)),
+          },
+          {
+            label: tr('Close Folder'),
+            icon: FolderX,
+            disabled: !root,
+            onSelect: closeFolder,
+          },
         ],
       },
       {
         label: tr('Edit'),
         items: [
           editorItem('Undo', 'undo', { icon: Undo2, shortcut: `${MOD}Z` }),
-          editorItem('Redo', 'redo', { icon: Redo2, shortcut: `${MOD}${SHIFT}Z` }),
+          editorItem('Redo', 'redo', {
+            icon: Redo2,
+            shortcut: `${MOD}${SHIFT}Z`,
+          }),
           'separator',
-          editorItem('Cut', 'editor.action.clipboardCutAction', { icon: Scissors, shortcut: `${MOD}X` }),
-          editorItem('Copy', 'editor.action.clipboardCopyAction', { icon: Copy, shortcut: `${MOD}C` }),
+          editorItem('Cut', 'editor.action.clipboardCutAction', {
+            icon: Scissors,
+            shortcut: `${MOD}X`,
+          }),
+          editorItem('Copy', 'editor.action.clipboardCopyAction', {
+            icon: Copy,
+            shortcut: `${MOD}C`,
+          }),
           editorItem('Paste', 'editor.action.clipboardPasteAction', {
             icon: ClipboardPaste,
             shortcut: `${MOD}V`,
             disabled: noEditor || !navigator.clipboard?.readText,
           }),
           'separator',
-          editorItem('Find', 'actions.find', { icon: Search, shortcut: `${MOD}F` }),
-          editorItem('Replace', 'editor.action.startFindReplaceAction', { icon: Replace, shortcut: `${MOD}H` }),
-          { label: tr('Find in Files'), icon: FileSearch, shortcut: `${MOD}${SHIFT}F`, onSelect: () => setPanel('search') },
+          editorItem('Find', 'actions.find', {
+            icon: Search,
+            shortcut: `${MOD}F`,
+          }),
+          editorItem('Replace', 'editor.action.startFindReplaceAction', {
+            icon: Replace,
+            shortcut: `${MOD}H`,
+          }),
+          {
+            label: tr('Find in Files'),
+            icon: FileSearch,
+            shortcut: `${MOD}${SHIFT}F`,
+            onSelect: () => setPanel('search'),
+          },
           'separator',
-          editorItem('Toggle Line Comment', 'editor.action.commentLine', { icon: Hash, shortcut: `${MOD}/` }),
-          editorItem('Format Document', 'editor.action.formatDocument', { icon: WandSparkles, shortcut: `${SHIFT}${ALT}F` }),
+          editorItem('Toggle Line Comment', 'editor.action.commentLine', {
+            icon: Hash,
+            shortcut: `${MOD}/`,
+          }),
+          editorItem('Format Document', 'editor.action.formatDocument', {
+            icon: WandSparkles,
+            shortcut: `${SHIFT}${ALT}F`,
+          }),
         ],
       },
       {
         label: tr('Selection'),
         items: [
-          editorItem('Select All', 'editor.action.selectAll', { shortcut: `${MOD}A` }),
-          editorItem('Expand Selection', 'editor.action.smartSelect.expand', { shortcut: `${SHIFT}${ALT}→` }),
-          editorItem('Shrink Selection', 'editor.action.smartSelect.shrink', { shortcut: `${SHIFT}${ALT}←` }),
+          editorItem('Select All', 'editor.action.selectAll', {
+            shortcut: `${MOD}A`,
+          }),
+          editorItem('Expand Selection', 'editor.action.smartSelect.expand', {
+            shortcut: `${SHIFT}${ALT}→`,
+          }),
+          editorItem('Shrink Selection', 'editor.action.smartSelect.shrink', {
+            shortcut: `${SHIFT}${ALT}←`,
+          }),
           'separator',
           editorItem('Add Cursor Above', 'editor.action.insertCursorAbove'),
           editorItem('Add Cursor Below', 'editor.action.insertCursorBelow'),
@@ -372,7 +602,10 @@ export function CodeEditor({ stats, request }: Props) {
       {
         label: tr('View'),
         items: [
-          editorItem('Command Palette…', 'editor.action.quickCommand', { icon: Command, shortcut: `${MOD}${SHIFT}P` }),
+          editorItem('Command Palette…', 'editor.action.quickCommand', {
+            icon: Command,
+            shortcut: `${MOD}${SHIFT}P`,
+          }),
           'separator',
           {
             label: tr('Explorer'),
@@ -381,7 +614,18 @@ export function CodeEditor({ stats, request }: Props) {
             checked: panel === 'explorer',
             onSelect: () => togglePanel('explorer'),
           },
-          { label: tr('Search'), icon: Search, checked: panel === 'search', onSelect: () => togglePanel('search') },
+          {
+            label: tr('Search'),
+            icon: Search,
+            checked: panel === 'search',
+            onSelect: () => togglePanel('search'),
+          },
+          {
+            label: tr('Extensions'),
+            icon: Blocks,
+            checked: panel === 'extensions',
+            onSelect: () => togglePanel('extensions'),
+          },
           {
             label: tr('Terminal'),
             icon: SquareTerminal,
@@ -390,20 +634,75 @@ export function CodeEditor({ stats, request }: Props) {
             onSelect: () => setTerminal(t => !t),
           },
           'separator',
-          { label: tr('Word Wrap'), icon: WrapText, checked: wordWrap, onSelect: () => setWordWrap(w => !w) },
-          { label: tr('Minimap'), icon: MapIcon, checked: minimap, onSelect: () => setMinimap(m => !m) },
+          {
+            label: tr('Word Wrap'),
+            icon: WrapText,
+            checked: wordWrap,
+            onSelect: () => setWordWrap(w => !w),
+          },
+          {
+            label: tr('Minimap'),
+            icon: MapIcon,
+            checked: minimap,
+            onSelect: () => setMinimap(m => !m),
+          },
+          {
+            label: tr('Preview'),
+            icon: Eye,
+            checked: preview,
+            disabled: !canPreview,
+            onSelect: () => setPreview(p => !p),
+          },
+          'separator',
+          editorItem('Zoom In', 'editor.action.fontZoomIn', {
+            icon: ZoomIn,
+            shortcut: `${MOD}+`,
+          }),
+          editorItem('Zoom Out', 'editor.action.fontZoomOut', {
+            icon: ZoomOut,
+            shortcut: `${MOD}-`,
+          }),
+          editorItem('Reset Zoom', 'editor.action.fontZoomReset'),
         ],
       },
       {
         label: tr('Go'),
         items: [
-          { label: tr('Go to File…'), icon: FileSearch, shortcut: `${MOD}P`, onSelect: () => setQuickOpen(true) },
-          editorItem('Go to Line…', 'editor.action.gotoLine', { icon: ArrowDownToLine }),
-          editorItem('Go to Symbol…', 'editor.action.quickOutline', { icon: AtSign }),
-          editorItem('Go to Definition', 'editor.action.revealDefinition', { shortcut: 'F12' }),
+          {
+            label: tr('Go to File…'),
+            icon: FileSearch,
+            shortcut: `${MOD}P`,
+            onSelect: () => setQuickOpen(true),
+          },
+          editorItem('Go to Line…', 'editor.action.gotoLine', {
+            icon: ArrowDownToLine,
+          }),
+          editorItem('Go to Symbol…', 'editor.action.quickOutline', {
+            icon: AtSign,
+          }),
+          editorItem('Go to Definition', 'editor.action.revealDefinition', {
+            shortcut: 'F12',
+          }),
           editorItem('Go to Bracket', 'editor.action.jumpToBracket'),
           'separator',
-          editorItem('Next Problem', 'editor.action.marker.next', { shortcut: `${ALT}F8` }),
+          {
+            label: tr('Back'),
+            icon: ArrowLeft,
+            shortcut: `${ALT}←`,
+            disabled: !canBack,
+            onSelect: () => step(-1),
+          },
+          {
+            label: tr('Forward'),
+            icon: ArrowRight,
+            shortcut: `${ALT}→`,
+            disabled: !canForward,
+            onSelect: () => step(1),
+          },
+          'separator',
+          editorItem('Next Problem', 'editor.action.marker.next', {
+            shortcut: `${ALT}F8`,
+          }),
         ],
       },
       {
@@ -423,12 +722,16 @@ export function CodeEditor({ stats, request }: Props) {
   const handleRenamed = (from: string, to: string) => {
     const remap = (p: string) => (p === from || p.startsWith(`${from}/`) ? to + p.slice(from.length) : p)
     setTabs(ts => ts.map(t => ({ ...t, path: remap(t.path) })))
+    nav.current.list = nav.current.list.map(remap)
     setActive(a => a && remap(a))
     setRecent(r => r.map(remap))
   }
 
   const handleDeleted = (path: string) => {
     const gone = (p: string) => p === path || p.startsWith(`${path}/`)
+    const n = nav.current
+    n.at -= n.list.slice(0, n.at + 1).filter(gone).length
+    n.list = n.list.filter(p => !gone(p))
     closeTabs(latest.current.tabs.filter(t => gone(t.path)).map(t => t.path))
     setRecent(r => r.filter(p => !gone(p)))
   }
@@ -445,8 +748,20 @@ export function CodeEditor({ stats, request }: Props) {
       void editor.getAction(id)?.run()
     }
     show({ x: e.event.browserEvent.clientX, y: e.event.browserEvent.clientY }, [
-      { label: tr('Cut'), icon: Scissors, shortcut: `${MOD}X`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCutAction') },
-      { label: tr('Copy'), icon: Copy, shortcut: `${MOD}C`, disabled: !hasSelection, onSelect: run('editor.action.clipboardCopyAction') },
+      {
+        label: tr('Cut'),
+        icon: Scissors,
+        shortcut: `${MOD}X`,
+        disabled: !hasSelection,
+        onSelect: run('editor.action.clipboardCutAction'),
+      },
+      {
+        label: tr('Copy'),
+        icon: Copy,
+        shortcut: `${MOD}C`,
+        disabled: !hasSelection,
+        onSelect: run('editor.action.clipboardCopyAction'),
+      },
       {
         label: tr('Paste'),
         icon: ClipboardPaste,
@@ -455,10 +770,29 @@ export function CodeEditor({ stats, request }: Props) {
         onSelect: run('editor.action.clipboardPasteAction'),
       },
       'separator',
-      { label: tr('Find'), icon: Search, shortcut: `${MOD}F`, onSelect: run('actions.find') },
-      { label: tr('Replace'), icon: Replace, shortcut: `${MOD}H`, onSelect: run('editor.action.startFindReplaceAction') },
-      { label: tr('Change All Occurrences'), icon: TextCursorInput, onSelect: run('editor.action.changeAll') },
-      { label: tr('Toggle Line Comment'), icon: Hash, shortcut: `${MOD}/`, onSelect: run('editor.action.commentLine') },
+      {
+        label: tr('Find'),
+        icon: Search,
+        shortcut: `${MOD}F`,
+        onSelect: run('actions.find'),
+      },
+      {
+        label: tr('Replace'),
+        icon: Replace,
+        shortcut: `${MOD}H`,
+        onSelect: run('editor.action.startFindReplaceAction'),
+      },
+      {
+        label: tr('Change All Occurrences'),
+        icon: TextCursorInput,
+        onSelect: run('editor.action.changeAll'),
+      },
+      {
+        label: tr('Toggle Line Comment'),
+        icon: Hash,
+        shortcut: `${MOD}/`,
+        onSelect: run('editor.action.commentLine'),
+      },
       {
         label: tr('Format Document'),
         icon: WandSparkles,
@@ -467,7 +801,12 @@ export function CodeEditor({ stats, request }: Props) {
         onSelect: run('editor.action.formatDocument'),
       },
       'separator',
-      { label: tr('Command Palette…'), icon: Command, shortcut: 'F1', onSelect: run('editor.action.quickCommand') },
+      {
+        label: tr('Command Palette…'),
+        icon: Command,
+        shortcut: 'F1',
+        onSelect: run('editor.action.quickCommand'),
+      },
     ])
   }
 
@@ -476,6 +815,25 @@ export function CodeEditor({ stats, request }: Props) {
     monacoRef.current = monaco
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void save())
     editor.onDidChangeCursorPosition(e => setCursor({ line: e.position.lineNumber, column: e.position.column }))
+    // What the status bar says about the file: the editor detects it from the text.
+    let watched: Monaco.IDisposable | null = null
+    const readFormat = () => {
+      const model = editor.getModel()
+      watched?.dispose()
+      if (!model) return
+      const read = () => {
+        const o = model.getOptions()
+        setFormat({
+          tabSize: o.tabSize,
+          insertSpaces: o.insertSpaces,
+          eol: model.getEOL() === '\r\n' ? 'CRLF' : 'LF',
+        })
+      }
+      read()
+      watched = model.onDidChangeOptions(read)
+    }
+    readFormat()
+    editor.onDidChangeModel(readFormat)
     editor.onContextMenu(e => openEditorMenu(editor, e))
     applyReveal()
     editor.focus()
@@ -495,16 +853,155 @@ export function CodeEditor({ stats, request }: Props) {
         disabled: index === tabs.length - 1,
         onSelect: () => requestClose(tabs.slice(index + 1).map(t => t.path)),
       },
-      { label: tr('Close Saved'), onSelect: () => requestClose(tabs.filter(t => !isDirty(t)).map(t => t.path)) },
-      { label: tr('Close All'), onSelect: () => requestClose(tabs.map(t => t.path)) },
+      {
+        label: tr('Close Saved'),
+        onSelect: () => requestClose(tabs.filter(t => !isDirty(t)).map(t => t.path)),
+      },
+      {
+        label: tr('Close All'),
+        onSelect: () => requestClose(tabs.map(t => t.path)),
+      },
       'separator',
-      { label: tr('Save'), icon: Save, shortcut: `${MOD}S`, disabled: !isDirty(tab), onSelect: () => void save(tab.path) },
-      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(tab.path) },
+      {
+        label: tr('Save'),
+        icon: Save,
+        shortcut: `${MOD}S`,
+        disabled: !isDirty(tab),
+        onSelect: () => void save(tab.path),
+      },
+      {
+        label: tr('Copy Path'),
+        icon: Copy,
+        onSelect: () => void copyText(tab.path),
+      },
+    ])
+  }
+
+  const moreMenu = (e: MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    show({ x: r.left, y: r.bottom + 4 }, [
+      {
+        label: tr('Close All'),
+        onSelect: () => requestClose(tabs.map(t => t.path)),
+      },
+      {
+        label: tr('Close Saved'),
+        onSelect: () => requestClose(tabs.filter(t => !isDirty(t)).map(t => t.path)),
+      },
+      {
+        label: tr('Close Others'),
+        disabled: tabs.length < 2,
+        onSelect: () => requestClose(tabs.filter(t => t.path !== active).map(t => t.path)),
+      },
+      'separator',
+      {
+        label: tr('Word Wrap'),
+        icon: WrapText,
+        checked: wordWrap,
+        onSelect: () => setWordWrap(w => !w),
+      },
+      {
+        label: tr('Minimap'),
+        icon: MapIcon,
+        checked: minimap,
+        onSelect: () => setMinimap(m => !m),
+      },
+      {
+        label: tr('Preview'),
+        icon: Eye,
+        checked: preview,
+        disabled: !canPreview,
+        onSelect: () => setPreview(p => !p),
+      },
+      'separator',
+      {
+        label: tr('Format Document'),
+        icon: WandSparkles,
+        shortcut: `${SHIFT}${ALT}F`,
+        onSelect: runEditor('editor.action.formatDocument'),
+      },
+      {
+        label: tr('Reveal in Explorer'),
+        icon: FilesIcon,
+        disabled: !active || !root || !active.startsWith(`${root}/`),
+        onSelect: () => active && revealFolder(dirOf(active)),
+      },
+      {
+        label: tr('Copy Path'),
+        icon: Copy,
+        disabled: !active,
+        onSelect: () => active && void copyText(active),
+      },
     ])
   }
 
   const activeTab = tabs.find(t => t.path === active) ?? null
   const language = activeTab ? languageFor(nameOf(activeTab.path)) : null
+  const previewKind =
+    language?.id === 'markdown' && extensions.markdownPreview
+      ? 'markdown'
+      : language?.id === 'html' && /\.html?$/i.test(activeTab?.path ?? '') && extensions.htmlPreview
+        ? 'html'
+        : null
+  const canPreview = !!previewKind
+  const showPreview = preview && canPreview
+  const previewSource = showPreview ? activeTab?.value : undefined
+  useEffect(() => {
+    if (previewSource === undefined) return
+    let alive = true
+    const timer = window.setTimeout(() => {
+      if (previewKind === 'html') setPreviewPage(previewSource)
+      else void markdownPage(previewSource, settings.theme === 'dark').then(page => alive && setPreviewPage(page))
+    }, 200)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [previewSource, previewKind, settings.theme])
+
+  // Sashes: drag the sidebar's edge (narrow enough and it closes) and the terminal's top.
+  const resizeSidebar = (e: ReactPointerEvent) => {
+    const start = sidebarWidth
+    let width = start
+    dragSash(
+      e,
+      dx => {
+        width = start + dx
+        if (width < SIDEBAR_SNAP) setPanel(null)
+        else {
+          setPanel(p => p ?? session.lastPanel)
+          setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)))
+        }
+      },
+      () => width >= SIDEBAR_SNAP && store('code.sidebarWidth', String(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)))),
+    )
+  }
+  const resizeTerminal = (e: ReactPointerEvent) => {
+    const start = terminalHeight
+    const room = (mainRef.current?.clientHeight ?? 600) - 120
+    let height = start
+    dragSash(
+      e,
+      (_dx, dy) => {
+        height = Math.min(room, Math.max(TERMINAL_MIN, start - dy))
+        setTerminalHeight(height)
+      },
+      () => store('code.terminalHeight', String(height)),
+    )
+  }
+  // Tabs reorder by dragging, like VS Code's.
+  const dropTab = (onto: string) => {
+    if (!dragTab || dragTab === onto) return
+    setTabs(ts => {
+      const from = ts.findIndex(t => t.path === dragTab)
+      const to = ts.findIndex(t => t.path === onto)
+      if (from < 0 || to < 0) return ts
+      const next = [...ts]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
   const dirtyCount = tabs.filter(isDirty).length
   const closingDirty = closing ? tabs.filter(t => closing.includes(t.path) && isDirty(t)) : []
 
@@ -522,6 +1019,65 @@ export function CodeEditor({ stats, request }: Props) {
           if (picked.length) void uploadFiles(root ?? ROOT, picked)
         }}
       />
+      <WindowToolbar>
+        <span className="tb-spacer" />
+        <div className="ce-cc is-centered">
+          <button
+            className="ce-tb-btn"
+            onClick={() => step(-1)}
+            disabled={!canBack}
+            aria-label={tr('Back')}
+            title={`${tr('Back')} (${ALT}←)`}
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <button
+            className="ce-tb-btn"
+            onClick={() => step(1)}
+            disabled={!canForward}
+            aria-label={tr('Forward')}
+            title={`${tr('Forward')} (${ALT}→)`}
+          >
+            <ArrowRight size={16} />
+          </button>
+          <button className="ce-cc-search" onClick={() => setQuickOpen(true)} title={tr('Go to File… ({0}P)', MOD)}>
+            <Search size={13} />
+            <span>{root ? nameOf(root) : (stats?.hostname ?? 'Code')}</span>
+          </button>
+        </div>
+        <span className="tb-spacer" />
+        <div className="ce-layout">
+          <button
+            className="ce-tb-btn"
+            onClick={toggleSidebar}
+            aria-pressed={!!panel}
+            aria-label={tr('Toggle Sidebar')}
+            title={`${tr('Toggle Sidebar')} (${MOD}B)`}
+          >
+            {panel ? <PanelLeft size={16} /> : <PanelLeftDashed size={16} />}
+          </button>
+          <button
+            className="ce-tb-btn"
+            onClick={() => setTerminal(t => !t)}
+            aria-pressed={terminal}
+            aria-label={tr('Toggle Terminal')}
+            title={`${tr('Toggle Terminal')} (${MOD}\`)`}
+          >
+            {terminal ? <PanelBottom size={16} /> : <PanelBottomDashed size={16} />}
+          </button>
+          <button
+            className="ce-tb-btn"
+            onClick={() => setPreview(p => !p)}
+            disabled={!canPreview}
+            aria-pressed={showPreview}
+            aria-label={tr('Toggle Preview')}
+            title={tr('Toggle Preview')}
+          >
+            {showPreview ? <PanelRight size={16} /> : <PanelRightDashed size={16} />}
+          </button>
+        </div>
+      </WindowToolbar>
+
       <div className="ce-body">
         <nav className="ce-activity" aria-label={tr('Views')}>
           <ActivityButton
@@ -536,6 +1092,12 @@ export function CodeEditor({ stats, request }: Props) {
             active={panel === 'search'}
             onClick={() => setPanel(p => (p === 'search' ? null : 'search'))}
           />
+          <ActivityButton
+            icon={Blocks}
+            label={tr('Extensions')}
+            active={panel === 'extensions'}
+            onClick={() => setPanel(p => (p === 'extensions' ? null : 'extensions'))}
+          />
           <span className="ce-activity-spacer" />
           <ActivityButton
             icon={SquareTerminal}
@@ -546,7 +1108,7 @@ export function CodeEditor({ stats, request }: Props) {
         </nav>
 
         {panel && (
-          <aside className="ce-sidebar">
+          <aside className="ce-sidebar" style={{ width: sidebarWidth }}>
             {panel === 'explorer' && root && (
               <Explorer
                 key={root}
@@ -583,57 +1145,116 @@ export function CodeEditor({ stats, request }: Props) {
                 onOpenMatch={(path, line, column) => void openFile(path, { line, column })}
               />
             )}
+            {panel === 'extensions' && <ExtensionsPanel value={extensions} onChange={setExtensions} />}
           </aside>
         )}
+        {panel && (
+          <div
+            className="ce-sash"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={tr('Resize the sidebar')}
+            onPointerDown={resizeSidebar}
+            onDoubleClick={() => {
+              setSidebarWidth(SIDEBAR_WIDTH)
+              store('code.sidebarWidth', String(SIDEBAR_WIDTH))
+            }}
+          />
+        )}
 
-        <section className="ce-main">
+        <section className="ce-main" ref={mainRef}>
           {tabs.length > 0 && (
-            <div className="ce-tabs" role="tablist">
-              {tabs.map(tab => (
-                <div
-                  key={tab.path}
-                  role="tab"
-                  aria-selected={tab.path === active}
-                  className={`ce-tab ${tab.path === active ? 'is-active' : ''} ${isDirty(tab) ? 'is-dirty' : ''}`}
-                  title={tab.path}
-                  onClick={() => setActive(tab.path)}
-                  onMouseDown={e => e.button === 1 && e.preventDefault()}
-                  onAuxClick={e => e.button === 1 && requestClose([tab.path])}
-                  onContextMenu={e => tabMenu(e, tab)}
-                >
-                  <FileTypeIcon name={nameOf(tab.path)} size={14} />
-                  <span className="ce-tab-name">{nameOf(tab.path)}</span>
-                  <button
-                    className="ce-tab-close"
-                    aria-label={tr('Close {0}', nameOf(tab.path))}
-                    onClick={e => {
-                      e.stopPropagation()
-                      requestClose([tab.path])
+            <div className="ce-tabbar">
+              <div className="ce-tabs" role="tablist" onDoubleClick={e => e.target === e.currentTarget && void newFile()}>
+                {tabs.map(tab => (
+                  <div
+                    key={tab.path}
+                    role="tab"
+                    aria-selected={tab.path === active}
+                    className={`ce-tab ${tab.path === active ? 'is-active' : ''} ${isDirty(tab) ? 'is-dirty' : ''} ${dragTab === tab.path ? 'is-dragging' : ''}`}
+                    title={tab.path}
+                    draggable
+                    onDragStart={e => {
+                      setDragTab(tab.path)
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', tab.path)
                     }}
+                    onDragOver={e => {
+                      if (!dragTab) return
+                      e.preventDefault()
+                      dropTab(tab.path)
+                    }}
+                    onDragEnd={() => setDragTab(null)}
+                    onDrop={e => dragTab && e.preventDefault()}
+                    onClick={() => setActive(tab.path)}
+                    onMouseDown={e => e.button === 1 && e.preventDefault()}
+                    onAuxClick={e => e.button === 1 && requestClose([tab.path])}
+                    onContextMenu={e => tabMenu(e, tab)}
                   >
-                    <span className="ce-dot" />
-                    <X size={13} />
+                    <FileTypeIcon name={nameOf(tab.path)} size={14} />
+                    <span className="ce-tab-name">{nameOf(tab.path)}</span>
+                    <button
+                      className="ce-tab-close"
+                      aria-label={tr('Close {0}', nameOf(tab.path))}
+                      onClick={e => {
+                        e.stopPropagation()
+                        requestClose([tab.path])
+                      }}
+                    >
+                      <span className="ce-dot" />
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {activeTab && (
+                <span className="ce-editor-actions">
+                  {canPreview && (
+                    <button
+                      className={preview ? 'is-on' : ''}
+                      onClick={() => setPreview(p => !p)}
+                      title={tr('Preview beside')}
+                      aria-label={tr('Preview beside')}
+                      aria-pressed={preview}
+                    >
+                      <Eye size={14} />
+                    </button>
+                  )}
+                  <button
+                    className={wordWrap ? 'is-on' : ''}
+                    onClick={() => setWordWrap(w => !w)}
+                    title={tr('Word Wrap')}
+                    aria-label={tr('Word Wrap')}
+                    aria-pressed={wordWrap}
+                  >
+                    <WrapText size={14} />
                   </button>
-                </div>
-              ))}
+                  <button
+                    className={minimap ? 'is-on' : ''}
+                    onClick={() => setMinimap(m => !m)}
+                    title={minimap ? tr('Hide Minimap') : tr('Show Minimap')}
+                    aria-label={tr('Minimap')}
+                    aria-pressed={minimap}
+                  >
+                    <MapIcon size={14} />
+                  </button>
+                  <button onClick={moreMenu} title={tr('More Actions…')} aria-label={tr('More Actions…')}>
+                    <Ellipsis size={14} />
+                  </button>
+                </span>
+              )}
             </div>
           )}
 
           {activeTab ? (
             <>
-              <div className="ce-crumbs">
-                {activeTab.path
-                  .split('/')
-                  .filter(Boolean)
-                  .map((part, i, parts) => (
-                    <span key={i} className="ce-crumb">
-                      {i === parts.length - 1 && <FileTypeIcon name={part} size={13} />}
-                      {part}
-                      {i < parts.length - 1 && <ChevronRight size={12} />}
-                    </span>
-                  ))}
-              </div>
-              <div className="ce-editor">
+              <Crumbs
+                path={activeTab.path}
+                root={root}
+                onFolder={revealFolder}
+                onFile={runEditor('editor.action.quickOutline')}
+              />
+              <div className={`ce-editor ${showPreview ? 'has-preview' : ''}`}>
                 <Suspense fallback={<div className="ce-loading">{tr('Loading editor…')}</div>}>
                   <MonacoView
                     path={activeTab.path}
@@ -642,10 +1263,22 @@ export function CodeEditor({ stats, request }: Props) {
                     dark={settings.theme === 'dark'}
                     wordWrap={wordWrap}
                     minimap={minimap}
+                    extensions={extensions}
                     onChange={value => setTabs(ts => ts.map(t => (t.path === activeTab.path ? { ...t, value } : t)))}
                     onMount={handleMount}
                   />
                 </Suspense>
+                {showPreview && (
+                  <iframe
+                    className="ce-preview"
+                    title={tr('Preview')}
+                    // Sealed off: an HTML page's scripts run, but can't reach the server or this page.
+                    sandbox={
+                      previewKind === 'html' ? 'allow-scripts allow-popups' : 'allow-popups allow-popups-to-escape-sandbox'
+                    }
+                    srcDoc={previewPage}
+                  />
+                )}
               </div>
             </>
           ) : (
@@ -663,7 +1296,14 @@ export function CodeEditor({ stats, request }: Props) {
           )}
 
           {terminal && (
-            <div className="ce-panel">
+            <div className="ce-panel" style={{ height: terminalHeight }}>
+              <div
+                className="ce-sash is-horizontal"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label={tr('Resize the terminal')}
+                onPointerDown={resizeTerminal}
+              />
               <div className="ce-panel-head">
                 {tr('TERMINAL')}
                 <button onClick={() => setTerminal(false)} aria-label={tr('Close terminal')}>
@@ -685,17 +1325,22 @@ export function CodeEditor({ stats, request }: Props) {
             <FolderOpen size={12} /> {nameOf(root)}
           </span>
         )}
-        {dirtyCount > 0 && <span>● {dirtyCount} {tr('unsaved')}</span>}
+        {dirtyCount > 0 && (
+          <span>
+            ● {dirtyCount} {tr('unsaved')}
+          </span>
+        )}
         {notice && <span className="ce-notice">{notice}</span>}
         <span className="ce-status-grow" />
         {activeTab && language && (
           <>
             <span>
-              {tr('Ln')} {cursor.line}{tr(', Col')} {cursor.column}
+              {tr('Ln')} {cursor.line}
+              {tr(', Col')} {cursor.column}
             </span>
-            <span>{tr('Spaces: 2')}</span>
+            <span>{format.insertSpaces ? tr('Spaces: {0}', format.tabSize) : tr('Tab Size: {0}', format.tabSize)}</span>
             <span>{tr('UTF-8')}</span>
-            <span>LF</span>
+            <span>{format.eol}</span>
             <span>{language.name}</span>
           </>
         )}
@@ -724,12 +1369,7 @@ export function CodeEditor({ stats, request }: Props) {
       )}
 
       {quickOpen && (
-        <QuickOpen
-          root={root ?? ROOT}
-          recent={recent}
-          onOpen={path => void openFile(path)}
-          onClose={() => setQuickOpen(false)}
-        />
+        <QuickOpen root={root ?? ROOT} recent={recent} onOpen={path => void openFile(path)} onClose={() => setQuickOpen(false)} />
       )}
 
       {dragging && (
@@ -738,6 +1378,50 @@ export function CodeEditor({ stats, request }: Props) {
           {tr('Drop to upload to')} {root ?? ROOT}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The open file's path above the editor, from the workspace folder when it's in it (as VS Code
+ * shows it). A folder shows in the Explorer; the file opens Go to Symbol.
+ */
+function Crumbs({
+  path,
+  root,
+  onFolder,
+  onFile,
+}: {
+  path: string
+  root: string | null
+  onFolder: (dir: string) => void
+  onFile: () => void
+}) {
+  const inside = !!root && root !== '/' && path.startsWith(`${root}/`)
+  let at = inside ? root : ''
+  const parts = path
+    .slice(at.length)
+    .split('/')
+    .filter(Boolean)
+    .map(name => ({ name, path: (at = `${at}/${name}`) }))
+  return (
+    <div className="ce-crumbs">
+      {parts.map((part, i) => {
+        const file = i === parts.length - 1
+        return (
+          <span key={part.path} className="ce-crumb">
+            <button
+              onClick={file ? onFile : () => onFolder(part.path)}
+              disabled={!file && !inside}
+              title={file ? tr('Go to Symbol…') : part.path}
+            >
+              {file && <FileTypeIcon name={part.name} size={13} />}
+              {part.name}
+            </button>
+            {!file && <ChevronRight size={12} />}
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -789,7 +1473,10 @@ function Welcome({
     <div className="ce-welcome">
       <AppIcon icon={CODE_APP.icon} color={CODE_APP.color} size={72} />
       <h2>{tr('Code')}</h2>
-      <p>{tr('Edit files on')} {host}{tr(', right from the browser.')}</p>
+      <p>
+        {tr('Edit files on')} {host}
+        {tr(', right from the browser.')}
+      </p>
       <div className="ce-welcome-cols">
         <div>
           <h3>{tr('Start')}</h3>

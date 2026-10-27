@@ -1623,14 +1623,15 @@ body:has(.menu) .dock-item .dock-tooltip {
   color: var(--text);
 }
 
-/* Tabs in the middle of the window (not of the space beside the title), once there's room. The
-   toolbar starts after the window buttons (82px in) and ends 10px from the edge, hence the 36px. */
-.window-toolbar:has(> .tb-segmented.is-centered) {
+/* Tabs (or Code's command center) in the middle of the window, not of the space beside the
+   title, once there's room. The toolbar starts after the window buttons (82px in) and ends 10px
+   from the edge, hence the 36px. */
+.window-toolbar:has(> .is-centered) {
   container-type: inline-size;
 }
 
 @container (min-width: 760px) {
-  .tb-segmented.is-centered {
+  .window-toolbar > .is-centered {
     position: absolute;
     left: calc(50% - 36px);
     transform: translateX(-50%);
@@ -2844,15 +2845,85 @@ body:has(.menu) .dock-item .dock-tooltip {
   flex-direction: column;
 }
 
-.ce-tabs {
+/* Code's title bar, as VS Code's: Back, Forward and the command center in the middle, the
+   layout toggles at the end. */
+.ce-cc {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ce-tb-btn {
+  width: 28px;
+  height: 26px;
+  flex: none;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.ce-tb-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover-soft);
+}
+
+.ce-tb-btn:disabled {
+  color: var(--text-3);
+  opacity: 0.6;
+}
+
+.ce-cc-search {
+  width: clamp(140px, 36cqw, 500px);
+  min-width: 0;
+  height: 26px;
+  margin-left: 6px;
+  padding: 0 10px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px var(--separator);
+}
+
+.ce-cc-search:hover {
+  color: var(--text);
+  background: var(--hover-soft);
+}
+
+.ce-cc-search span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-layout {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+/* Tabs, then the editor's actions (Preview, Word Wrap, Minimap, …) at the end of the row. */
+.ce-tabbar {
   height: 36px;
   flex: none;
   display: flex;
-  overflow-x: auto;
   background: var(--ce-chrome);
   border-bottom: 1px solid var(--separator);
-  scrollbar-width: none;
   user-select: none;
+}
+
+.ce-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .ce-tab {
@@ -2956,13 +3027,269 @@ body:has(.menu) .dock-item .dock-tooltip {
 .ce-crumb {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
+}
+
+.ce-crumb button {
+  height: 20px;
+  padding: 0 3px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  color: inherit;
+}
+
+.ce-crumb button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover-soft);
+}
+
+.ce-crumb button:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .ce-editor {
   position: relative;
   flex: 1;
   min-height: 0;
+}
+
+/* Chrome draws a frame (an app, a preview) badly inside the SVG-bent glass: windows holding one
+   keep the plain frost. */
+.window:has(iframe) {
+  backdrop-filter: blur(26px) saturate(1.7) brightness(1.05) !important;
+}
+
+/* A preview beside the file (Markdown, HTML). */
+.ce-editor.has-preview {
+  display: flex;
+}
+
+.ce-editor.has-preview > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.ce-preview {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid var(--separator);
+  /* Solid: pages have their own background, and a frame over glass renders badly. */
+  background: #fff;
+}
+
+.ce-editor-actions {
+  flex: none;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ce-editor-actions button {
+  width: 24px;
+  height: 22px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.ce-editor-actions button:hover {
+  color: var(--text);
+  background: var(--hover-soft);
+}
+
+.ce-editor-actions button.is-on {
+  color: var(--accent-text);
+}
+
+/* Sashes: the handles to drag the sidebar's width and the terminal's height. */
+.ce-sash {
+  position: relative;
+  z-index: 4;
+  flex: none;
+  width: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.ce-sash::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  transition: background 0.15s 0.1s;
+}
+
+.ce-sash:hover::before,
+body.is-sash-dragging .ce-sash::before {
+  background: var(--accent);
+}
+
+.ce-sash.is-horizontal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 0;
+  cursor: row-resize;
+}
+
+.ce-sash.is-horizontal::before {
+  top: -3px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 6px;
+}
+
+body.is-sash-dragging {
+  user-select: none;
+}
+
+/* Frames would swallow the pointer mid-drag. */
+body.is-sash-dragging iframe {
+  pointer-events: none;
+}
+
+.ce-tab.is-dragging {
+  opacity: 0.5;
+}
+
+/* ----- Extensions view ----- */
+
+.ce-exts {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ce-exts-note {
+  display: flex;
+  gap: 6px;
+  margin: 0 4px 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.ce-exts-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ce-ext {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--hover-soft);
+}
+
+.ce-ext.is-under {
+  margin: -4px 0 0 22px;
+  padding: 7px 10px;
+}
+
+.ce-ext.is-off .ce-ext-icon,
+.ce-ext.is-off strong {
+  opacity: 0.5;
+}
+
+.ce-ext-icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.ce-ext-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ce-ext-text strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ce-ext-text small {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+/* ----- What the extensions draw in the editor ----- */
+
+.ce-lens-error,
+.ce-lens-warning,
+.ce-lens-info {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.ce-lens-error {
+  color: #f14c4c !important;
+}
+
+.ce-lens-warning {
+  color: #cca700 !important;
+}
+
+.ce-lens-info {
+  color: #3794ff !important;
+}
+
+.ce-lens-line-error {
+  background: rgba(241, 76, 76, 0.08);
+}
+
+.ce-todo {
+  font-weight: 700;
+  border-radius: 3px;
+  color: #1c1c1e !important;
+  background: #ffbd2a;
+}
+
+.ce-todo.is-fix {
+  color: #fff !important;
+  background: #f14c4c;
+}
+
+.ce-todo.is-note {
+  color: #fff !important;
+  background: #3794ff;
+}
+
+.ce-indent.is-0 {
+  background: rgba(255, 255, 64, 0.07);
+}
+
+.ce-indent.is-1 {
+  background: rgba(127, 255, 127, 0.07);
+}
+
+.ce-indent.is-2 {
+  background: rgba(255, 127, 255, 0.07);
+}
+
+.ce-indent.is-3 {
+  background: rgba(79, 236, 236, 0.07);
 }
 
 .ce-loading {
@@ -2974,6 +3301,7 @@ body:has(.menu) .dock-item .dock-tooltip {
 }
 
 .ce-panel {
+  position: relative;
   height: 210px;
   flex: none;
   display: flex;
@@ -3602,6 +3930,10 @@ body:has(.menu) .dock-item .dock-tooltip {
     flex-wrap: wrap;
   }
 
+  .ce-sash:not(.is-horizontal) {
+    display: none;
+  }
+
   /* The editor's sidebar floats over the code instead of squeezing it. */
   .ce-sidebar {
     position: absolute;
@@ -3609,7 +3941,7 @@ body:has(.menu) .dock-item .dock-tooltip {
     bottom: 24px;
     left: 46px;
     z-index: 5;
-    width: min(260px, calc(100% - 60px));
+    width: min(260px, calc(100% - 60px)) !important;
     background: var(--menu-bg);
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.2);
   }
@@ -11398,6 +11730,57 @@ button.menubar-clock.is-active {
   justify-content: center;
 }
 
+/* One screen of several: the rest of the picture is cut off (see RemoteScreen's rescale). */
+.rs-crop {
+  flex: none;
+  overflow: hidden;
+}
+
+.rs-screens {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #e5e5ea;
+}
+
+.rs-screens select {
+  max-width: 190px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: #e5e5ea;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+}
+
+.rs-notice {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100% - 24px));
+  padding: 8px 8px 8px 12px;
+  border-radius: 10px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #fff;
+  background: rgba(40, 30, 10, 0.88);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 159, 10, 0.45);
+}
+
+.rs-notice > svg {
+  flex: none;
+  color: #ff9f0a;
+}
+
+.rs-notice .icon-btn {
+  color: #fff;
+}
+
 .rs-view:not(.is-fit) .rs-surface {
   align-items: flex-start;
   justify-content: flex-start;
@@ -15988,5 +16371,171 @@ a.btn {
 
   .rt-lists {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ----- Setup guide (Devices) ----- */
+
+.dv-guide {
+  max-width: 760px;
+  margin: 26px auto 8px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--group-bg);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.dv-guide h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.rg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.rg.is-compact {
+  gap: 8px;
+}
+
+.rg-os {
+  align-self: flex-start;
+}
+
+.rg-os button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.dv-help .rg + .dv-help-body {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--separator);
+}
+
+.rg-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rg-variants .pill-btn.is-on {
+  color: #fff;
+  background: var(--accent);
+}
+
+.rg-uses {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rg-uses .dv-link {
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+.rg-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rg-cmd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 8px;
+  /* Dark in both themes, like a terminal. */
+  background: #1c1c1f;
+}
+
+.rg-cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font: 11.5px/1.6 var(--mono);
+  color: #e5e5ea;
+}
+
+.rg-cmd .icon-btn {
+  flex: none;
+  color: #c7c7cc;
+}
+
+.rg-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.rg-specs {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rg-specs h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rg-specs dl {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.rg-specs dl > div {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+}
+
+.rg-specs dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rg-specs dd {
+  margin: 0;
+}
+
+.sheet.rg-sheet {
+  width: min(720px, 100%);
+}
+
+.rg-sheet .ci-body {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+@media (max-width: 560px) {
+  .rg-specs dl > div {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import {
+  BookOpen,
   Copy,
   Cpu,
   Ellipsis,
@@ -24,6 +25,7 @@ import type { Device, DeviceInput, DeviceKind, DeviceStatus, FoundDevice, Remote
 import { copyText } from '../lib/clipboard'
 import { useContextMenu } from '../lib/contextMenu'
 import { tr } from '../lib/i18n'
+import { RemoteGuide } from './RemoteGuide'
 
 // Devices: the other computers on the network. The server is always on and on the same network,
 // so from anywhere (through it) they can be woken up and their screens shown in a window.
@@ -49,6 +51,7 @@ export function Devices({ onConnect }: { onConnect: (device: Device) => void }) 
   const [waking, setWaking] = useState<Record<string, number>>({})
   const [editing, setEditing] = useState<{ device?: Device; draft: DeviceInput } | null>(null)
   const [finding, setFinding] = useState(false)
+  const [guide, setGuide] = useState(false)
 
   const load = useCallback(
     () =>
@@ -127,6 +130,9 @@ export function Devices({ onConnect }: { onConnect: (device: Device) => void }) 
       <header className="dv-bar">
         <span className="dv-title">{!!devices?.length && <small>{tr('{0} of {1} on', online, devices.length)}</small>}</span>
         <span className="tb-spacer" />
+        <button className="btn" onClick={() => setGuide(true)}>
+          <BookOpen size={13} /> {tr('Setup Guide')}
+        </button>
         <button className="btn" onClick={() => setFinding(true)}>
           <Radar size={13} /> {tr('Find on Network')}
         </button>
@@ -165,6 +171,12 @@ export function Devices({ onConnect }: { onConnect: (device: Device) => void }) 
             </div>
           </div>
         )}
+        {devices?.length === 0 && (
+          <div className="dv-guide">
+            <h3>{tr('Before adding one: set up its screen sharing')}</h3>
+            <RemoteGuide />
+          </div>
+        )}
         {!!devices?.length && (
           <div className="dv-grid">
             {devices.map(d => (
@@ -193,6 +205,7 @@ export function Devices({ onConnect }: { onConnect: (device: Device) => void }) 
       </div>
 
       {editing && <DeviceSheet device={editing.device} initial={editing.draft} onSave={save} onDelete={editing.device ? () => void remove(editing.device!).then(() => setEditing(null)) : undefined} onClose={() => setEditing(null)} />}
+      {guide && <GuideSheet onClose={() => setGuide(false)} />}
       {finding && (
         <FindSheet
           known={devices ?? []}
@@ -475,7 +488,8 @@ function DeviceSheet({
 
           <details className="dv-help" open={!device}>
             <summary>{tr('How to set it up')}</summary>
-            <SetupHelp kind={d.kind} protocol={d.protocol} />
+            {d.kind !== 'other' && <RemoteGuide kind={d.kind} compact onProtocol={p => set({ protocol: p, port: DEFAULT_PORT[p] })} />}
+            <SetupHelp kind={d.kind} />
           </details>
           {error && <p className="form-error">{error}</p>}
           <button type="submit" hidden />
@@ -499,16 +513,8 @@ function DeviceSheet({
   )
 }
 
-function SetupHelp({ kind, protocol }: { kind: DeviceKind; protocol: ScreenProtocol }) {
-  const screen: Record<DeviceKind, string | null> = {
-    windows:
-      protocol === 'rdp'
-        ? tr('RDP needs Windows Pro: Settings → System → Remote Desktop → On. Sign in with your Windows account.')
-        : tr('Windows Home can’t share its screen over RDP, but a free VNC server can: install TightVNC Server (or UltraVNC), set a password for full control, and allow it through the firewall when asked.'),
-    mac: tr('On the Mac: System Settings → General → Sharing → Screen Sharing → ⓘ → turn on “VNC viewers may control screen with password” and set one. Use that password here and leave the user name empty.'),
-    linux: tr('Turn on screen sharing (VNC or RDP) in the desktop’s settings, or install a VNC server such as x11vnc or TigerVNC.'),
-    other: null,
-  }
+/** How to wake it; the screen's setup is in the guide above it. */
+function SetupHelp({ kind }: { kind: DeviceKind }) {
   const wake: Record<DeviceKind, string> = {
     windows: tr('To wake it: turn on Wake-on-LAN in the BIOS; in Device Manager → the network adapter → Power Management, allow it to wake the computer (and under Advanced, turn on Wake on Magic Packet); and turn off Fast Startup in the power options, so it can wake from shut down. It works over a network cable.'),
     mac: tr('A Mac wakes from sleep when “Wake for network access” is on in its energy settings. It can’t be woken once shut down.'),
@@ -517,12 +523,6 @@ function SetupHelp({ kind, protocol }: { kind: DeviceKind; protocol: ScreenProto
   }
   return (
     <div className="dv-help-body">
-      {protocol && screen[kind] && (
-        <p>
-          <MonitorPlay size={13} /> {screen[kind]}
-          {protocol === 'vnc' && <small>{tr(' VNC passwords use only their first 8 characters.')}</small>}
-        </p>
-      )}
       <p>
         <Power size={13} /> {wake[kind]}
       </p>
@@ -531,6 +531,25 @@ function SetupHelp({ kind, protocol }: { kind: DeviceKind; protocol: ScreenProto
 }
 
 // ---------- Find on the network ----------
+
+function GuideSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="sheet-backdrop" onPointerDown={e => e.target === e.currentTarget && onClose()}>
+      <div className="sheet ci dv-sheet rg-sheet" role="dialog" aria-label={tr('Setup Guide')} onKeyDown={e => e.key === 'Escape' && onClose()}>
+        <header className="ci-head">
+          <strong>{tr('Setup Guide')}</strong>
+          <span className="tb-spacer" />
+          <button className="icon-btn" onClick={onClose} aria-label={tr('Close')}>
+            <X size={15} />
+          </button>
+        </header>
+        <div className="ci-body">
+          <RemoteGuide />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function FindSheet({ known, onAdd, onClose }: { known: Device[]; onAdd: (f: FoundDevice) => void; onClose: () => void }) {
   const [found, setFound] = useState<FoundDevice[] | null>(null)

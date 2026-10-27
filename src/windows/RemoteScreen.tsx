@@ -5,11 +5,13 @@ import {
   Hand,
   Keyboard as KeyboardIcon,
   LoaderCircle,
+  Monitor,
   MonitorOff,
   MousePointer2,
   RotateCw,
   Shrink,
   TriangleAlert,
+  X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -19,6 +21,7 @@ import { api } from '../api'
 import type { Device } from '../api/types'
 import { copyText } from '../lib/clipboard'
 import { tr } from '../lib/i18n'
+import { screenRegions, screenSplits, type Layout } from '../lib/remoteScreens'
 import { KIND_ICON } from './Devices'
 
 // A device's screen in a window. The server opens the VNC or RDP session (with the saved
@@ -55,6 +58,21 @@ const FOLLOW_MARGIN = 48
 const TOUCH_SIZE = { width: 1600, height: 900 }
 // What the hidden text field holds, so a backspace always has something to delete.
 const SENTINEL = '  '
+
+function readStored(key: string, fallback: string) {
+  try {
+    return localStorage.getItem(key) ?? fallback
+  } catch {
+    return fallback
+  }
+}
+function store(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // Not remembered; fine.
+  }
+}
 
 const localIsMac = /Mac|iPhone|iPad/.test(navigator.platform)
 const touchScreen = matchMedia('(pointer: coarse)').matches
@@ -123,6 +141,7 @@ function errorText(status: Status, device: Device) {
 export function RemoteScreen({ device, active }: { device: Device; active: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const surface = useRef<HTMLDivElement>(null)
+  const crop = useRef<HTMLDivElement>(null)
   const typing = useRef<HTMLTextAreaElement>(null)
   const clientRef = useRef<Client | null>(null)
   const [phase, setPhase] = useState<Phase>('connecting')
@@ -137,6 +156,14 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
   const [keysOpen, setKeysOpen] = useState(false)
   // Modifiers held for the next key from the on-screen keys.
   const [held, setHeld] = useState<number[]>([])
+  // Which screen is shown (an index, or "all"), and how the picture is cut into screens.
+  const [screen, setScreen] = useState(() => readStored(`remote.screen.${device.id}`, '0'))
+  const [layout, setLayout] = useState<Layout>(() => readStored(`remote.layout.${device.id}`, 'auto'))
+  const [allNotice, setAllNotice] = useState(false)
+  const regions = device.protocol === 'vnc' && size ? screenRegions(size.width, size.height, layout) : []
+  const shownRegion = screen === 'all' || regions.length < 2 ? null : (regions[Number(screen)] ?? regions[0])
+  const regionRef = useRef(shownRegion)
+  regionRef.current = shownRegion
   const swapRef = useRef(swap)
   swapRef.current = swap
   const fitRef = useRef(fit)
@@ -150,7 +177,9 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
   const keysOpenRef = useRef(keysOpen)
   keysOpenRef.current = keysOpen
 
-  // Scales the picture to the window (or shows it 1:1 with scroll bars), then zoomed.
+  // Scales the picture (or the one screen shown) to the window, or shows it 1:1 with scroll bars,
+  // then zoomed. One screen is cut out with a negative margin in a box that hides the rest, which
+  // keeps the mouse's positions right (Guacamole reads them from offsets, not transforms).
   const rescale = () => {
     const client = clientRef.current
     const el = host.current
@@ -159,8 +188,18 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     const w = display.getWidth()
     const h = display.getHeight()
     if (!w || !h) return
-    const base = fitRef.current ? Math.min(el.clientWidth / w, el.clientHeight / h) : 1 / (window.devicePixelRatio || 1)
-    display.scale(base * zoomRef.current)
+    const region = regionRef.current
+    const shownW = region ? region.w : w
+    const base = fitRef.current ? Math.min(el.clientWidth / shownW, el.clientHeight / h) : 1 / (window.devicePixelRatio || 1)
+    const scale = base * zoomRef.current
+    display.scale(scale)
+    const box = crop.current
+    const view = display.getElement()
+    if (box) {
+      box.style.width = region ? `${region.w * scale}px` : ''
+      box.style.height = region ? `${h * scale}px` : ''
+      view.style.marginLeft = region ? `${-region.x * scale}px` : ''
+    }
   }
 
   // Zooms to a step, keeping the point under (x, y) in the window where it was.
@@ -218,7 +257,7 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     clientRef.current = client
     const display = client.getDisplay()
     const view = display.getElement()
-    mount.appendChild(view)
+    ;(crop.current ?? mount).appendChild(view)
     let failed = false
 
     client.onstatechange = state => {
@@ -411,7 +450,21 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     // A new session only for another device, or a retry.
   }, [device.id, attempt])
 
-  useEffect(rescale, [fit])
+  useEffect(rescale, [fit, shownRegion?.x, shownRegion?.w])
+
+  const chooseScreen = (value: string) => {
+    if (value.startsWith('layout:')) {
+      const next = value.slice(7)
+      setLayout(next)
+      store(`remote.layout.${device.id}`, next)
+      setScreen('0')
+      store(`remote.screen.${device.id}`, '0')
+      return
+    }
+    setScreen(value)
+    store(`remote.screen.${device.id}`, value)
+    setAllNotice(value === 'all')
+  }
 
   // The pointer is drawn on the picture only in touchpad mode.
   useEffect(() => {
@@ -544,6 +597,36 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
             </button>
           </>
         )}
+        {phase === 'connected' && size && device.protocol === 'vnc' && (regions.length > 1 || layout !== 'auto') && (
+          <label className="rs-screens" title={tr('Which screen to show')}>
+            <Monitor size={13} />
+            <select value={shownRegion ? String(regions.indexOf(shownRegion)) : regions.length > 1 ? 'all' : '0'} onChange={e => chooseScreen(e.target.value)} aria-label={tr('Which screen to show')}>
+              {regions.length > 1 &&
+                regions.map((r, i) => (
+                  <option key={r.x} value={String(i)}>
+                    {tr('Screen {0}', i + 1)} ({r.w} × {size.height})
+                  </option>
+                ))}
+              <option value={regions.length > 1 ? 'all' : '0'}>{regions.length > 1 ? tr('All screens') : tr('One screen')}</option>
+              <optgroup label={tr('Screens on {0}', device.name)}>
+                <option value="layout:auto">{tr('Find them by size')}</option>
+                {[1, 2, 3, 4].map(n => (
+                  <option key={n} value={`layout:n${n}`}>
+                    {n === 1 ? tr('One screen') : tr('{0} equal screens side by side', n)}
+                  </option>
+                ))}
+                {screenSplits(size.width, size.height)
+                  .filter((s, _, all) => new Set(s).size > 1 && s.length === all[0].length)
+                  .slice(0, 6)
+                  .map(s => (
+                    <option key={s.join()} value={`layout:w${s.join(',')}`}>
+                      {s.join(' + ')}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
+          </label>
+        )}
         {phase === 'connected' && !touchScreen && (
           <>
             {(localIsMac || device.kind === 'mac') && (
@@ -571,7 +654,18 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
         tabIndex={0}
         onPointerDown={() => !touchScreen && host.current?.focus({ preventScroll: true })}
       >
-        <div ref={surface} className="rs-surface" />
+        <div ref={surface} className="rs-surface">
+          <div ref={crop} className="rs-crop" />
+        </div>
+        {allNotice && phase === 'connected' && (
+          <div className="rs-notice">
+            <TriangleAlert size={13} />
+            <span>{tr('Showing every screen: everything gets smaller, and this browser draws a much bigger picture. The server and the connection carry every screen either way; to lighten them, let the other computer share one screen (see Setup Guide in Devices).')}</span>
+            <button className="icon-btn" onClick={() => setAllNotice(false)} aria-label={tr('Close')}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
         {phase !== 'connected' && (
           <div className="rs-overlay">
             <span className="rs-device">
