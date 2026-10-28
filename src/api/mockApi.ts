@@ -540,7 +540,9 @@ export const mockApi: Api = {
   async smbStatus() {
     return { sessions: [{ user: 'teman', machine: '192.168.1.11', protocol: 'SMB3_11', shares: ['DATA'], since: new Date().toISOString() }], openFiles: 2 }
   },
-  async restartSmb() {},
+  async restartSmb() {
+    await delay(1500)
+  },
   async saveShare(spec: SmbShareSpec, editing?: string) {
     smbShares = [...smbShares.filter(s => s.name !== editing), { ...spec, source: 'temanlabs' as const }]
   },

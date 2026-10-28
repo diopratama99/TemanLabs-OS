@@ -538,12 +538,25 @@ func (s *server) handleSmbStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": list, "openFiles": len(raw.OpenFiles)})
 }
 
+// smbRestarting is held while Samba restarts: clicks that come meanwhile don't restart it again
+// (each restart drops every connected computer).
+var smbRestarting sync.Mutex
+
 func (s *server) handleSmbRestart(w http.ResponseWriter, r *http.Request) {
+	if !smbRestarting.TryLock() {
+		writeError(w, http.StatusConflict, "Samba is already restarting")
+		return
+	}
+	defer smbRestarting.Unlock()
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "systemctl", "restart", "smbd", "nmbd").CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, "systemctl", "restart", "smbd").CombinedOutput(); err != nil {
 		writeError(w, http.StatusBadGateway, strings.TrimSpace(lastLines(string(out), 2)))
 		return
 	}
+	// nmbd only answers NetBIOS names. With "disable netbios" it isn't running (or is masked), and
+	// restarting it anyway fails and makes a good restart look broken: it's restarted only when
+	// it runs.
+	_ = exec.CommandContext(ctx, "systemctl", "try-restart", "nmbd").Run()
 	w.WriteHeader(http.StatusNoContent)
 }

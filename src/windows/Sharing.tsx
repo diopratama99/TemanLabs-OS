@@ -13,6 +13,7 @@ import {
   Share2,
   Trash2,
   Users,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '../api'
@@ -60,6 +61,8 @@ export function Sharing({ stats, request }: Props) {
   const [info, setInfo] = useState<SmbInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sessions, setSessions] = useState<SmbSession[]>([])
+  // Restarting Samba drops everyone connected: it's asked first when someone is, and done once.
+  const [restarting, setRestarting] = useState<'idle' | 'confirm' | 'busy'>('idle')
   const [openFiles, setOpenFiles] = useState(0)
   // Share being edited: an existing one, or a new one (possibly prefilled from Files).
   const [editing, setEditing] = useState<{ share: SmbShareSpec; original?: string } | null>(null)
@@ -80,6 +83,21 @@ export function Sharing({ stats, request }: Props) {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  const restartSmb = async () => {
+    if (restarting === 'busy') return
+    if (restarting === 'idle' && sessions.length > 0) {
+      setRestarting('confirm')
+      return
+    }
+    setRestarting('busy')
+    try {
+      await api.restartSmb()
+    } finally {
+      setRestarting('idle')
+      void refresh()
+    }
+  }
 
   useEffect(() => {
     const load = () =>
@@ -200,15 +218,33 @@ export function Sharing({ stats, request }: Props) {
             {id === 'connections' && sessions.length > 0 && <span className="sidebar-badge">{sessions.length}</span>}
           </button>
         ))}
-        <div className="sh-service">
-          <i className={info?.running ? 'is-on' : ''} />
-          <span>
-            {info ? (info.running ? tr('Sharing is on') : info.installed ? tr('Samba is stopped') : tr('Samba isn’t installed')) : '…'}
-            {info?.version && <small>{tr('Samba')} {info.version.replace('-Ubuntu', '')}</small>}
-          </span>
-          <button className="icon-btn" onClick={() => void api.restartSmb().then(refresh)} title={tr('Restart Samba')} aria-label={tr('Restart Samba')}>
-            <RotateCw size={13} />
-          </button>
+        <div className={`sh-service ${restarting === 'confirm' ? 'is-confirm' : ''}`}>
+          <i className={info?.running && restarting !== 'busy' ? 'is-on' : ''} />
+          {restarting === 'confirm' ? (
+            <span>
+              {tr('Restart Samba?')}
+              <small>{sessions.length === 1 ? tr('1 connected computer loses its connection for a moment.') : tr('{0} connected computers lose their connection for a moment.', sessions.length)}</small>
+            </span>
+          ) : (
+            <span>
+              {restarting === 'busy' ? tr('Restarting Samba…') : info ? (info.running ? tr('Sharing is on') : info.installed ? tr('Samba is stopped') : tr('Samba isn’t installed')) : '…'}
+              {info?.version && <small>{tr('Samba')} {info.version.replace('-Ubuntu', '')}</small>}
+            </span>
+          )}
+          {restarting === 'confirm' ? (
+            <span className="sh-service-confirm">
+              <button className="pill-btn danger" onClick={() => void restartSmb()}>
+                {tr('Restart')}
+              </button>
+              <button className="icon-btn" onClick={() => setRestarting('idle')} aria-label={tr('Cancel')} title={tr('Cancel')}>
+                <X size={13} />
+              </button>
+            </span>
+          ) : (
+            <button className="icon-btn" onClick={() => void restartSmb()} disabled={restarting === 'busy'} title={tr('Restart Samba')} aria-label={tr('Restart Samba')}>
+              <RotateCw size={13} className={restarting === 'busy' ? 'spin' : ''} />
+            </button>
+          )}
         </div>
       </aside>
 

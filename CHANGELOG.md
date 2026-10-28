@@ -4,6 +4,11 @@ What changed in each release of TemanLabsOS. The release workflow puts a version
 
 Versions with `-beta` are released like any other (the installer and Software Update offer them); the final version of the same number is offered after its beta.
 
+## v0.6.1-beta
+
+### Fixed
+- Restarting Samba from File Sharing asks first when computers are connected, shows that it's restarting, and restarts once however often it's clicked. It no longer reports a failure on servers with NetBIOS turned off (where nmbd doesn't run).
+
 ## v0.6.0-beta
 
 ### New

@@ -2356,4 +2356,8 @@ export const ID: Record<string, string> = {
   "One service": "Satu layanan",
   "{0} can be unplugged now.": "{0} sudah aman dicabut.",
   "Eject “{0}”": "Keluarkan “{0}”",
+  "Restart Samba?": "Restart Samba?",
+  "1 connected computer loses its connection for a moment.": "1 komputer yang tersambung akan terputus sebentar.",
+  "{0} connected computers lose their connection for a moment.": "{0} komputer yang tersambung akan terputus sebentar.",
+  "Restarting Samba…": "Merestart Samba…",
 }

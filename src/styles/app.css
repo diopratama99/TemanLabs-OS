@@ -6589,6 +6589,24 @@ body.is-sash-dragging iframe {
   color: var(--text-3);
 }
 
+/* Asking before a restart that drops the computers connected. */
+.sh-service.is-confirm {
+  flex-wrap: wrap;
+}
+
+.sh-service.is-confirm > span:first-of-type {
+  flex-basis: calc(100% - 16px);
+}
+
+.sh-service .sh-service-confirm {
+  flex: none;
+  flex-direction: row;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .sh-sheet {
   width: min(560px, 100%);
 }
