@@ -2,15 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CircleCheck, LoaderCircle, Power, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { api } from '../api'
 import type { Job, UpdatesInfo } from '../api/types'
-import { useAppMenus } from '../lib/appMenus'
 import { formatFileDate } from '../lib/format'
-import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
 
 const JOB_POLL_MS = 1200
 
-/** System Updates: apt upgrades from the web, with the install log and restart prompt. */
-export function SystemUpdates() {
+/**
+ * Settings › Software Update, under TemanLabsOS's own: the system's packages (apt upgrades from
+ * Ubuntu, Docker and the other sources), with the install log and the restart prompt.
+ */
+export function PackageUpdates() {
   const [info, setInfo] = useState<UpdatesInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [job, setJob] = useState<Job | null>(null)
@@ -60,16 +61,6 @@ export function SystemUpdates() {
   const check = () => void start(api.checkUpdates)
   const install = (packages: string[] = []) => void start(() => api.installUpdates(packages))
 
-  useAppMenus(() => [
-    {
-      label: tr('Update'),
-      items: [
-        { label: tr('Check for Updates'), icon: RefreshCw, disabled: running, onSelect: check },
-        { label: tr('Install All Updates'), disabled: running || !info?.updates.length, onSelect: () => install() },
-      ],
-    },
-  ])
-
   const updates = info?.updates ?? []
   const security = updates.filter(u => u.security).length
   const toggle = (name: string) =>
@@ -81,19 +72,19 @@ export function SystemUpdates() {
     })
 
   return (
-    <div className="pane su">
-      <WindowToolbar>
-        <ToolbarTitle
-          title={tr('System Updates')}
-          subtitle={info?.lastChecked ? tr('Last checked {0}', formatFileDate(info.lastChecked)) : undefined}
-        />
-        <span className="tb-spacer" />
-        <div className="tb-group">
-          <button className="tb-btn" onClick={check} disabled={running} aria-label={tr('Check for updates')} title={tr('Check for Updates')}>
-            <RefreshCw size={15} className={running && job?.title?.startsWith('Checking') ? 'spin' : ''} />
-          </button>
-        </div>
-      </WindowToolbar>
+    <section className="su">
+      <div className="su-head">
+        <span>
+          <strong>{tr('System packages')}</strong>
+          <small>
+            {tr('Ubuntu, Docker and your other apt sources.')}
+            {info?.lastChecked ? ` ${tr('Last checked {0}', formatFileDate(info.lastChecked))}` : ''}
+          </small>
+        </span>
+        <button className="btn" onClick={check} disabled={running}>
+          <RefreshCw size={13} className={running && job?.title?.startsWith('Checking') ? 'spin' : ''} /> {tr('Check for Updates')}
+        </button>
+      </div>
 
       {loadError && <p className="form-error">{tr('Couldn’t read updates:')} {loadError}</p>}
 
@@ -191,6 +182,6 @@ export function SystemUpdates() {
           ))}
         </div>
       )}
-    </div>
+    </section>
   )
 }

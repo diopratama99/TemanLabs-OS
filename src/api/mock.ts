@@ -53,6 +53,7 @@ export function nextStats(): SystemStats {
     disks: [
       { name: 'System', mount: '/', used: 48 * GB, total: 256 * GB },
       { name: 'Data', mount: '/DATA', used: 1352 * GB, total: 2048 * GB },
+      { name: 'HDD', mount: '/media/HDD', used: 232 * GB, total: 931 * GB, external: true, device: '/dev/sdb' },
     ],
     network: { rx, tx },
     addresses: {

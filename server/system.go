@@ -35,6 +35,13 @@ type disk struct {
 	// The ZFS pool it is, and the pool's state (ONLINE, DEGRADED…).
 	Pool   string `json:"pool,omitempty"`
 	Health string `json:"health,omitempty"`
+	// Plugged in over USB (or a removable drive): it gets an icon on the desktop, and the drive
+	// (Device, the whole disk) can be ejected.
+	External bool   `json:"external,omitempty"`
+	Device   string `json:"device,omitempty"`
+
+	// The device /proc/mounts names ("/dev/sdc1").
+	source string
 }
 
 type lanAddress struct {
@@ -247,8 +254,35 @@ func diskUsage() []disk {
 		if disks[i].Pool != "" {
 			disks[i].Health = zfsHealth(disks[i].Pool)
 		}
+		if disks[i].Mount != "/" && strings.HasPrefix(disks[i].source, "/dev/") {
+			disks[i].Device, disks[i].External = externalDrive("/sys/class/block", disks[i].source)
+		}
 	}
 	return disks
+}
+
+// externalDrive says whether a partition (or a whole disk) is on a drive plugged in over USB, or a
+// removable one (a card reader), and gives that drive's device: /dev/sdc for /dev/sdc1. sysfs is
+// /sys/class/block, where each name links to the device's place in the hardware tree.
+func externalDrive(sysfs, dev string) (string, bool) {
+	if real, err := filepath.EvalSymlinks(dev); err == nil {
+		dev = real
+	}
+	name := filepath.Base(dev)
+	link, err := os.Readlink(filepath.Join(sysfs, name))
+	if err != nil {
+		return "", false
+	}
+	// A partition's folder sits in its disk's: …/block/sdc/sdc1.
+	whole := name
+	if _, err := os.Stat(filepath.Join(sysfs, name, "partition")); err == nil {
+		whole = filepath.Base(filepath.Dir(link))
+	}
+	removable, _ := os.ReadFile(filepath.Join(sysfs, whole, "removable"))
+	if !strings.Contains(link, "/usb") && strings.TrimSpace(string(removable)) != "1" {
+		return "", false
+	}
+	return "/dev/" + whole, true
 }
 
 // fsSpace is a filesystem's size, used and free (for unprivileged users) space in bytes.
@@ -314,11 +348,12 @@ func listDisks(mounts io.Reader, stat func(string) (fsSpace, bool), poolSpace fu
 			name = "System"
 		}
 		disks = append(disks, disk{
-			Name:  name,
-			Mount: mount,
-			Total: space.total,
-			Used:  used,
-			Cloud: fields[2] == "fuse.rclone",
+			Name:   name,
+			Mount:  mount,
+			Total:  space.total,
+			Used:   used,
+			Cloud:  fields[2] == "fuse.rclone",
+			source: fields[0],
 		})
 	}
 	for pool, i := range pools {

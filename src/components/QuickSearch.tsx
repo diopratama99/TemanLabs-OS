@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Monitor, Moon, Search, Sun, type LucideIcon } from 'lucide-react'
 import type { InstalledApp } from '../api/types'
 import { useSettings } from '../lib/settings'
-import { LAUNCHER, SYSTEM_APPS } from '../lib/systemApps'
+import { LAUNCHER, MERGED_APPS, SYSTEM_APPS, type MergedId } from '../lib/systemApps'
 import { AppIcon } from './AppIcon'
 import { Glass } from './Glass'
 import type { WindowId } from './Window'
@@ -33,7 +33,7 @@ interface Props {
   apps: InstalledApp[]
   onClose: () => void
   onOpenApp: (app: InstalledApp) => void
-  onOpenWindow: (id: WindowId) => void
+  onOpenWindow: (id: WindowId | MergedId) => void
   onLauncher: () => void
   onShowDesktop: () => void
 }
@@ -60,6 +60,19 @@ export function QuickSearch({ closing = false, apps, onClose, onOpenApp, onOpenW
       icon: <AppIcon icon={app.icon} color={app.color} size={30} />,
       run: () => onOpenWindow(app.id),
     })),
+    // Apps since merged into others, by their old names: they open the part they became.
+    ...(Object.keys(MERGED_APPS) as MergedId[]).map(id => {
+      const m = MERGED_APPS[id]
+      const into = SYSTEM_APPS.find(a => a.id === m.into)
+      return {
+        key: id,
+        group: 'System',
+        label: m.label,
+        sub: into ? tr('In {0}', into.label) : undefined,
+        icon: <AppIcon icon={into?.icon ?? 'settings'} color={into?.color ?? LAUNCHER.color} size={30} />,
+        run: () => onOpenWindow(id),
+      }
+    }),
     {
       key: 'launchpad',
       group: 'System',

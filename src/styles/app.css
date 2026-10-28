@@ -1630,7 +1630,7 @@ body:has(.menu) .dock-item .dock-tooltip {
   container-type: inline-size;
 }
 
-@container (min-width: 760px) {
+@container (min-width: 560px) {
   .window-toolbar > .is-centered {
     position: absolute;
     left: calc(50% - 36px);
@@ -14021,6 +14021,25 @@ button.bk-file-name:hover {
   opacity: 0.12;
 }
 
+.hc-lone {
+  fill: var(--viz-1);
+}
+
+.hc-lone.is-2 {
+  fill: var(--viz-2);
+}
+
+/* A level to compare with, such as the speed of the internet plan. */
+.hc-ref {
+  stroke: var(--text-2);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.hc-ref-label {
+  font-size: 10px;
+}
+
 .hc-cross {
   stroke: var(--text-2);
   stroke-width: 1;
@@ -16538,4 +16557,657 @@ a.btn {
     grid-template-columns: 1fr;
     gap: 0;
   }
+}
+
+/* ----- Speed Test ----- */
+.dv.st {
+  container-type: inline-size;
+}
+
+.st .dv-title small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.st-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.st-last,
+.st-live,
+.st-summary {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--group-bg, var(--field-bg));
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.st-stats,
+.st-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 16px;
+}
+
+.st-stat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.st-stat strong {
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.st-summary .st-stat strong {
+  font-size: 17px;
+}
+
+.st-stat small {
+  font-size: 11.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-meta {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.st-meta a,
+.st-row-server a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-text);
+}
+
+.st-failed {
+  margin: 0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.st-failed > svg {
+  flex: none;
+  margin-top: 2px;
+  color: #ff9f0a;
+}
+
+.st-failed span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-failed small {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* The test running: what it measures, the speed right now, and how far along it is. */
+.st-live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 16px;
+}
+
+.st-live-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.st-live-speed {
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.st-meter {
+  width: min(340px, 100%);
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--separator);
+}
+
+.st-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.4s var(--ease-out);
+}
+
+.st-live small {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.st-range {
+  margin: 0;
+}
+
+.st-none {
+  margin: 0;
+  text-align: center;
+}
+
+.st-charts {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+.st-bar {
+  fill: var(--viz-1);
+}
+
+.st-bar.is-hover {
+  opacity: 0.75;
+}
+
+.st-hours .hc-plot svg {
+  cursor: default;
+}
+
+.st-hours .hc-tip {
+  min-width: 170px;
+  white-space: nowrap;
+}
+
+/* The tests, newest first. */
+.st-results > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.st-results .dv-subhead {
+  margin: 0;
+}
+
+.st-table {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  background: var(--group-bg, var(--field-bg));
+}
+
+.st-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) 0.8fr 0.8fr 0.6fr minmax(120px, 1.4fr);
+  gap: 10px;
+  align-items: center;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-row + .st-row {
+  border-top: 1px solid var(--separator);
+}
+
+.st-row.is-head {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.st-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-row small {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.st-row-server {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+}
+
+.st-row-error {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+}
+
+.st-row-error svg {
+  flex: none;
+  color: #ff9f0a;
+}
+
+.st-more {
+  margin-top: 8px;
+}
+
+@container (max-width: 560px) {
+  .st-row {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+
+  .st-row > :nth-child(4),
+  .st-row > :nth-child(5) {
+    display: none;
+  }
+
+  .st-row-error {
+    grid-column: 2 / -1;
+  }
+}
+
+/* Settings */
+.st-providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.st-provider {
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px var(--separator);
+}
+
+.st-provider.is-active {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.st-provider small {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.st-license {
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--field-bg);
+}
+
+.st-license p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.st-license a {
+  color: var(--accent-text);
+}
+
+.st-form label.st-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-remove {
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+.st-data {
+  margin: 4px 0 0;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.st-data.is-warn svg {
+  flex: none;
+  margin-top: 1px;
+  color: #ff9f0a;
+}
+
+@media (max-width: 560px) {
+  .st-providers {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ----- Network: an overview, Routers, Speed Test and the tools, in a sidebar window ----- */
+.nw-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nw-pane > .pane {
+  flex: 1;
+  min-height: 0;
+}
+
+.nw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nw-link {
+  width: 100%;
+  text-align: left;
+}
+
+.nw-link > svg:last-child {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.nw-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.nw-card {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  background: var(--group-bg, var(--field-bg));
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  transition: background 0.15s;
+}
+
+.nw-card:hover {
+  background: var(--hover-soft);
+}
+
+.nw-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nw-card-head svg:last-child {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.nw-card small {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.nw-speeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+}
+
+.nw-speeds span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nw-speeds b {
+  font-variant-numeric: tabular-nums;
+}
+
+.nw-routers,
+.nw-addrs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+
+.nw-routers span,
+.nw-addrs span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nw-addrs small {
+  min-width: 72px;
+}
+
+.nw-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.nw-dot.is-up {
+  background: #30a14e;
+}
+
+.nw-dot.is-down {
+  background: #ff453a;
+}
+
+.nw-dot.is-affected {
+  background: #ff9f0a;
+}
+
+/* ----- System Monitor › Logs ----- */
+.cn.lv {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.lv-filters {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.lv-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.lv-unit input,
+.lv-filters select {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--field-bg);
+}
+
+.lv-unit input {
+  width: 170px;
+}
+
+.lv-unit.is-on input {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* ----- Terminal with the Commands panel beside it ----- */
+.terminal-window {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.terminal-window > .terminal {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.terminal-commands-btn {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  background: var(--hover-soft);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.terminal-commands-btn:hover,
+.terminal-commands-btn:focus-visible {
+  opacity: 1;
+}
+
+.cm-panel {
+  position: relative;
+  z-index: 1;
+  width: min(390px, 55%);
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--separator);
+  background: var(--solid);
+}
+
+.cm-panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 6px 14px;
+  font-size: 13px;
+}
+
+.cm-panel-find {
+  flex: none;
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cm-panel-find .sidebar-search {
+  margin: 0;
+}
+
+.cm-panel-find select {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--field-bg);
+}
+
+.cm-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+
+@media (max-width: 700px) {
+  .cm-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: auto;
+    border-left: 0;
+  }
+}
+
+/* ----- Settings › Software Update: the system's packages ----- */
+.su-head {
+  margin: 18px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.su-head > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.su-head strong {
+  font-size: 15px;
+}
+
+.su-head small {
+  font-size: 12px;
+  color: var(--text-2);
 }

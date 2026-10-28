@@ -2,17 +2,22 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { HistoryPoint } from '../api/types'
 import { tr } from '../lib/i18n'
 
-export interface ChartSeries {
-  key: keyof HistoryPoint
+/** A point on the chart: its time (Unix seconds) and its measures. */
+export interface ChartPoint {
+  t: number
+}
+
+export interface ChartSeries<P extends ChartPoint = HistoryPoint> {
+  key: keyof P & string
   label: string
   /** A categorical slot: 1 (blue) or 2 (orange), see .hc in app.css. */
   slot: 1 | 2
 }
 
-interface Props {
+interface Props<P extends ChartPoint> {
   title: string
-  points: (HistoryPoint | null)[]
-  series: ChartSeries[]
+  points: (P | null)[]
+  series: ChartSeries<P>[]
   format: (v: number) => string
   /** A fixed top (100 for percentages); else the data's peak, rounded up. */
   max?: number
@@ -23,7 +28,11 @@ interface Props {
   /** A line under the title: average and peak, or the like. */
   summary?: string
   /** Extra lines in the tooltip for one point (CPU's peak). */
-  detail?: (p: HistoryPoint) => string | null
+  detail?: (p: P) => string | null
+  /** A dashed line to compare with (an internet plan's speed). */
+  reference?: { value: number; label: string }
+  /** The tooltip over a missing point. */
+  gapLabel?: string
 }
 
 const H = 150
@@ -53,7 +62,19 @@ const when = (t: number, long: boolean) =>
  * A line chart of one or two measures over time: one axis, thin lines, a light fill under a
  * single line, gaps where the server was off, and a crosshair with the values under the pointer.
  */
-export function HistoryChart({ title, points, series, format, max, bytes, long, summary, detail }: Props) {
+export function HistoryChart<P extends ChartPoint = HistoryPoint>({
+  title,
+  points,
+  series,
+  format,
+  max,
+  bytes,
+  long,
+  summary,
+  detail,
+  reference,
+  gapLabel = tr('The server was off'),
+}: Props<P>) {
   const box = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(600)
   const [hover, setHover] = useState<number | null>(null)
@@ -66,30 +87,33 @@ export function HistoryChart({ title, points, series, format, max, bytes, long, 
   }, [])
 
   const n = points.length
-  const peak = Math.max(0, ...points.flatMap(p => (p ? series.map(s => p[s.key]) : [])))
+  const val = (p: P, key: keyof P) => Number(p[key]) || 0
+  const peak = Math.max(0, reference?.value ?? 0, ...points.flatMap(p => (p ? series.map(s => val(p, s.key)) : [])))
   const top = max ?? (bytes ? niceBytes(peak * 1.1) : niceMax(peak * 1.1))
   const plotW = width - PAD.left - PAD.right
   const plotH = H - PAD.top - PAD.bottom
   const x = (i: number) => PAD.left + (n <= 1 ? 0 : (i / (n - 1)) * plotW)
   const y = (v: number) => PAD.top + plotH - (Math.min(v, top) / top) * plotH
 
-  // A path per series, broken where points are missing.
+  // A path per series, broken where points are missing; a point on its own is a dot.
   const paths = series.map(s => {
     let line = ''
     let area = ''
+    const dots: [number, number][] = []
     let run: [number, number][] = []
     const flush = () => {
       if (!run.length) return
+      if (run.length === 1) dots.push(run[0])
       line += run.map(([px, py], j) => `${j ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join('')
       area += `M${run[0][0].toFixed(1)},${y(0)}` + run.map(([px, py]) => `L${px.toFixed(1)},${py.toFixed(1)}`).join('') + `L${run[run.length - 1][0].toFixed(1)},${y(0)}Z`
       run = []
     }
     points.forEach((p, i) => {
-      if (p) run.push([x(i), y(p[s.key])])
+      if (p) run.push([x(i), y(val(p, s.key))])
       else flush()
     })
     flush()
-    return { s, line, area }
+    return { s, line, area, dots }
   })
 
   const ticks = [0, top / 2, top]
@@ -146,10 +170,19 @@ export function HistoryChart({ title, points, series, format, max, bytes, long, 
           {paths.map(({ s, line }) => (
             <path key={s.key} className={`hc-line is-${s.slot}`} d={line} />
           ))}
+          {paths.map(({ s, dots }) => dots.map(([cx, cy]) => <circle key={`${s.key}${cx}`} className={`hc-lone is-${s.slot}`} cx={cx} cy={cy} r={2.5} />))}
+          {reference && reference.value > 0 && (
+            <g>
+              <line className="hc-ref" x1={PAD.left} x2={width - PAD.right} y1={y(reference.value)} y2={y(reference.value)} />
+              <text className="hc-axis hc-ref-label" x={width - PAD.right - 4} y={y(reference.value) - 5} textAnchor="end">
+                {reference.label}
+              </text>
+            </g>
+          )}
           {hover !== null && (
             <g>
               <line className="hc-cross" x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotH} />
-              {hp && series.map(s => <circle key={s.key} className={`hc-dot is-${s.slot}`} cx={x(hover)} cy={y(hp[s.key])} r={4} />)}
+              {hp && series.map(s => <circle key={s.key} className={`hc-dot is-${s.slot}`} cx={x(hover)} cy={y(val(hp, s.key))} r={4} />)}
             </g>
           )}
           {/* The whole plot answers the pointer, not just the thin line. */}
@@ -162,13 +195,13 @@ export function HistoryChart({ title, points, series, format, max, bytes, long, 
               <>
                 {series.map(s => (
                   <span key={s.key} className="hc-tip-row">
-                    <i className={`hc-swatch is-${s.slot}`} /> {s.label} <b>{format(hp[s.key])}</b>
+                    <i className={`hc-swatch is-${s.slot}`} /> {s.label} <b>{format(val(hp, s.key))}</b>
                   </span>
                 ))}
                 {detail?.(hp) && <span className="hc-tip-row is-dim">{detail(hp)}</span>}
               </>
             ) : (
-              <span className="hc-tip-row is-dim">{tr('The server was off')}</span>
+              <span className="hc-tip-row is-dim">{gapLabel}</span>
             )}
           </div>
         )}

@@ -25,6 +25,7 @@ import { formatBytes, formatSpeed } from '../lib/format'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { PortsView } from './PortsView'
 import { HistoryView } from './HistoryView'
+import { LogsView } from './LogViewer'
 import { ProcessesView } from './ProcessesView'
 import { ServicesView } from './ServicesView'
 import { tr } from '../lib/i18n'
@@ -86,7 +87,7 @@ interface Props {
   onOpenApp: (app: InstalledApp) => void
 }
 
-type Tab = 'containers' | 'services' | 'processes' | 'ports' | 'history'
+type Tab = 'containers' | 'services' | 'processes' | 'ports' | 'history' | 'logs'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'containers', label: tr('Containers') },
@@ -94,11 +95,19 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'processes', label: tr('Processes') },
   { id: 'ports', label: tr('Ports') },
   { id: 'history', label: tr('History') },
+  { id: 'logs', label: tr('Logs') },
 ]
 
-/** System Monitor: Docker containers (live resource use, logs, controls) and listening ports. */
-export function SystemMonitor(props: Props) {
+/**
+ * System Monitor: Docker containers (live resource use, logs, controls), services, processes,
+ * listening ports, history and the server's log (Log Viewer's old name opens that tab).
+ */
+export function SystemMonitor({ request, ...props }: Props & { request?: { part: string; nonce: number } | null }) {
   const [tab, setTab] = useState<Tab>('containers')
+  useEffect(() => {
+    const part = request?.part
+    if (part && TABS.some(t => t.id === part)) setTab(part as Tab)
+  }, [request])
   const tabs = (
     <div className="tb-segmented am-tabs">
       {TABS.map(t => (
@@ -117,6 +126,8 @@ export function SystemMonitor(props: Props) {
       return <PortsView apps={props.apps} onOpenApp={props.onOpenApp} tabs={tabs} />
     case 'history':
       return <HistoryView tabs={tabs} />
+    case 'logs':
+      return <LogsView tabs={tabs} />
     default:
       return <ContainersView {...props} tabs={tabs} />
   }

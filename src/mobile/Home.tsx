@@ -7,7 +7,7 @@ import type { WindowId } from '../components/Window'
 import { formatBytes, formatSpeed, formatUptime } from '../lib/format'
 import { tr } from '../lib/i18n'
 import { useSettings } from '../lib/settings'
-import { SYSTEM_APPS } from '../lib/systemApps'
+import { currentAppId, SYSTEM_APPS } from '../lib/systemApps'
 
 interface Props {
   stats: SystemStats | null
@@ -20,7 +20,7 @@ interface Props {
 }
 
 // Shortcuts until something has been opened from here.
-const DEFAULT_SHORTCUTS: WindowId[] = ['downloader', 'activity', 'store', 'terminal', 'recorder', 'devices', 'remux', 'updates']
+const DEFAULT_SHORTCUTS: WindowId[] = ['downloader', 'activity', 'store', 'terminal', 'network', 'devices', 'remux', 'files']
 
 /** The phone's first screen: how the server is, what needs a look, and the way to what's used most. */
 export function Home({ stats, apps, updates, onOpen, onOpenApp, onOpenUpdates, onPower }: Props) {
@@ -39,7 +39,8 @@ export function Home({ stats, apps, updates, onOpen, onOpenApp, onOpenUpdates, o
   const pct = (used: number, total: number) => (total ? Math.round((used / total) * 100) : 0)
 
   // What was opened lately, then the usual ones, eight in all.
-  const recent = (settings.recentApps ?? []).filter(id => !id.startsWith('app:') || apps.some(a => `app:${a.id}` === id))
+  // Apps since merged into others count as the app they went into.
+  const recent = (settings.recentApps ?? []).map(currentAppId).filter(id => !id.startsWith('app:') || apps.some(a => `app:${a.id}` === id))
   const shortcuts = [...new Set([...recent, ...DEFAULT_SHORTCUTS])].slice(0, 8)
 
   return (

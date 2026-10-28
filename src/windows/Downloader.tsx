@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, Download, FolderOpen, Image, LayoutGrid, LoaderCircle, MonitorSmartphone, Music, Play, RotateCcw, Server, Settings2, Trash2, X } from 'lucide-react'
 import { api } from '../api'
 import type { DownloadItem, DownloadMode, Downloads } from '../api/types'
@@ -14,6 +14,7 @@ import { displayName, parentOf } from '../lib/paths'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { MediaBrowser } from './DownloaderBrowse'
 import { DownloaderSettings } from './DownloaderSettings'
+import { RecorderMain } from './LiveRecorder'
 
 const QUALITIES = [
   { id: 'best', label: tr('Best') },
@@ -107,27 +108,59 @@ async function fetchToDevice(it: DownloadItem, onProgress: (done: number | null)
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-interface Props {
+export interface DownloaderProps {
   onOpenMedia: (path: string, kind: MediaKind) => void
   onShowInFiles: (folder: string) => void
+  /** The tabs, for the toolbar. */
+  tabs?: ReactNode
 }
 
-/** Downloader: save videos, sound or photos from a link. */
-export function Downloader(props: Props) {
+type Tab = 'links' | 'live'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'links', label: tr('Links') },
+  { id: 'live', label: tr('Live Streams') },
+]
+// The tab in front, kept while the window is closed and opened again.
+const session = { tab: 'links' as Tab }
+
+/**
+ * Downloader: save videos, sound or photos from a link, and record live streams as they happen
+ * (Live Recorder was an app of its own; its old name opens the Live Streams tab).
+ */
+export function Downloader({ request, ...props }: DownloaderProps & { request?: { part: string; nonce: number } | null }) {
+  const [tab, setTabState] = useState<Tab>(session.tab)
+  const setTab = (t: Tab) => {
+    session.tab = t
+    setTabState(t)
+  }
+  useEffect(() => {
+    if (request?.part === 'live' || request?.part === 'links') setTab(request.part)
+  }, [request])
+  const tabs = (
+    <div className="tb-segmented is-centered" role="tablist">
+      {TABS.map(t => (
+        <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
   return (
     <div className="dlr">
       <MediaToolsGate
         icon={<Download size={44} strokeWidth={1.3} />}
-        title={tr('Save videos and photos from a link')}
-        text={tr('Paste a link from YouTube, Instagram, X, TikTok, Facebook, Reddit or hundreds of other sites, and it’s saved on the server or on this device: the video in the quality you pick, just the sound, or the photos of a post.')}
+        title={tr('Save videos, photos and live streams')}
+        text={tr('Paste a link from YouTube, Instagram, X, TikTok, Facebook, Reddit or hundreds of other sites, and it’s saved on the server or on this device. Or add channels from Twitch, YouTube, Kick or TikTok, and their streams are recorded from the moment they go live.')}
       >
-        <DownloaderMain {...props} />
+        {tab === 'live' ? <RecorderMain {...props} tabs={tabs} /> : <DownloaderMain {...props} tabs={tabs} />}
       </MediaToolsGate>
     </div>
   )
 }
 
-function DownloaderMain({ onOpenMedia, onShowInFiles }: Props) {
+type Props = DownloaderProps
+
+function DownloaderMain({ onOpenMedia, onShowInFiles, tabs }: Props) {
   const [data, setData] = useState<Downloads | null>(null)
   const [links, setLinks] = useState('')
   const [mode, setMode] = useState<DownloadMode>('video')
@@ -253,6 +286,8 @@ function DownloaderMain({ onOpenMedia, onShowInFiles }: Props) {
     <>
       <WindowToolbar>
         <ToolbarTitle title={tr('Downloader')} subtitle={device ? tr('To this device') : data?.folder} />
+        <span className="tb-spacer" />
+        {tabs}
         <span className="tb-spacer" />
         <div className="tb-group">
           <button className="tb-btn" onClick={() => setSettings(true)} aria-label={tr('Settings')} title={tr('Settings')}>

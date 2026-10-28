@@ -15,8 +15,6 @@ export type SystemWindowId =
   | 'terminal'
   | 'activity'
   | 'sharing'
-  | 'updates'
-  | 'console'
   | 'disks'
   | 'network'
   | 'scheduler'
@@ -25,13 +23,10 @@ export type SystemWindowId =
   | 'preview'
   | 'video'
   | 'remux'
-  | 'commands'
   | 'devices'
-  | 'routers'
   | 'settings'
   | 'about'
   | 'downloader'
-  | 'recorder'
 export type WindowId = SystemWindowId | `app:${string}` | `info:${string}` | `remote:${string}`
 
 export interface Frame {

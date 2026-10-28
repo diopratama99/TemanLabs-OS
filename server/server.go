@@ -44,6 +44,7 @@ type server struct {
 	dl       *downloader
 	recorder *recorderStore
 	routers  *routerStore
+	speed    *speedStore
 	owner    *owner
 }
 
@@ -121,6 +122,7 @@ func newServer(cfg *Config) (*server, error) {
 	s.dl = newDownloader(cfg.StateDir)
 	s.recorder = newRecorder(cfg.StateDir)
 	s.routers = newRouterStore(cfg.StateDir)
+	s.speed = newSpeedStore(cfg.StateDir)
 	s.frames = newFrameProxies(s)
 	go s.stats.run()
 	go s.pruneTrash()
@@ -131,6 +133,7 @@ func newServer(cfg *Config) (*server, error) {
 	go s.runRecorder()
 	go s.runZFSSnapshots()
 	go s.runRouters()
+	go s.runSpeedTests()
 	return s, nil
 }
 
@@ -259,6 +262,15 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("DELETE /api/routers/{id}", s.handleDeleteRouter)
 	api.HandleFunc("POST /api/routers/{id}/test", s.handleTestRouter)
 	api.HandleFunc("POST /api/routers/{id}/restart", s.handleRestartRouter)
+	api.HandleFunc("GET /api/speedtest", s.handleSpeedTest)
+	api.HandleFunc("POST /api/speedtest/run", s.handleSpeedRun)
+	api.HandleFunc("POST /api/speedtest/stop", s.handleSpeedStop)
+	api.HandleFunc("PUT /api/speedtest/config", s.handleSpeedConfig)
+	api.HandleFunc("POST /api/speedtest/ookla", s.handleSpeedOokla)
+	api.HandleFunc("DELETE /api/speedtest/ookla", s.handleSpeedRemoveOokla)
+	api.HandleFunc("GET /api/speedtest/servers", s.handleSpeedServers)
+	api.HandleFunc("GET /api/speedtest/export", s.handleSpeedExport)
+	api.HandleFunc("DELETE /api/speedtest/results", s.handleSpeedClear)
 	api.HandleFunc("GET /api/devices", s.handleListDevices)
 	api.HandleFunc("POST /api/devices", s.handleCreateDevice)
 	api.HandleFunc("GET /api/devices/status", s.handleDeviceStatus)

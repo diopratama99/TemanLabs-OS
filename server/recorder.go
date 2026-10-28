@@ -265,7 +265,7 @@ func (s *server) finishRecording(rec *recording) {
 	case strings.HasSuffix(file, ".ts"):
 		mp4 := strings.TrimSuffix(file, ".ts") + ".mp4"
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
-		out, err := exec.CommandContext(ctx, "ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", file, "-map", "0", "-c", "copy", "-movflags", "+faststart", mp4).CombinedOutput()
+		out, err := exec.CommandContext(ctx, "ffmpeg", recordingToMP4(file, mp4)...).CombinedOutput()
 		cancel()
 		if err == nil {
 			_ = os.Remove(file)
@@ -295,6 +295,13 @@ func (s *server) finishRecording(rec *recording) {
 	s.recorder.save()
 }
 
+// recordingToMP4 is ffmpeg's command line that puts a recording's video and sound in an MP4 as
+// they are. Only those: streams also carry data an MP4 can't hold (Kick's and Twitch's timed ID3
+// metadata), which would stop the whole conversion.
+func recordingToMP4(ts, mp4 string) []string {
+	return []string{"-nostdin", "-y", "-loglevel", "error", "-i", ts, "-map", "0:v?", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", mp4}
+}
+
 // runRecorder watches the channels and the recordings running.
 func (s *server) runRecorder() {
 	// Recordings that were being made when TemanLabsOS stopped: still running in their unit,
@@ -306,10 +313,22 @@ func (s *server) runRecorder() {
 			pending = append(pending, rec)
 		}
 	}
+	// And ones kept as .ts because they couldn't be turned into MP4 then: tried again, one at a time.
+	var retry []*recording
+	for _, rec := range s.recorder.Recordings {
+		if rec.Status == "done" && strings.HasSuffix(rec.File, ".ts") && strings.HasPrefix(rec.Error, "kept as .ts") {
+			retry = append(retry, rec)
+		}
+	}
 	s.recorder.mu.Unlock()
 	for _, rec := range pending {
 		go s.finishRecording(rec)
 	}
+	go func() {
+		for _, rec := range retry {
+			s.finishRecording(rec)
+		}
+	}()
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()

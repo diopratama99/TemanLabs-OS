@@ -32,6 +32,8 @@ import {
   Workflow,
   Wrench,
   Router,
+  Usb,
+  Gauge,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -42,6 +44,8 @@ export const appIcons: Record<string, LucideIcon> = {
   commands: BookMarked,
   devices: MonitorSmartphone,
   router: Router,
+  usbdrive: Usb,
+  gauge: Gauge,
   cloud: Cloud,
   house: House,
   shield: ShieldCheck,

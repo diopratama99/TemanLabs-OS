@@ -6,26 +6,22 @@ import type { MediaKind, MediaRequest } from '../lib/media'
 import { AboutServer } from '../windows/AboutServer'
 import { AppCenter, type StoreCategory } from '../windows/AppCenter'
 import { CodeEditor, type OpenRequest } from '../windows/CodeEditor'
-import { Commands } from '../windows/Commands'
 import { Devices } from '../windows/Devices'
 import { DiskManager } from '../windows/DiskManager'
 import { Downloader } from '../windows/Downloader'
 import { Files } from '../windows/Files'
 import { Kubernetes } from '../windows/Kubernetes'
-import { LiveRecorder } from '../windows/LiveRecorder'
-import { LogViewer } from '../windows/LogViewer'
 import { MusicPlayer } from '../windows/MusicPlayer'
-import { NetworkTools } from '../windows/NetworkTools'
+import { Network } from '../windows/Network'
 import { PhotoViewer } from '../windows/PhotoViewer'
 import { Remux } from '../windows/Remux'
-import { Routers } from '../windows/Routers'
 import { ScheduledTasks } from '../windows/ScheduledTasks'
 import { Settings, type SettingsSection } from '../windows/Settings'
 import { Sharing, type ShareRequest } from '../windows/Sharing'
 import { SystemMonitor } from '../windows/SystemMonitor'
-import { SystemUpdates } from '../windows/SystemUpdates'
-import { Terminal } from '../windows/Terminal'
+import { TerminalWindow } from '../windows/TerminalWindow'
 import { VideoPlayer } from '../windows/VideoPlayer'
+import type { MergedId } from '../lib/systemApps'
 import type { SystemWindowId, WindowId } from './Window'
 
 // The built-in apps' contents, for both the desktop's windows and the phone's screens: each shell
@@ -39,22 +35,17 @@ export const SYSTEM_WINDOWS: Record<SystemWindowId, { title: string; width: numb
   terminal: { title: tr('Terminal'), width: 680, height: 420 },
   activity: { title: tr('System Monitor'), width: 980, height: 600 },
   sharing: { title: tr('File Sharing'), width: 900, height: 600 },
-  updates: { title: tr('System Updates'), width: 760, height: 620 },
-  console: { title: tr('Log Viewer'), width: 1080, height: 660 },
   disks: { title: tr('Disk Manager'), width: 900, height: 620 },
-  network: { title: tr('Network Tools'), width: 900, height: 600 },
+  network: { title: tr('Network'), width: 980, height: 680 },
   scheduler: { title: tr('Scheduled Tasks'), width: 860, height: 560 },
   kubernetes: { title: tr('Kubernetes'), width: 1080, height: 680 },
   music: { title: tr('Music Player'), width: 760, height: 600 },
   preview: { title: tr('Image Viewer'), width: 920, height: 640 },
   video: { title: tr('Video Player'), width: 960, height: 600 },
   remux: { title: tr('Remux'), width: 980, height: 640 },
-  commands: { title: tr('Commands'), width: 1040, height: 680 },
   devices: { title: tr('Devices'), width: 900, height: 600 },
-  routers: { title: tr('Routers'), width: 900, height: 640 },
   about: { title: tr('About This Server'), width: 300, height: 430 },
   downloader: { title: tr('Downloader'), width: 820, height: 600 },
-  recorder: { title: tr('Live Recorder'), width: 900, height: 640 },
 }
 
 // Windows with a source-list sidebar run it full height; Terminal gets a slim title bar.
@@ -63,7 +54,7 @@ export const WINDOW_VARIANT: Partial<Record<SystemWindowId, 'sidebar' | 'compact
   store: 'sidebar',
   settings: 'sidebar',
   sharing: 'sidebar',
-  console: 'sidebar',
+  network: 'sidebar',
   disks: 'sidebar',
   scheduler: 'sidebar',
   kubernetes: 'sidebar',
@@ -74,9 +65,7 @@ export const WINDOW_VARIANT: Partial<Record<SystemWindowId, 'sidebar' | 'compact
   music: 'compact',
   remux: 'compact',
   devices: 'compact',
-  routers: 'compact',
   about: 'compact',
-  commands: 'sidebar',
 }
 
 export type MediaWindow = 'preview' | 'video' | 'music'
@@ -96,7 +85,9 @@ export interface WindowHost {
   remuxRequest: MediaRequest | null
   shareRequest: ShareRequest | null
   terminalInput: { text: string; nonce: number } | null
-  openWindow: (id: WindowId) => void
+  /** The part of an app to show (a merged app's old name, opened): Network's Routers, say. */
+  parts: Partial<Record<SystemWindowId, { part: string; nonce: number }>>
+  openWindow: (id: WindowId | MergedId) => void
   openAppWindow: (app: InstalledApp) => void
   openAppSettings: (app: InstalledApp, options?: { tab?: 'terminal'; update?: boolean }) => void
   openMedia: (path: string, kind: MediaKind) => void
@@ -172,35 +163,25 @@ export function renderSystemWindow(id: SystemWindowId, h: WindowHost) {
         />
       )
     case 'terminal':
-      return <Terminal onTitle={t => h.setWindowTitle('terminal', t)} input={h.terminalInput} onFindCommand={() => h.openWindow('commands')} />
+      return <TerminalWindow onTitle={t => h.setWindowTitle('terminal', t)} input={h.terminalInput} onRun={h.runInTerminal} request={h.parts.terminal} />
     case 'preview':
       return <PhotoViewer request={h.mediaRequests.preview ?? null} onTitle={t => h.setWindowTitle('preview', t)} />
     case 'video':
       return <VideoPlayer request={h.mediaRequests.video ?? null} onTitle={t => h.setWindowTitle('video', t)} onConvert={h.openRemux} />
     case 'devices':
       return <Devices onConnect={h.openRemote} />
-    case 'routers':
-      return <Routers />
     case 'downloader':
-      return <Downloader onOpenMedia={h.openMedia} onShowInFiles={h.openFilesAt} />
-    case 'recorder':
-      return <LiveRecorder onOpenMedia={h.openMedia} onShowInFiles={h.openFilesAt} />
+      return <Downloader onOpenMedia={h.openMedia} onShowInFiles={h.openFilesAt} request={h.parts.downloader} />
     case 'about':
       return <AboutServer stats={h.stats} onMoreInfo={() => h.openSettings('about')} />
-    case 'commands':
-      return <Commands onRun={h.runInTerminal} />
     case 'remux':
       return <Remux request={h.remuxRequest} onPlay={h.openMedia} />
     case 'music':
       return <MusicPlayer request={h.mediaRequests.music ?? null} onTitle={t => h.setWindowTitle('music', t)} />
-    case 'updates':
-      return <SystemUpdates />
-    case 'console':
-      return <LogViewer />
     case 'disks':
       return <DiskManager onShowInFiles={h.openFilesAt} />
     case 'network':
-      return <NetworkTools />
+      return <Network request={h.parts.network} />
     case 'scheduler':
       return <ScheduledTasks />
     case 'kubernetes':
@@ -208,6 +189,6 @@ export function renderSystemWindow(id: SystemWindowId, h: WindowHost) {
     case 'sharing':
       return <Sharing stats={h.stats} request={h.shareRequest} />
     case 'activity':
-      return <SystemMonitor apps={h.apps} stats={h.stats} onOpenApp={h.openAppWindow} />
+      return <SystemMonitor apps={h.apps} stats={h.stats} onOpenApp={h.openAppWindow} request={h.parts.activity} />
   }
 }

@@ -4,7 +4,7 @@ import type { InstalledApp } from '../api/types'
 import { useContextMenu } from '../lib/contextMenu'
 import { layoutFolders, moveTo, newFolder, renameFolder, ungroup, type FolderView } from '../lib/launchpadFolders'
 import { useSettings } from '../lib/settings'
-import { SYSTEM_APPS, UTILITY_IDS } from '../lib/systemApps'
+import { currentAppId, MERGED_APPS, SYSTEM_APPS, UTILITY_IDS, type MergedId } from '../lib/systemApps'
 import { AppIcon } from './AppIcon'
 import type { MenuAnchor, MenuItem } from './ContextMenu'
 import { Glass } from './Glass'
@@ -29,7 +29,7 @@ interface Props {
   apps: InstalledApp[]
   onClose: () => void
   onOpenApp: (app: InstalledApp) => void
-  onOpenWindow: (id: WindowId) => void
+  onOpenWindow: (id: WindowId | MergedId) => void
   /** `extra` items (folders, hiding) are appended to the app's usual menu. */
   onAppMenu: (app: InstalledApp, anchor: MenuAnchor, extra?: MenuItem[]) => void
   onSystemMenu: (id: SystemWindowId, anchor: MenuAnchor, extra?: MenuItem[]) => void
@@ -119,11 +119,16 @@ export function Launcher({ closing = false, apps, onClose, onOpenApp, onOpenWind
     ...(showHidden && hidden.size ? [{ id: 'hidden', title: tr('Hidden'), keys: [...hidden].filter(k => byKey.has(k)) }] : []),
   ]
   const activeTab = groups.some(g => g.id === tab) ? tab : 'all'
-  const recent = (settings.recentApps ?? []).filter(k => byKey.has(k) && !hidden.has(k)).slice(0, RECENT)
+  const recent = [...new Set((settings.recentApps ?? []).map(currentAppId))].filter(k => byKey.has(k) && !hidden.has(k)).slice(0, RECENT)
   const everything = (showHidden ? entries.map(e => e.key) : visibleKeys).sort((a, b) => byKey.get(a)!.name.localeCompare(byKey.get(b)!.name))
 
   const q = query.trim().toLowerCase()
-  const results = q ? entries.filter(e => (showHidden || !hidden.has(e.key)) && e.name.toLowerCase().includes(q)) : []
+  // Searching finds apps since merged into others by their old names too.
+  const merged: Entry[] = (Object.keys(MERGED_APPS) as MergedId[]).flatMap(id => {
+    const into = SYSTEM_APPS.find(a => a.id === MERGED_APPS[id].into)
+    return into ? [{ key: id, name: MERGED_APPS[id].label, icon: into.icon, color: into.color, open: () => onOpenWindow(id) }] : []
+  })
+  const results = q ? [...entries, ...merged].filter(e => (showHidden || !hidden.has(e.key)) && e.name.toLowerCase().includes(q)) : []
   const iconSize = window.innerWidth < 720 ? 52 : 54
 
   const launch = (entry: Entry) => {

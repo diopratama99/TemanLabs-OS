@@ -57,6 +57,9 @@ export interface Disk {
   /** The ZFS pool it is, and the pool's state (ONLINE, DEGRADED…). */
   pool?: string
   health?: string
+  /** Plugged in over USB (or removable): shown on the desktop; device is the drive, to eject. */
+  external?: boolean
+  device?: string
 }
 
 export interface NetworkAddresses {
@@ -1443,4 +1446,73 @@ export interface SignedInBrowser {
   addr?: string
   agent?: string
   locked?: boolean
+}
+
+// ----- Speed Test -----
+export type SpeedProvider = 'cloudflare' | 'ookla'
+export type SpeedRange = '24h' | '7d' | '30d' | '90d' | '180d'
+
+export interface SpeedResult {
+  time: string
+  provider: SpeedProvider
+  /** Mbps. */
+  down: number
+  up: number
+  /** Milliseconds: idle ping, its jitter, and the ping while the line is busy (Ookla). */
+  ping: number
+  jitter: number
+  loaded?: number
+  /** Percent of packets lost (Ookla). */
+  loss?: number
+  server?: string
+  isp?: string
+  ip?: string
+  /** The data the test used, both ways. */
+  bytes: number
+  /** Ookla's result page on speedtest.net. */
+  url?: string
+  error?: string
+  manual?: boolean
+}
+
+export interface SpeedConfig {
+  /** Minutes between tests; 0 tests only by hand. */
+  interval: number
+  provider: SpeedProvider
+  /** Cloudflare: light (cheap on data) or full. */
+  size: 'light' | 'full'
+  /** Ookla's server; 0 picks the nearest. */
+  ooklaServer: number
+  ooklaAccepted: boolean
+  /** The plan's speeds in Mbps (0: not set). */
+  planDown: number
+  planUp: number
+}
+
+export interface SpeedRun {
+  started: string
+  provider: SpeedProvider
+  phase: 'starting' | 'ping' | 'download' | 'upload'
+  mbps: number
+  progress: number
+  manual: boolean
+}
+
+export interface SpeedInfo {
+  config: SpeedConfig
+  running: SpeedRun | null
+  last: SpeedResult | null
+  /** The range asked for, oldest first. */
+  results: SpeedResult[]
+  total: number
+  since: string | null
+  ookla: { installed: boolean; version: string; available: boolean }
+}
+
+export interface OoklaServer {
+  id: number
+  name: string
+  location: string
+  country: string
+  host: string
 }

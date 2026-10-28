@@ -1,6 +1,7 @@
 import { tr } from './lib/i18n'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type MouseEvent } from 'react'
 import {
+  ArrowUpFromLine,
   Braces,
   Copy,
   EyeOff,
@@ -44,7 +45,7 @@ import {
 import { api, ApiError, MOCK_MODE } from './api'
 import { usePlaces } from './hooks/usePlaces'
 import { DATA_ROOT, TRASH_PLACE } from './lib/places'
-import type { Device, InstalledApp } from './api/types'
+import type { Device, Disk, InstalledApp } from './api/types'
 import { AppIcon } from './components/AppIcon'
 import type { MenuAnchor, MenuItem } from './components/ContextMenu'
 import { DesktopWidgets } from './components/DesktopWidgets'
@@ -67,7 +68,7 @@ import { useContextMenu } from './lib/contextMenu'
 import { isEditable } from './lib/dom'
 import { useSettings } from './lib/settings'
 import { findShortcut, shortcutOf, TEXT_EDITING_KEYS } from './lib/shortcuts'
-import { SYSTEM_APPS, VIEWER_APPS } from './lib/systemApps'
+import { currentAppId, isMerged, MERGED_APPS, SYSTEM_APPS, VIEWER_APPS, type MergedId } from './lib/systemApps'
 import type { StoreCategory } from './windows/AppCenter'
 import type { ShareRequest } from './windows/Sharing'
 import { PowerOverlay } from './components/PowerOverlay'
@@ -145,7 +146,8 @@ export default function App() {
   const [remoteDevices, setRemoteDevices] = useState<Record<string, Device>>({})
   const [launchpad, setLauncher] = useState(false)
   const [spotlight, setQuickSearch] = useState(false)
-  const [driveSelected, setDriveSelected] = useState(false)
+  // The desktop icon selected: "DATA", or an external drive's mount.
+  const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('general')
   const [storeCategory, setStoreCategory] = useState<StoreCategory>('All')
   const [editorRequest, setEditorRequest] = useState<OpenRequest | null>(null)
@@ -266,7 +268,16 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const openWindow = (id: WindowId) => {
+  // Parts of apps to show: a merged app's old name opens its part of the app it went into.
+  const [parts, setParts] = useState<WindowHost['parts']>({})
+  const openWindow = (target: WindowId | MergedId) => {
+    let id: WindowId
+    if (isMerged(target)) {
+      const m = MERGED_APPS[target]
+      if (m.into === 'settings') setSettingsSection(m.part as SettingsSection)
+      else setParts(p => ({ ...p, [m.into]: { part: m.part, nonce: Date.now() } }))
+      id = m.into
+    } else id = target
     setLauncher(false)
     // The Launcher's "Recently Used": its keys are a built-in app's id or "app:<id>", as window ids are.
     if (id.startsWith('app:') || SYSTEM_APPS.some(a => a.id === id))
@@ -379,7 +390,8 @@ export default function App() {
   const togglePin = (id: string) =>
     update({ dockApps: dockIds.includes(id) ? dockIds.filter(d => d !== id) : [...dockIds, id] })
   // Built-in apps: the main ones by default; utilities (Remux, Disk Manager…) once pinned.
-  const dockSystemIds = settings.dockSystem ?? SYSTEM_APPS.filter(a => a.dock !== false).map(a => a.id)
+  // Pinned apps since merged into others are the app they went into.
+  const dockSystemIds = [...new Set((settings.dockSystem ?? SYSTEM_APPS.filter(a => a.dock !== false).map(a => a.id)).map(currentAppId))]
   const toggleSystemPin = (id: string) =>
     update({ dockSystem: dockSystemIds.includes(id) ? dockSystemIds.filter(d => d !== id) : [...dockSystemIds, id] })
   /** Puts id at index in a list (moving it if it's there already). */
@@ -447,7 +459,7 @@ export default function App() {
 
   const showDesktopMenu = (e: MouseEvent<HTMLElement>) => {
     if (e.defaultPrevented || isEditable(e.target)) return
-    setDriveSelected(false)
+    setSelectedIcon(null)
     const dark = settings.theme === 'dark'
     // Widgets open their own menu (DesktopWidgets) and consume the event before it gets here.
     show(e, [
@@ -475,11 +487,32 @@ export default function App() {
   }
 
   const showDriveMenu = (e: MouseEvent<HTMLElement>) => {
-    setDriveSelected(true)
+    setSelectedIcon('DATA')
     show(e, [
       { label: tr('Open'), icon: FolderOpen, onSelect: () => openWindow('files') },
       'separator',
       { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText('/DATA') },
+    ])
+  }
+  // A drive plugged in over USB: on the desktop while it's mounted, like DATA, and ejected from here.
+  const externalDrives = (stats?.disks ?? []).filter(d => d.external)
+  const eject = (drive: Disk) => {
+    if (!drive.device) return
+    void api.ejectDisk(drive.device).then(() => {
+      setSelectedIcon(null)
+      setToast({ id: Date.now(), message: tr('{0} can be unplugged now.', drive.name) })
+      window.setTimeout(() => setToast(null), TOAST_MS)
+    })
+  }
+  const showExternalMenu = (e: MouseEvent<HTMLElement>, drive: Disk) => {
+    setSelectedIcon(drive.mount)
+    show(e, [
+      { label: tr('Open'), icon: FolderOpen, onSelect: () => openFilesAt(drive.mount) },
+      { label: tr('Get Info'), icon: Info, onSelect: () => openWindow(`info:${drive.mount}`) },
+      'separator',
+      { label: tr('Copy Path'), icon: Copy, onSelect: () => void copyText(drive.mount) },
+      'separator',
+      { label: tr('Eject “{0}”', drive.name), icon: ArrowUpFromLine, disabled: !drive.device, onSelect: () => eject(drive) },
     ])
   }
 
@@ -609,7 +642,7 @@ export default function App() {
         submenu: SYSTEM_APPS.map(app => ({ label: app.label, onSelect: () => openWindow(app.id) })),
       },
       { label: tr('Devices'), icon: Monitor, onSelect: () => openWindow('devices') },
-      { label: tr('Network Tools'), icon: Link, onSelect: () => openWindow('network') },
+      { label: tr('Network'), icon: Link, onSelect: () => openWindow('network') },
     ]
 
     const windowMenu: AppMenu = {
@@ -727,6 +760,7 @@ export default function App() {
     remuxRequest,
     shareRequest,
     terminalInput,
+    parts,
     openWindow,
     openAppWindow,
     openAppSettings,
@@ -804,7 +838,7 @@ export default function App() {
         className="desktop"
         onPointerDown={e => {
           if (e.target !== e.currentTarget || e.button !== 0) return
-          setDriveSelected(false)
+          setSelectedIcon(null)
           // Clicking empty desktop finishes editing widgets.
           setEditingWidgets(false)
         }}
@@ -824,8 +858,8 @@ export default function App() {
         )}
         <div className="desktop-icons" hidden={!settings.showDesktopDrive}>
           <button
-            className={`desk-icon ${driveSelected ? 'is-selected' : ''}`}
-            onClick={() => setDriveSelected(true)}
+            className={`desk-icon ${selectedIcon === 'DATA' ? 'is-selected' : ''}`}
+            onClick={() => setSelectedIcon('DATA')}
             onDoubleClick={() => openWindow('files')}
             onContextMenu={showDriveMenu}
             title={tr('Double-click to open')}
@@ -833,6 +867,19 @@ export default function App() {
             <AppIcon icon="drive" color={['#9aa6bd', '#4b5568']} size={64} />
             <span>DATA</span>
           </button>
+          {externalDrives.map(d => (
+            <button
+              key={d.mount}
+              className={`desk-icon is-external ${selectedIcon === d.mount ? 'is-selected' : ''}`}
+              onClick={() => setSelectedIcon(d.mount)}
+              onDoubleClick={() => openFilesAt(d.mount)}
+              onContextMenu={e => showExternalMenu(e, d)}
+              title={`${d.mount} · ${tr('Double-click to open')}`}
+            >
+              <AppIcon icon="usbdrive" color={['#ffd27a', '#e08a12']} size={64} />
+              <span>{d.name}</span>
+            </button>
+          ))}
         </div>
       </main>
 

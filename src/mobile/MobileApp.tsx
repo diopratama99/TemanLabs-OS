@@ -23,6 +23,7 @@ import { AppView } from '../windows/AppView'
 import type { OpenRequest } from '../windows/CodeEditor'
 import { RemoteScreen } from '../windows/RemoteScreen'
 import type { SettingsSection } from '../windows/Settings'
+import { isMerged, MERGED_APPS } from '../lib/systemApps'
 import type { ShareRequest } from '../windows/Sharing'
 import { AppsList } from './AppsList'
 import { Home } from './Home'
@@ -86,8 +87,18 @@ export function MobileApp() {
     (id.startsWith('app:') || SYSTEM_WINDOWS[id as SystemWindowId]) &&
     update(s => (s.recentApps?.[0] === id ? {} : { recentApps: [id, ...(s.recentApps ?? []).filter(k => k !== id)].slice(0, 16) }))
 
+  // Parts of apps to show: a merged app's old name opens its part of the app it went into.
+  const [parts, setParts] = useState<WindowHost['parts']>({})
+
   /** Opens a screen on top of the tab in front; one already there is brought back instead. */
-  const open = (id: string) => {
+  const open = (target: string) => {
+    let id = target
+    if (isMerged(target)) {
+      const m = MERGED_APPS[target]
+      if (m.into === 'settings') setSettingsSection(m.part as SettingsSection)
+      else setParts(p => ({ ...p, [m.into]: { part: m.part, nonce: Date.now() } }))
+      id = m.into
+    }
     remember(id)
     if (id === 'files') {
       // Files has a tab of its own.
@@ -177,6 +188,7 @@ export function MobileApp() {
     remuxRequest,
     shareRequest,
     terminalInput,
+    parts,
     openWindow: id => open(id),
     openAppWindow,
     openAppSettings,

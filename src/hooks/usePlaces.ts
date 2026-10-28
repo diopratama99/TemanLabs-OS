@@ -19,10 +19,14 @@ export function usePlaces(): { favorites: Place[]; locations: Place[] } {
 
   useEffect(() => {
     let alive = true
-    api
-      .getSystemStats()
-      .then(stats => alive && setDisks(stats.disks))
-      .catch(() => {})
+    // Drives come and go (one plugged in over USB shows up in a few seconds).
+    const loadDisks = () =>
+      api
+        .getSystemStats()
+        .then(stats => alive && setDisks(d => (JSON.stringify(d.map(x => x.mount)) === JSON.stringify(stats.disks.map(x => x.mount)) ? d : stats.disks)))
+        .catch(() => {})
+    void loadDisks()
+    const timer = setInterval(loadDisks, 8000)
     api
       .listFiles(DATA_ROOT)
       .then(entries => {
@@ -31,6 +35,7 @@ export function usePlaces(): { favorites: Place[]; locations: Place[] } {
       .catch(() => {})
     return () => {
       alive = false
+      clearInterval(timer)
     }
   }, [])
 

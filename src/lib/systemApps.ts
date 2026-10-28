@@ -24,22 +24,36 @@ export const SYSTEM_APPS: SystemApp[] = [
   { id: 'music', label: tr('Music Player'), icon: 'music', color: ['#ff7a93', '#f5203e'] },
   // Saving from the web: links to files, and live streams as they happen.
   { id: 'downloader', label: tr('Downloader'), icon: 'downloader', color: ['#ffd36b', '#ff8a00'], dock: false },
-  { id: 'recorder', label: tr('Live Recorder'), icon: 'radio', color: ['#ff8a8a', '#e0245e'], dock: false },
   { id: 'settings', label: tr('Settings'), icon: 'settings', color: ['#a1a1a8', '#55555b'] },
   // The other computers: wake them, and use their screens in a window.
   { id: 'devices', label: tr('Devices'), icon: 'devices', color: ['#7cc8ff', '#3b5bfd'], dock: false },
-  // The modems, routers and access points: watched, and restarted when they hang.
-  { id: 'routers', label: tr('Routers'), icon: 'router', color: ['#6ee7b7', '#0f9f6e'], dock: false },
+  // The internet and the home network: the routers (watched, restarted when they hang), speed
+  // tests on a schedule, and the network tools.
+  { id: 'network', label: tr('Network'), icon: 'network', color: ['#64d2ff', '#0a6cff'], dock: false },
   // Server utilities: in Launcher → Utilities, in the Dock only while open.
   { id: 'sharing', label: tr('File Sharing'), icon: 'share', color: ['#5ee0d0', '#0d8f88'], dock: false, utility: true },
-  { id: 'updates', label: tr('System Updates'), icon: 'updates', color: ['#8e8e93', '#48484a'], dock: false, utility: true },
-  { id: 'console', label: tr('Log Viewer'), icon: 'scroll', color: ['#4a4a4f', '#1c1c1e'], dock: false, utility: true },
   { id: 'disks', label: tr('Disk Manager'), icon: 'drive', color: ['#b8bcc6', '#5f6470'], dock: false, utility: true },
-  { id: 'network', label: tr('Network Tools'), icon: 'network', color: ['#64d2ff', '#0a6cff'], dock: false, utility: true },
   { id: 'scheduler', label: tr('Scheduled Tasks'), icon: 'scheduler', color: ['#ff9f6b', '#e6501e'], dock: false, utility: true },
   { id: 'remux', label: tr('Remux'), icon: 'remux', color: ['#ffc25c', '#ff6a2b'], dock: false, utility: true },
-  { id: 'commands', label: tr('Commands'), icon: 'commands', color: ['#5eead4', '#0f8a7a'], dock: false, utility: true },
 ]
+
+/** Apps folded into others; their old names (and ids) open the part they became. */
+export type MergedId = 'routers' | 'speedtest' | 'recorder' | 'updates' | 'console' | 'commands' | 'networktools'
+
+export const MERGED_APPS: Record<MergedId, { label: string; into: SystemWindowId; part: string }> = {
+  routers: { label: tr('Routers'), into: 'network', part: 'routers' },
+  speedtest: { label: tr('Speed Test'), into: 'network', part: 'speed' },
+  networktools: { label: tr('Network Tools'), into: 'network', part: 'interfaces' },
+  recorder: { label: tr('Live Recorder'), into: 'downloader', part: 'live' },
+  updates: { label: tr('System Updates'), into: 'settings', part: 'updates' },
+  console: { label: tr('Log Viewer'), into: 'activity', part: 'logs' },
+  commands: { label: tr('Commands'), into: 'terminal', part: 'commands' },
+}
+
+export const isMerged = (id: string): id is MergedId => Object.hasOwn(MERGED_APPS, id)
+
+/** The app an id opens today: the one a merged app went into. */
+export const currentAppId = (id: string) => (isMerged(id) ? MERGED_APPS[id].into : id)
 
 export const UTILITY_IDS = new Set<string>(SYSTEM_APPS.filter(a => a.utility).map(a => a.id))
 

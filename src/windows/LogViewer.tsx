@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertOctagon, CircleAlert, Copy, Cpu, KeyRound, List, Pause, Play, RotateCw, Search, Trash2, type LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import type { LogEntry, LogView } from '../api/types'
@@ -30,8 +30,11 @@ const levelClass = (p: number) => (p <= 3 ? 'is-error' : p === 4 ? 'is-warning' 
 const time = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-/** Log Viewer: the server's log (systemd journal), by category. */
-export function LogViewer() {
+/**
+ * System Monitor › Logs: the server's log (systemd journal), by category or service. It was an app
+ * of its own, Log Viewer; that name opens this tab.
+ */
+export function LogsView({ tabs }: { tabs: ReactNode }) {
   const [view, setView] = useState<LogView>('all')
   const [range, setRange] = useState('')
   const [query, setQuery] = useState('')
@@ -110,46 +113,12 @@ export function LogViewer() {
   const errors = entries.filter(e => e.priority <= 3).length
 
   return (
-    <div className="split">
-      <aside className="sidebar">
-        <div className="sidebar-group">{tr('Reports')}</div>
-        {VIEWS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={`sidebar-item ${view === id && !unit ? 'is-active' : ''}`}
-            onClick={() => {
-              setView(id)
-              setUnit('')
-              setUnitDraft('')
-            }}
-          >
-            <Icon size={15} /> {label}
-          </button>
-        ))}
-        <div className="sidebar-group">{tr('Service')}</div>
-        <label className="sidebar-search">
-          <input
-            value={unitDraft}
-            onChange={e => setUnitDraft(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && setUnit(unitDraft.trim())}
-            onBlur={() => setUnit(unitDraft.trim())}
-            placeholder={tr('e.g. docker.service ⏎')}
-            spellCheck={false}
-          />
-        </label>
-      </aside>
-
-      <div className="cn">
+    <div className="cn lv">
         <WindowToolbar>
-          <ToolbarTitle title={tr('Log Viewer')} subtitle={unit || VIEWS.find(v => v.id === view)?.label} />
+          <ToolbarTitle title={tr('System Monitor')} subtitle={tr('Logs')} />
           <span className="tb-spacer" />
-          <div className="tb-segmented">
-            {RANGES.map(r => (
-              <button key={r.id} className={range === r.id ? 'is-active' : ''} onClick={() => setRange(r.id)}>
-                {r.label}
-              </button>
-            ))}
-          </div>
+          {tabs}
+          <span className="tb-spacer" />
           <div className="tb-group">
             <button className={`tb-btn ${live ? 'is-on' : ''}`} onClick={() => setLive(l => !l)} aria-label={live ? tr('Pause') : tr('Live')} title={live ? tr('Pause live updates') : tr('Live updates')}>
               {live ? <Pause size={15} /> : <Play size={15} />}
@@ -163,6 +132,46 @@ export function LogViewer() {
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder={tr('Search messages')} />
           </label>
         </WindowToolbar>
+
+        {/* What to read: a report or one service, and how far back. */}
+        <div className="lv-filters">
+          <label className="lv-unit">
+            <span>{tr('Show')}</span>
+            <select
+              value={unit ? '' : view}
+              onChange={e => {
+                setView(e.target.value as LogView)
+                setUnit('')
+                setUnitDraft('')
+              }}
+            >
+              {unit && <option value="">{tr('One service')}</option>}
+              {VIEWS.map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={`lv-unit ${unit ? 'is-on' : ''}`}>
+            <span>{tr('Service')}</span>
+            <input
+              value={unitDraft}
+              onChange={e => setUnitDraft(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && setUnit(unitDraft.trim())}
+              onBlur={() => setUnit(unitDraft.trim())}
+              placeholder={tr('e.g. docker.service ⏎')}
+              spellCheck={false}
+            />
+          </label>
+          <select value={range} onChange={e => setRange(e.target.value)} aria-label={tr('Since')}>
+            {RANGES.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="cn-head">
           <span>{tr('Time')}</span>
@@ -227,7 +236,6 @@ export function LogViewer() {
             </span>
           )}
         </div>
-      </div>
     </div>
   )
 }

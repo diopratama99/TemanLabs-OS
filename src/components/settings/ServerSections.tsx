@@ -240,7 +240,7 @@ export function NetworkSection({ stats, onOpenWindow }: { stats: SystemStats | n
             </SettingRow>
           ))}
       </div>
-      <OpenApp label={tr('Open Network Tools…')} onClick={() => onOpenWindow('network')} />
+      <OpenApp label={tr('Open Network…')} onClick={() => onOpenWindow('network')} />
     </>
   )
 }

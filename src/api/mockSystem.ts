@@ -33,6 +33,11 @@ import type {
   Router,
   RouterInput,
   RoutersInfo,
+  SpeedConfig,
+  SpeedInfo,
+  SpeedRange,
+  SpeedResult,
+  SpeedRun,
   RouterSearch,
   ZfsInfo,
   ZfsPool,
@@ -182,6 +187,40 @@ let mockTank: ZfsPool | null = null
 // of which has stopped answering.
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600e3).toISOString()
 const routerBase = { incidents: [], events: [], restarting: false, gaveUp: false, hasPassword: false, uptime24h: 1, uptime7d: 1, added: hoursAgo(24 * 20) }
+// Speed Test: a month of hourly tests on a 100/50 Mbps line that slows down in the evening.
+const SPEED_SPANS: Record<SpeedRange, number> = { '24h': 24, '7d': 168, '30d': 720, '90d': 2160, '180d': 4320 }
+let mockSpeedConfig: SpeedConfig = { interval: 60, provider: 'cloudflare', size: 'light', ooklaServer: 0, ooklaAccepted: false, planDown: 100, planUp: 50 }
+let mockOokla = false
+let mockSpeedRun: SpeedRun | null = null
+let mockSpeedResults: SpeedResult[] = (() => {
+  const out: SpeedResult[] = []
+  const now = Date.now()
+  let seed = 7
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  for (let h = 30 * 24; h >= 1; h--) {
+    const at = new Date(now - h * 3600_000 + 7 * 60_000)
+    const hour = at.getHours()
+    const evening = hour >= 19 && hour <= 22 ? 0.45 + rand() * 0.2 : hour >= 17 && hour <= 23 ? 0.75 : 0.92
+    if (h % 97 === 13) {
+      out.push({ time: at.toISOString(), provider: 'cloudflare', down: 0, up: 0, ping: 0, jitter: 0, bytes: 0, error: 'no answer from Cloudflare: dial tcp: i/o timeout' })
+      continue
+    }
+    const down = 100 * evening * (0.9 + rand() * 0.15)
+    out.push({
+      time: at.toISOString(),
+      provider: 'cloudflare',
+      down,
+      up: 50 * (0.85 + rand() * 0.15),
+      ping: 8 + rand() * 4 + (evening < 0.7 ? 14 : 0),
+      jitter: 0.6 + rand() * 1.5 + (evening < 0.7 ? 4 : 0),
+      server: 'Cloudflare Jakarta',
+      ip: '158.140.162.218',
+      bytes: 88e6 + rand() * 6e6,
+    })
+  }
+  return out
+})()
+
 let mockRouters: Router[] = [
   {
     ...routerBase,
@@ -505,6 +544,87 @@ export const mockSystem = {
   },
   async trueNasApps() {
     return mockTrueNasApps
+  },
+  async speedTest(range?: SpeedRange): Promise<SpeedInfo> {
+    const cut = range ? Date.now() - SPEED_SPANS[range] * 3600_000 : Infinity
+    return {
+      config: { ...mockSpeedConfig },
+      running: mockSpeedRun ? { ...mockSpeedRun } : null,
+      last: mockSpeedResults[mockSpeedResults.length - 1] ?? null,
+      results: mockSpeedResults.filter(r => new Date(r.time).getTime() >= cut),
+      total: mockSpeedResults.length,
+      since: mockSpeedResults[0]?.time ?? null,
+      ookla: { installed: mockOokla, version: '1.2.0', available: true },
+    }
+  },
+  async runSpeedTest() {
+    if (mockSpeedRun) throw new Error('a speed test is already running')
+    const ookla = mockSpeedConfig.provider === 'ookla'
+    const run: SpeedRun = { started: new Date().toISOString(), provider: mockSpeedConfig.provider, phase: 'starting', mbps: 0, progress: 0, manual: true }
+    mockSpeedRun = run
+    const steps = 40
+    for (let i = 1; i <= steps; i++) {
+      setTimeout(() => {
+        if (mockSpeedRun !== run) return
+        const f = i / steps
+        run.phase = f < 0.12 ? 'ping' : f < 0.55 ? 'download' : 'upload'
+        run.progress = f
+        run.mbps = run.phase === 'ping' ? 0 : run.phase === 'download' ? 88 + Math.sin(i) * 6 : 46 + Math.cos(i) * 3
+        if (i === steps) {
+          mockSpeedRun = null
+          mockSpeedResults = [
+            ...mockSpeedResults,
+            {
+              time: run.started,
+              provider: run.provider,
+              down: 91.4,
+              up: 47.2,
+              ping: ookla ? 3.1 : 9.4,
+              jitter: 0.8,
+              loaded: ookla ? 18.5 : undefined,
+              loss: ookla ? 0 : undefined,
+              server: ookla ? 'MyRepublic Indonesia, Tangerang' : 'Cloudflare Jakarta',
+              isp: ookla ? 'MyRepublic Indonesia' : undefined,
+              ip: '158.140.162.218',
+              bytes: ookla ? 168e6 : 91e6,
+              url: ookla ? 'https://www.speedtest.net/result/c/00000000-0000-0000-0000-000000000000' : undefined,
+              manual: true,
+            },
+          ]
+        }
+      }, i * 250)
+    }
+  },
+  async stopSpeedTest() {
+    mockSpeedRun = null
+  },
+  async saveSpeedConfig(config: SpeedConfig) {
+    if (config.provider === 'ookla' && !mockOokla) throw new Error('install Ookla’s Speedtest first')
+    mockSpeedConfig = { ...config, ooklaAccepted: mockSpeedConfig.ooklaAccepted }
+  },
+  async installOokla() {
+    await delay(1500)
+    mockOokla = true
+    mockSpeedConfig = { ...mockSpeedConfig, ooklaAccepted: true, provider: 'ookla' }
+  },
+  async removeOokla() {
+    mockOokla = false
+    mockSpeedConfig = { ...mockSpeedConfig, ooklaAccepted: false, ooklaServer: 0, provider: 'cloudflare' }
+  },
+  async ooklaServers() {
+    await delay(600)
+    return [
+      { id: 46362, name: 'MyRepublic Indonesia', location: 'Tangerang', country: 'Indonesia', host: 'speedtest.tangerang.myrepublic.net.id' },
+      { id: 61871, name: 'Hayat Teknologi Informatika', location: 'Bekasi', country: 'Indonesia', host: 'speedtest-new.hayat.net.id' },
+      { id: 4235, name: 'Telkom Indonesia', location: 'Jakarta', country: 'Indonesia', host: 'speedtest.telkom.net.id' },
+    ]
+  },
+  async clearSpeedResults() {
+    mockSpeedResults = []
+  },
+  speedExportUrl() {
+    const rows = mockSpeedResults.map(r => [r.time, r.provider, r.down.toFixed(2), r.up.toFixed(2), r.ping.toFixed(2)].join(','))
+    return `data:text/csv;charset=utf-8,${encodeURIComponent(['time,provider,download_mbps,upload_mbps,ping_ms', ...rows].join('\n'))}`
   },
   async routers(): Promise<RoutersInfo> {
     return {

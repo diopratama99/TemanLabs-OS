@@ -66,6 +66,7 @@ import {
 } from '../components/settings/ServerSections'
 import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { language, tr } from '../lib/i18n'
+import { PackageUpdates } from './SystemUpdates'
 import { useMobileBack } from '../lib/mobileBack'
 
 export type SettingsSection =
@@ -436,6 +437,7 @@ export function Settings({ stats, section, onSectionChange, onOpenWindow, onPowe
                 </button>
               </div>
             </div>
+            <PackageUpdates />
           </>
         )}
         {section === 'storage' && <StorageSection stats={stats} onOpenWindow={onOpenWindow} />}

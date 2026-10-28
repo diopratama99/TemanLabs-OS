@@ -40,6 +40,10 @@ import type {
   TrueNasApp,
   RouterInput,
   RoutersInfo,
+  SpeedConfig,
+  SpeedInfo,
+  SpeedRange,
+  OoklaServer,
   RouterSearch,
   ZfsInfo,
   ZfsSnapshot,
@@ -324,6 +328,18 @@ export const httpApi = {
   testRouter: (id: string, form?: RouterInput) =>
     request<{ message: string }>('POST', `/api/routers/${encodeURIComponent(id)}/test`, form ? { json: form } : {}),
   restartRouter: (id: string) => request<void>('POST', `/api/routers/${encodeURIComponent(id)}/restart`),
+  /** Speed Test: the settings, the test running and the results of a range (none without one). */
+  speedTest: (range?: SpeedRange) => request<SpeedInfo>('GET', `/api/speedtest${query(range ? { range } : {})}`),
+  runSpeedTest: () => request<void>('POST', '/api/speedtest/run'),
+  stopSpeedTest: () => request<void>('POST', '/api/speedtest/stop'),
+  saveSpeedConfig: (config: SpeedConfig) => request<void>('PUT', '/api/speedtest/config', { json: config }),
+  /** Downloads Ookla's Speedtest CLI (its license accepted) and makes it the provider. */
+  installOokla: () => request<void>('POST', '/api/speedtest/ookla', { json: { accept: true } }),
+  removeOokla: () => request<void>('DELETE', '/api/speedtest/ookla'),
+  ooklaServers: () => request<OoklaServer[]>('GET', '/api/speedtest/servers'),
+  clearSpeedResults: () => request<void>('DELETE', '/api/speedtest/results'),
+  /** Every result as CSV. */
+  speedExportUrl: () => '/api/speedtest/export',
   /** A switched-on device's MAC address, from its IP. */
   lookupMac: (host: string) => request<{ mac: string }>('GET', `/api/devices/mac${query({ host })}`),
   /** Downloads and starts the remote desktop engine in the background. */

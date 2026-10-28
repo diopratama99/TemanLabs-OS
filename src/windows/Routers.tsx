@@ -5,6 +5,7 @@ import type { AppIncident, FoundPlug, FoundRouter, Router, RouterInput, RouterKi
 import { Switch } from '../components/Switch'
 import { formatFileDate, formatUptime } from '../lib/format'
 import { tr } from '../lib/i18n'
+import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 
 // Routers: the modems, routers and access points the server watches. It checks each every 30
 // seconds (and the internet through them), keeps their outages, and restarts one by hand or by
@@ -80,16 +81,16 @@ export function Routers() {
 
   return (
     <div className="dv rt">
-      <header className="dv-bar">
-        <span className="dv-title">{routers.length > 0 && <small>{tr('{0} of {1} answering', answering, routers.length)}</small>}</span>
+      <WindowToolbar>
+        <ToolbarTitle title={tr('Routers')} subtitle={routers.length > 0 ? tr('{0} of {1} answering', answering, routers.length) : undefined} />
         <span className="tb-spacer" />
-        <button className="btn" onClick={() => setFinding(true)}>
+        <button className="pill-btn" onClick={() => setFinding(true)}>
           <Radar size={13} /> {tr('Find on Network')}
         </button>
-        <button className="btn btn-primary" onClick={() => setEditing({ draft: blank() })}>
+        <button className="pill-btn" onClick={() => setEditing({ draft: blank() })}>
           <Plus size={13} /> {tr('Add Router')}
         </button>
-      </header>
+      </WindowToolbar>
       <div className="dv-body">
         {error && (
           <p className="form-error dv-error">
@@ -317,7 +318,7 @@ const toInput = (r: Router): RouterInput => ({
   autoRestart: r.autoRestart,
 })
 
-function InternetCard({ info }: { info: RoutersInfo }) {
+export function InternetCard({ info }: { info: RoutersInfo }) {
   const net = info.internet
   const state = net.up === null ? 'unknown' : net.up ? 'up' : 'down'
   return (

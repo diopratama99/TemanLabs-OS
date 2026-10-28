@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -38,7 +40,10 @@ tmpfs /run tmpfs rw 0 0
 		t.Fatalf("got %d disks %+v, want %+v", len(got), got, want)
 	}
 	for i := range want {
-		if got[i] != want[i] {
+		// The device it came from isn't part of what is sent.
+		g := got[i]
+		g.source = ""
+		if g != want[i] {
 			t.Errorf("disk %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
@@ -47,5 +52,40 @@ tmpfs /run tmpfs rw 0 0
 	withZFS := func(pool string) (uint64, uint64, bool) { return 350 * G, 100 * G, pool == "tank" }
 	if d := listDisks(strings.NewReader(mounts), stat, withZFS)[1]; d.Used != 350*G || d.Total != 450*G {
 		t.Errorf("tank with zfs list = %+v", d)
+	}
+}
+
+func TestExternalDrive(t *testing.T) {
+	root := t.TempDir()
+	class := filepath.Join(root, "class", "block")
+	mk := func(dir string, files map[string]string) {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for name, v := range files {
+			_ = os.WriteFile(filepath.Join(root, dir, name), []byte(v), 0o644)
+		}
+	}
+	// A USB disk with a partition, an internal SATA disk, and an SD card on an internal reader.
+	usb := "devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/host6/target6:0:0/6:0:0:0/block/sdc"
+	sata := "devices/pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0/block/sda"
+	card := "devices/platform/mmc0/mmc_host/mmc0/mmc0:0001/block/mmcblk0"
+	mk(usb, map[string]string{"removable": "0\n"})
+	mk(usb+"/sdc1", map[string]string{"partition": "1\n"})
+	mk(sata, map[string]string{"removable": "0\n"})
+	mk(sata+"/sda2", map[string]string{"partition": "2\n"})
+	mk(card, map[string]string{"removable": "1\n"})
+	mk(card+"/mmcblk0p1", map[string]string{"partition": "1\n"})
+	mk("class/block", nil)
+	for name, target := range map[string]string{"sdc": usb, "sdc1": usb + "/sdc1", "sda": sata, "sda2": sata + "/sda2", "mmcblk0": card, "mmcblk0p1": card + "/mmcblk0p1"} {
+		if err := os.Symlink(filepath.Join("..", "..", target), filepath.Join(class, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for dev, want := range map[string]string{"/dev/sdc1": "/dev/sdc", "/dev/sdc": "/dev/sdc", "/dev/sda2": "", "/dev/mmcblk0p1": "/dev/mmcblk0", "/dev/nvme0n1p1": ""} {
+		got, ok := externalDrive(class, dev)
+		if got != want || ok != (want != "") {
+			t.Errorf("externalDrive(%s) = %q, %v; want %q", dev, got, ok, want)
+		}
 	}
 }

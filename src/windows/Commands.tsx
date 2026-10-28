@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BookMarked,
-  Boxes,
   Copy,
-  History,
-  LayoutGrid,
   Pencil,
   Plus,
   Save,
@@ -13,15 +10,11 @@ import {
   Star,
   Trash2,
   TriangleAlert,
-  User,
   X,
-  type LucideIcon,
 } from 'lucide-react'
 import { api } from '../api'
 import type { CommandApp, CommandBook, CommandsInfo, SavedCommand } from '../api/types'
-import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { copyText } from '../lib/clipboard'
-import { useAppMenus } from '../lib/appMenus'
 import { language, tr } from '../lib/i18n'
 import { blanks, CATEGORIES, fill, LIBRARY, LIBRARY_TOOLS, PARAMS, type Text } from '../lib/commandLibrary'
 import { indexDocs, rank } from '../lib/commandSearch'
@@ -140,10 +133,14 @@ function buildEntries(info: CommandsInfo): Entry[] {
 interface Props {
   /** Puts a command on the Terminal's prompt (it isn't run until the user presses Enter). */
   onRun: (command: string) => void
+  onClose: () => void
 }
 
-/** Commands: a searchable book of terminal commands for this server and its apps. */
-export function Commands({ onRun }: Props) {
+/**
+ * Commands: a searchable book of terminal commands for this server and its apps, in a panel
+ * beside the Terminal (it was an app of its own; its old name opens the panel).
+ */
+export function Commands({ onRun, onClose }: Props) {
   const [info, setInfo] = useState<CommandsInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [section, setSection] = useState<Section>('all')
@@ -261,8 +258,6 @@ export function Commands({ onRun }: Props) {
     } else onRun(text)
   }
 
-  useAppMenus(() => [{ label: tr('File'), items: [{ label: tr('New Command…'), icon: Plus, onSelect: () => newCommand() }] }])
-
   const count = (s: Section) =>
     s === 'all'
       ? entries.filter(e => e.source !== 'history').length
@@ -270,26 +265,27 @@ export function Commands({ onRun }: Props) {
         ? entries.filter(e => favorites.has(e.key)).length
         : entries.filter(e => e.category === s).length
 
-  const sideItem = (id: Section, label: string, Icon: LucideIcon) => (
-    <button
-      key={id}
-      className={`sidebar-item ${!query && section === id ? 'is-active' : ''}`}
-      onClick={() => {
-        setSection(id)
-        setQuery('')
-        setOpen(null)
-      }}
-    >
-      <Icon size={15} /> {label}
-      <span className="cm-count">{count(id) || ''}</span>
-    </button>
+  const option = (id: Section, label: string) => (
+    <option key={id} value={id}>
+      {label} ({count(id)})
+    </option>
   )
   const installedTools = CATEGORIES.filter(c => c.group === 'tools' && (!c.tool || info?.tools[c.tool] !== false))
-  const title = query.trim() ? tr('Results') : section === 'all' ? tr('All Commands') : categoryLabel(section)
 
   return (
-    <div className="split">
-      <aside className="sidebar cm-side">
+    <aside className="cm-panel" aria-label={tr('Commands')}>
+      <header className="cm-panel-head">
+        <BookMarked size={15} />
+        <strong>{tr('Commands')}</strong>
+        <span className="tb-spacer" />
+        <button className="icon-btn" onClick={() => newCommand()} aria-label={tr('New Command')} title={tr('New Command')}>
+          <Plus size={15} />
+        </button>
+        <button className="icon-btn" onClick={onClose} aria-label={tr('Close')} title={tr('Close')}>
+          <X size={15} />
+        </button>
+      </header>
+      <div className="cm-panel-find">
         <label className="sidebar-search">
           <Search size={13} />
           <input
@@ -308,26 +304,28 @@ export function Commands({ onRun }: Props) {
             </button>
           )}
         </label>
-        <div className="sidebar-group">{tr('Library')}</div>
-        {sideItem('all', tr('All Commands'), LayoutGrid)}
-        {sideItem('favorites', tr('Favorites'), Star)}
-        {sideItem('mine', tr('My Commands'), User)}
-        {(info?.history.length ?? 0) > 0 && sideItem('history', tr('History'), History)}
-        {(info?.apps.length ?? 0) > 0 && sideItem('apps', tr('Installed Apps'), Boxes)}
-        <div className="sidebar-group">Ubuntu</div>
-        {CATEGORIES.filter(c => c.group === 'ubuntu').map(c => sideItem(c.id, L(c.label), c.icon))}
-        {installedTools.length > 0 && <div className="sidebar-group">{tr('Apps & Tools')}</div>}
-        {installedTools.map(c => sideItem(c.id, L(c.label), c.icon))}
-      </aside>
+        <select
+          value={section}
+          disabled={!!query.trim()}
+          onChange={e => {
+            setSection(e.target.value)
+            setOpen(null)
+          }}
+          aria-label={tr('Library')}
+        >
+          <optgroup label={tr('Library')}>
+            {option('all', tr('All Commands'))}
+            {option('favorites', tr('Favorites'))}
+            {option('mine', tr('My Commands'))}
+            {(info?.history.length ?? 0) > 0 && option('history', tr('History'))}
+            {(info?.apps.length ?? 0) > 0 && option('apps', tr('Installed Apps'))}
+          </optgroup>
+          <optgroup label="Ubuntu">{CATEGORIES.filter(c => c.group === 'ubuntu').map(c => option(c.id, L(c.label)))}</optgroup>
+          {installedTools.length > 0 && <optgroup label={tr('Apps & Tools')}>{installedTools.map(c => option(c.id, L(c.label)))}</optgroup>}
+        </select>
+      </div>
 
-      <div className="pane cm-pane">
-        <WindowToolbar>
-          <ToolbarTitle title={title} subtitle={tr('{0} commands', shown.length)} />
-          <span className="tb-spacer" />
-          <button className="pill-btn" onClick={() => newCommand()}>
-            <Plus size={13} /> {tr('New Command')}
-          </button>
-        </WindowToolbar>
+      <div className="cm-panel-body">
 
         {error && <p className="form-error">{error}</p>}
         {!info && !error && <p className="am-empty">{tr('Loading…')}</p>}
@@ -380,7 +378,7 @@ export function Commands({ onRun }: Props) {
       </div>
 
       {editing && <CommandSheet initial={editing} onSave={saveCommand} onDelete={editing.id ? () => deleteCommand(editing.id) : undefined} onClose={() => setEditing(null)} />}
-    </div>
+    </aside>
   )
 }
 

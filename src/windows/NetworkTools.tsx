@@ -2,56 +2,16 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowDown, ArrowUp, Copy, LoaderCircle, Plus, Shield, ShieldOff, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { FirewallRule, NetConnection, NetInterface } from '../api/types'
-import { useAppMenus } from '../lib/appMenus'
 import { copyText } from '../lib/clipboard'
 import { formatBytes, formatSpeed } from '../lib/format'
-import { ToolbarTitle, WindowToolbar } from '../lib/windowChrome'
 import { tr } from '../lib/i18n'
 
-type Tab = 'info' | 'ping' | 'trace' | 'lookup' | 'connections' | 'firewall'
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'info', label: tr('Info') },
-  { id: 'ping', label: tr('Ping') },
-  { id: 'trace', label: tr('Traceroute') },
-  { id: 'lookup', label: tr('Lookup') },
-  { id: 'connections', label: tr('Connections') },
-  { id: 'firewall', label: tr('Firewall') },
-]
+// The network tools, shown as sections of Network (see Network.tsx): interfaces, ping,
+// traceroute, DNS lookup, connections and the firewall.
 
 const INFO_POLL_MS = 2000
 
-/** Network Tools: interfaces, ping, traceroute, DNS lookup, connections and the firewall. */
-export function NetworkTools() {
-  const [tab, setTab] = useState<Tab>('info')
-  useAppMenus(() => [
-    { label: tr('View'), items: TABS.map(t => ({ label: t.label, checked: tab === t.id, onSelect: () => setTab(t.id) })) },
-  ])
-  return (
-    <div className="pane nu">
-      <WindowToolbar>
-        <ToolbarTitle title={tr('Network Tools')} />
-        <span className="tb-spacer" />
-        <div className="tb-segmented is-centered">
-          {TABS.map(t => (
-            <button key={t.id} className={tab === t.id ? 'is-active' : ''} onClick={() => setTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <span className="tb-spacer" />
-      </WindowToolbar>
-      {tab === 'info' && <InfoTab />}
-      {tab === 'ping' && <ToolTab tool="ping" />}
-      {tab === 'trace' && <ToolTab tool="traceroute" />}
-      {tab === 'lookup' && <LookupTab />}
-      {tab === 'connections' && <ConnectionsTab />}
-      {tab === 'firewall' && <FirewallTab />}
-    </div>
-  )
-}
-
-function InfoTab() {
+export function InfoTab() {
   const [list, setList] = useState<NetInterface[]>([])
   const [rates, setRates] = useState<Record<string, { rx: number; tx: number }>>({})
   const [showVirtual, setShowVirtual] = useState(false)
@@ -118,7 +78,7 @@ function InfoTab() {
   )
 }
 
-function ToolTab({ tool }: { tool: 'ping' | 'traceroute' }) {
+export function ToolTab({ tool }: { tool: 'ping' | 'traceroute' }) {
   const [host, setHost] = useState(tool === 'ping' ? '1.1.1.1' : 'google.com')
   const [count, setCount] = useState(4)
   const [output, setOutput] = useState('')
@@ -159,7 +119,7 @@ function ToolTab({ tool }: { tool: 'ping' | 'traceroute' }) {
   )
 }
 
-function LookupTab() {
+export function LookupTab() {
   const [name, setName] = useState('google.com')
   const [result, setResult] = useState<{ records: Record<string, string[]>; resolvers: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -208,7 +168,7 @@ function LookupTab() {
   )
 }
 
-function ConnectionsTab() {
+export function ConnectionsTab() {
   const [list, setList] = useState<NetConnection[] | null>(null)
   const [onlyEstablished, setOnlyEstablished] = useState(true)
   useEffect(() => {
@@ -252,7 +212,7 @@ function ConnectionsTab() {
   )
 }
 
-function FirewallTab() {
+export function FirewallTab() {
   const [state, setState] = useState<{ enabled: boolean; rules: FirewallRule[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ action: 'allow', port: '', protocol: 'tcp', from: '' })

@@ -4,6 +4,26 @@ What changed in each release of TemanLabsOS. The release workflow puts a version
 
 Versions with `-beta` are released like any other (the installer and Software Update offer them); the final version of the same number is offered after its beta.
 
+## v0.6.0-beta
+
+### New
+- Network › Speed Test: the internet's download and upload speed, ping and jitter, by hand or on a schedule (every 15 minutes to once a day), kept for 180 days. It's tested with Cloudflare (built in) or Ookla's Speedtest (installed in one click once its terms are accepted; each result gets a speedtest.net link to show the ISP, and the ping while the line is busy). See the speeds over time against your plan's, the typical and slowest speeds, how many tests fell under 80% of the plan, and the hours of the day the line slows down. The results export as CSV, and the settings show how much data a schedule uses a day and a month.
+- Drives plugged in over USB show on the desktop beside DATA while they're mounted: open one, see its info, or eject it.
+
+### Changed
+- Fewer apps, with nothing taken away:
+  - **Network** holds Routers, Speed Test and Network Tools, with an overview of the internet, its speed, the routers and the server's addresses.
+  - **Downloader** has a Live Streams tab for what Live Recorder did.
+  - **Settings › Software Update** lists the system's packages too (System Updates).
+  - **System Monitor** has a Logs tab (Log Viewer).
+  - **Terminal** opens Commands in a panel beside the shell.
+  - The old names still find them in Quick Search and the Launcher, and old Dock pins and recent apps point to where they went.
+
+### Fixed
+- Files' sidebar picks up a drive plugged in while it's open.
+- Live recordings from Kick (and other sites that send metadata with the stream) are saved as MP4 again instead of being kept as .ts; ones already kept as .ts are turned into MP4 when the server starts.
+- The tabs in a window's toolbar (Downloader's) sit in the middle of the window at its usual size.
+
 ## v0.5.0-beta
 
 ### New

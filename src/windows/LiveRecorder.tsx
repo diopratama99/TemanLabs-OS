@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Circle, FolderOpen, LoaderCircle, MoreHorizontal, Pencil, Play, Plus, Radio, RefreshCw, Settings2, Square, Trash2, X } from 'lucide-react'
 import { api } from '../api'
 import type { RecChannel, Recorder, Recording } from '../api/types'
 import { FolderField } from '../components/FolderField'
-import { MediaToolsGate, MediaToolsRow } from '../components/MediaTools'
+import { MediaToolsRow } from '../components/MediaTools'
 import { Switch } from '../components/Switch'
 import { useContextMenu } from '../lib/contextMenu'
 import { formatBytes, formatFileDate } from '../lib/format'
@@ -40,24 +40,15 @@ function elapsed(from: string, to?: string) {
 interface Props {
   onOpenMedia: (path: string, kind: MediaKind) => void
   onShowInFiles: (folder: string) => void
+  /** The Downloader's tabs, for the toolbar. */
+  tabs?: ReactNode
 }
 
-/** Live Recorder: record channels from Twitch, YouTube, Kick, TikTok… when they go live. */
-export function LiveRecorder(props: Props) {
-  return (
-    <div className="dlr">
-      <MediaToolsGate
-        icon={<Radio size={44} strokeWidth={1.3} />}
-        title={tr('Record live streams')}
-        text={tr('Add channels from Twitch, YouTube, Kick, TikTok and other sites. They’re checked every couple of minutes, and a stream is recorded on the server from the moment it starts until it ends, then saved as MP4.')}
-      >
-        <RecorderMain {...props} />
-      </MediaToolsGate>
-    </div>
-  )
-}
-
-function RecorderMain({ onOpenMedia, onShowInFiles }: Props) {
+/**
+ * The Downloader's Live Streams tab: record channels from Twitch, YouTube, Kick, TikTok… when
+ * they go live.
+ */
+export function RecorderMain({ onOpenMedia, onShowInFiles, tabs }: Props) {
   const [data, setData] = useState<Recorder | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<RecChannel | 'new' | null>(null)
@@ -113,7 +104,9 @@ function RecorderMain({ onOpenMedia, onShowInFiles }: Props) {
   return (
     <>
       <WindowToolbar>
-        <ToolbarTitle title={tr('Live Recorder')} subtitle={data?.folder} />
+        <ToolbarTitle title={tr('Downloader')} subtitle={data?.folder} />
+        <span className="tb-spacer" />
+        {tabs}
         <span className="tb-spacer" />
         <div className="tb-group">
           <button className="tb-btn" onClick={() => setEditing('new')} aria-label={tr('Add Channel')} title={tr('Add Channel')}>
