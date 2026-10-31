@@ -8,6 +8,7 @@ Versions with `-beta` are released like any other (the installer and Software Up
 
 ### Fixed
 - Restarting Samba from File Sharing asks first when computers are connected, shows that it's restarting, and restarts once however often it's clicked. It no longer reports a failure on servers with NetBIOS turned off (where nmbd doesn't run).
+- Signing in works behind a reverse proxy that changes the host name (a hosting panel's `https://8080-….example.net` address forwarding to the server), instead of failing with "cross-origin request refused".
 
 ## v0.6.0-beta
 

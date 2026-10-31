@@ -10,7 +10,9 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -394,14 +396,46 @@ func sameOrigin(next http.Handler) http.Handler {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || u.Host != r.Host {
-					writeError(w, http.StatusForbidden, "cross-origin request refused")
+				if err != nil || !slices.Contains(servedAs(r), normHost(u.Host)) {
+					writeError(w, http.StatusForbidden, fmt.Sprintf("cross-origin request refused (page at %s, server reached as %s)", origin, strings.Join(servedAs(r), ", ")))
 					return
 				}
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// servedAs is the host names the page may have been loaded from: the request's Host, and behind a
+// reverse proxy that changes it (a hosting panel's https://8080-….example.net forwarding to
+// localhost:8080), the host the proxy says it was asked for. A page on another site can't set
+// these headers on a request it makes, so trusting them doesn't let other sites through.
+func servedAs(r *http.Request) []string {
+	hosts := []string{normHost(r.Host)}
+	for _, v := range r.Header.Values("X-Forwarded-Host") {
+		if first, _, _ := strings.Cut(v, ","); strings.TrimSpace(first) != "" {
+			hosts = append(hosts, normHost(strings.TrimSpace(first)))
+		}
+	}
+	// Forwarded: for=…;host=example.net;proto=https (RFC 7239), the first proxy's entry.
+	if first, _, _ := strings.Cut(r.Header.Get("Forwarded"), ","); first != "" {
+		for _, pair := range strings.Split(first, ";") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && strings.EqualFold(k, "host") {
+				hosts = append(hosts, normHost(strings.Trim(v, `"`)))
+			}
+		}
+	}
+	return hosts
+}
+
+// normHost lower-cases a host and drops the default ports, which a proxy may name and a browser's
+// Origin leaves out.
+func normHost(h string) string {
+	h = strings.ToLower(h)
+	for _, port := range []string{":443", ":80"} {
+		h = strings.TrimSuffix(h, port)
+	}
+	return h
 }
 
 type statusRecorder struct {
