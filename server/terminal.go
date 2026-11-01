@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/coder/websocket"
@@ -22,13 +23,28 @@ func (s *server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 	s.servePTY(w, r, cmd, attrs)
 }
 
+// acceptWebSocket upgrades a request from this server's own page. Other sites are turned away
+// (Origin must match the host); behind a reverse proxy that changes the Host, the host the proxy
+// was asked for counts too (see servedAs).
+func acceptWebSocket(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOptions) (*websocket.Conn, error) {
+	if opts == nil {
+		opts = &websocket.AcceptOptions{}
+	}
+	for _, h := range servedAs(r)[1:] {
+		// The library matches these as patterns: a name with pattern characters isn't a host.
+		if !strings.ContainsAny(h, "*?[\\") {
+			opts.OriginPatterns = append(opts.OriginPatterns, h)
+		}
+	}
+	return websocket.Accept(w, r, opts)
+}
+
 // servePTY runs cmd in a PTY sized from the cols/rows query and bridges it to a WebSocket.
 func (s *server) servePTY(w http.ResponseWriter, r *http.Request, cmd *exec.Cmd, attrs *syscall.SysProcAttr) {
 	if attrs == nil {
 		attrs = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	}
-	// websocket.Accept rejects cross-origin upgrades by default (Origin must match Host).
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := acceptWebSocket(w, r, nil)
 	if err != nil {
 		return
 	}

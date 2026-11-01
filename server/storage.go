@@ -598,10 +598,27 @@ type usbMounter struct {
 	on    bool
 	// Partitions mounted here, so a user's unmount isn't undone right away.
 	seen map[string]bool
+	// A drive whose cable or power is failing comes and goes: when it went, its returns lately,
+	// and until when it isn't mounted again.
+	gone   map[string]time.Time
+	flaps  map[string][]time.Time
+	paused map[string]time.Time
 }
 
+const (
+	// Back within this long after going counts as the drive dropping out, not being replugged.
+	usbFlapGap = 2 * time.Minute
+	// This many drop-outs within usbFlapWindow and the drive is left alone for usbFlapPause.
+	usbFlapLimit  = 3
+	usbFlapWindow = 10 * time.Minute
+	usbFlapPause  = 10 * time.Minute
+)
+
 func newUSBMounter(stateDir string, o *owner) *usbMounter {
-	u := &usbMounter{path: filepath.Join(stateDir, "storage.json"), owner: o, on: true, seen: map[string]bool{}}
+	u := &usbMounter{
+		path: filepath.Join(stateDir, "storage.json"), owner: o, on: true, seen: map[string]bool{},
+		gone: map[string]time.Time{}, flaps: map[string][]time.Time{}, paused: map[string]time.Time{},
+	}
 	if data, err := os.ReadFile(u.path); err == nil {
 		var cfg struct {
 			USB *bool `json:"usbAutomount"`
@@ -628,13 +645,123 @@ func (u *usbMounter) set(on bool) error {
 	return os.WriteFile(u.path, data, 0o644)
 }
 
-// loop mounts USB partitions with a filesystem at /media/<label> soon after they appear.
-func (u *usbMounter) loop() {
-	for range time.Tick(5 * time.Second) {
-		if !u.enabled() {
+// back is called when a drive shows up to be mounted: false while it's dropping out over and over
+// (a failing cable or too little power), which mounting each time would only make worse.
+func (u *usbMounter) back(uuid string, now time.Time) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if now.Before(u.paused[uuid]) {
+		return false
+	}
+	if went, ok := u.gone[uuid]; ok && now.Sub(went) < usbFlapGap {
+		recent := []time.Time{now}
+		for _, t := range u.flaps[uuid] {
+			if now.Sub(t) < usbFlapWindow {
+				recent = append(recent, t)
+			}
+		}
+		u.flaps[uuid] = recent
+		if len(recent) >= usbFlapLimit {
+			u.paused[uuid] = now.Add(usbFlapPause)
+			u.flaps[uuid] = nil
+			log.Printf("usb: drive %s keeps disconnecting (%d times in %s): not mounting it for %s; check its cable and power", uuid, len(recent), usbFlapWindow, usbFlapPause)
+			return false
+		}
+	}
+	return true
+}
+
+// stack is the mounts on one folder under /media: how many there are, how many are of drives that
+// are gone (their device no longer exists), and the devices of the ones still there.
+type stack struct {
+	total, stale int
+	live         []string
+}
+
+// staleMounts finds the folders under /media with mounts of drives that are gone.
+func staleMounts(mounts string, exists func(string) bool) map[string]*stack {
+	all := map[string]*stack{}
+	for _, l := range strings.Split(mounts, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 2 {
 			continue
 		}
+		target := unescapeMount(f[1])
+		if !strings.HasPrefix(target, "/media/") {
+			continue
+		}
+		st := all[target]
+		if st == nil {
+			st = &stack{}
+			all[target] = st
+		}
+		st.total++
+		if strings.HasPrefix(f[0], "/dev/") && !exists(f[0]) {
+			st.stale++
+		} else {
+			st.live = append(st.live, f[0])
+		}
+	}
+	for t, st := range all {
+		if st.stale == 0 {
+			delete(all, t)
+		}
+	}
+	return all
+}
+
+// unmountStale takes away the mounts of drives that were unplugged without being unmounted (lazily:
+// files still open on them don't hold it up), and their empty folders. Only the top mount of a
+// folder can be unmounted, so where a drive that's back sits on top of its old mounts, all of them
+// go and it's mounted again on the next round; that's done only when what's still mounted there are
+// USB drives too, never someone's own mount. It says whether such a drive needs mounting again.
+func unmountStale(ctx context.Context) (remount bool) {
+	data, err := os.ReadFile("/proc/self/mounts")
+	if err != nil {
+		return false
+	}
+	for target, st := range staleMounts(string(data), fileExists) {
+		ours := true
+		for _, dev := range st.live {
+			if _, ext := externalDrive("/sys/class/block", dev); !ext {
+				ours = false
+			}
+		}
+		if !ours {
+			continue
+		}
+		done := 0
+		for range st.total {
+			if out, err := exec.CommandContext(ctx, "umount", "-l", target).CombinedOutput(); err != nil {
+				log.Printf("usb: unmounting gone drive at %s: %s", target, strings.TrimSpace(string(out)))
+				break
+			}
+			done++
+		}
+		if !mountedAt(target) {
+			_ = os.Remove(target)
+		}
+		log.Printf("usb: unmounted %d mount(s) of a drive that's gone at %s (%d still there, mounted again)", st.stale, target, len(st.live))
+		remount = remount || (len(st.live) > 0 && done > 0)
+	}
+	return remount
+}
+
+// loop mounts USB partitions with a filesystem at /media/<label> soon after they appear, and takes
+// away the mounts of ones that went without being unmounted.
+func (u *usbMounter) loop() {
+	for range time.Tick(5 * time.Second) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if unmountStale(ctx) {
+			// The drives unmounted with the gone ones are mounted again below.
+			u.mu.Lock()
+			clear(u.seen)
+			u.mu.Unlock()
+		}
+		if !u.enabled() {
+			cancel()
+			continue
+		}
 		devs, err := listBlock(ctx)
 		if err != nil {
 			cancel()
@@ -666,7 +793,19 @@ func (u *usbMounter) loop() {
 				if mounted || seen {
 					continue
 				}
-				target := filepath.Join("/media", safeLabel(str(p.Label), p.Name))
+				if !u.back(uuid, time.Now()) {
+					// Looked at again on the next round, so it mounts once it settles down.
+					u.mu.Lock()
+					delete(u.seen, uuid)
+					u.mu.Unlock()
+					continue
+				}
+				// Never on top of another drive's mount: two drives with the same label get HDD, HDD-2…
+				base := filepath.Join("/media", safeLabel(str(p.Label), p.Name))
+				target := base
+				for i := 2; mountedAt(target) && i < 10; i++ {
+					target = fmt.Sprintf("%s-%d", base, i)
+				}
 				_ = os.MkdirAll(target, 0o755)
 				args := []string{p.Path, target}
 				if o := fstabOptions(fstype, u.owner); strings.Contains(o, "uid=") {
@@ -680,11 +819,12 @@ func (u *usbMounter) loop() {
 				}
 			}
 		}
-		// Forget drives that were unplugged, so they mount again next time.
+		// Forget drives that were unplugged, so they mount again next time, and note when they went.
 		u.mu.Lock()
 		for uuid := range u.seen {
 			if !present[uuid] {
 				delete(u.seen, uuid)
+				u.gone[uuid] = time.Now()
 			}
 		}
 		u.mu.Unlock()

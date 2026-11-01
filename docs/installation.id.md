@@ -23,7 +23,7 @@ Pindahan dari TrueNAS SCALE? [Pindah dari TrueNAS SCALE](migrate-truenas.id.md) 
 ## Persyaratan
 
 **Server**
-- Ubuntu 22.04 / 24.04 (sudah diuji di 24.04) dengan systemd.
+- Distro Linux dengan systemd: Ubuntu 22.04 / 24.04 atau Debian 12 ke atas (paling banyak diuji di Ubuntu 24.04). Distro lain dengan systemd umumnya juga bisa; di distro berbasis apt, installer sekalian memasang ffmpeg.
 - Docker Engine (untuk App Center, System Monitor, dan sebagian besar fitur).
 - Opsional, untuk fitur tertentu:
   - `ffmpeg`: thumbnail video dan Remux (dipasang otomatis oleh installer).

@@ -41,6 +41,8 @@ import type {
   RouterInput,
   RoutersInfo,
   SpeedConfig,
+  DesktopLook,
+  PlaybackInfo,
   SpeedInfo,
   SpeedRange,
   OoklaServer,
@@ -293,6 +295,10 @@ export const httpApi = {
   saveCommandBook: (book: CommandBook) => request<void>('PUT', '/api/commands/book', { json: book }),
   /** Where a video was left off (0 when it wasn't, or was watched to the end). */
   mediaPosition: (path: string) => request<{ position: number; duration: number }>('GET', `/api/media/position${query({ path })}`),
+  /** A video's size and length, and the smaller sizes it can be played at. */
+  playbackInfo: (path: string) => request<PlaybackInfo>('GET', `/api/media/probe${query({ path })}`),
+  /** The video converted to a smaller size (its shorter side) as it plays, from start seconds. */
+  transcodeUrl: (path: string, height: number, start: number) => `/api/media/transcode${query({ path, height: String(height), start: start.toFixed(2) })}`,
   /** Remembers where a video is; position 0 forgets it. */
   saveMediaPosition: (path: string, position: number, duration: number) =>
     request<void>('PUT', '/api/media/position', { json: { path, position, duration } }),
@@ -411,6 +417,9 @@ export const httpApi = {
     request<void>('POST', `/api/processes/${pid}/kill${force ? '?force=1' : ''}`),
 
   listWallpapers: () => request<WallpaperImage[]>('GET', '/api/wallpapers'),
+  /** The wallpaper in use, the same on every device (readable before signing in, for the lock screen). */
+  desktopLook: () => request<DesktopLook>('GET', '/api/desktop'),
+  saveDesktopLook: (look: Omit<DesktopLook, 'updated'>) => request<DesktopLook>('PUT', '/api/desktop', { json: look }),
   uploadWallpaper: (image: Blob) => {
     const form = new FormData()
     form.append('file', image, 'wallpaper')

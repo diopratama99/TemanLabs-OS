@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Wallpapers are the user's own photos, kept on the server so every browser can use them.
@@ -34,6 +37,85 @@ func newWallpaperEntry(name string) wallpaperEntry {
 }
 
 func (s *server) wallpaperDir() string { return filepath.Join(s.cfg.StateDir, "wallpapers") }
+
+// ----- The wallpaper in use -----
+
+// desktopLook is the wallpaper the desktop shows, chosen on any device and the same on all of them.
+// The lock screen shows it before anyone signs in, so it's read without a session; the photos it
+// points to are served that way already.
+type desktopLook struct {
+	// A built-in wallpaper (by number), or the user's own photo instead.
+	Wallpaper int     `json:"wallpaper"`
+	Custom    *string `json:"customWallpaper"`
+	// A tiny blurred copy of the photo, shown while it loads.
+	Preview *wallpaperPreview `json:"customWallpaperPreview"`
+	// Zero until a wallpaper is chosen on some device.
+	Updated time.Time `json:"updated"`
+}
+
+type wallpaperPreview struct {
+	URL  string `json:"url"`
+	Data string `json:"data"`
+}
+
+const maxPreviewBytes = 64 << 10
+
+var (
+	desktopMu        sync.Mutex
+	customWallpaperU = regexp.MustCompile(`^/api/wallpapers/[0-9a-f]{16}\.(jpg|png|webp|gif)$`)
+)
+
+func (s *server) desktopFile() string { return filepath.Join(s.cfg.StateDir, "desktop.json") }
+
+func (s *server) handleGetDesktop(w http.ResponseWriter, r *http.Request) {
+	desktopMu.Lock()
+	data, err := os.ReadFile(s.desktopFile())
+	desktopMu.Unlock()
+	var look desktopLook
+	if err == nil {
+		_ = json.Unmarshal(data, &look)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, look)
+}
+
+func (s *server) handleSetDesktop(w http.ResponseWriter, r *http.Request) {
+	var look desktopLook
+	if err := decodeJSON(r, &look); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	switch {
+	case look.Wallpaper < 0 || look.Wallpaper > 1000:
+		writeError(w, http.StatusBadRequest, "unknown wallpaper")
+		return
+	case look.Custom != nil && !customWallpaperU.MatchString(*look.Custom):
+		writeError(w, http.StatusBadRequest, "not one of the wallpapers")
+		return
+	case look.Preview != nil && (look.Custom == nil || look.Preview.URL != *look.Custom ||
+		!strings.HasPrefix(look.Preview.Data, "data:image/") || len(look.Preview.Data) > maxPreviewBytes):
+		writeError(w, http.StatusBadRequest, "invalid preview")
+		return
+	}
+	look.Updated = time.Now()
+	data, err := json.MarshalIndent(look, "", "  ")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	desktopMu.Lock()
+	defer desktopMu.Unlock()
+	tmp := s.desktopFile() + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := os.Rename(tmp, s.desktopFile()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, look)
+}
 
 // saveWallpaper stores an image under a random name, refusing anything that isn't one.
 func (s *server) saveWallpaper(src io.Reader) (*wallpaperEntry, error) {

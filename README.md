@@ -4,7 +4,7 @@
 
 # TemanLabsOS
 
-**A web desktop for your Ubuntu home server**
+**A web desktop for your Linux home server**
 
 Manage Docker, files, backups, storage, services, the network and the other computers in your home from the browser, through a polished desktop, without opening a terminal.
 
@@ -20,6 +20,7 @@ Manage Docker, files, backups, storage, services, the network and the other comp
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Kubernetes-k3s-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes" />
   <img src="https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
+  <img src="https://img.shields.io/badge/Debian-12%2B-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian" />
 </p>
 <p>
   <a href="https://github.com/diopratama99/TemanLabs-OS/commits"><img src="https://img.shields.io/github/last-commit/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Last commit" /></a>
@@ -160,7 +161,7 @@ The full guide (requirements, updating, configuration, development, troubleshoot
 |---|---|
 | **Devices** | The other computers on your network: on/off status, **Wake-on-LAN** to switch them on from anywhere, a network scan that finds them by name, and their **screens in a window** over VNC or RDP. The remote desktop engine runs in a small container that only the server itself can reach. |
 | **Terminal** | A full shell in the browser (xterm.js + PTY). |
-| **Terminal → Commands** | Beside the Terminal (the book button): hundreds of terminal commands for Ubuntu and the tools you have (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), commands for every installed app, your shell history and your own saved commands. Search in plain words (“see which ports are open”), fill in the blanks and send it to the Terminal. |
+| **Terminal → Commands** | Beside the Terminal (the book button): hundreds of terminal commands for Linux and the tools you have (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), commands for every installed app, your shell history and your own saved commands. Search in plain words (“see which ports are open”), fill in the blanks and send it to the Terminal. |
 | **Disk Manager** | Drives, partitions, SMART health, mounting and **mount at startup**, **formatting** (ext4, xfs, btrfs, exFAT, NTFS), space analysis, **merged storage** (mergerfs), USB auto-mount and eject, **cloud drives** through rclone, and **ZFS pools**: import one from TrueNAS (read-only first), its health, scrubs and daily snapshots. See [Moving from TrueNAS SCALE](docs/migrate-truenas.md). |
 | **Settings → Software Update** | TemanLabsOS's own updates, app updates, and the system's `apt` updates with a live log and a notice when a restart is needed. |
 | **System Monitor → Logs** | The systemd journal by category or by service. |
@@ -191,15 +192,19 @@ The full guide (requirements, updating, configuration, development, troubleshoot
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/about.png" alt="About This Server" /><p align="center"><b>About This Server</b>: the machine, from its firmware</p></td>
-    <td width="50%"><img src="docs/screenshots/light.png" alt="Light theme" /><p align="center"><b>Light theme</b>: status bar panels and widgets</p></td>
+    <td width="50%"><img src="docs/screenshots/light.png" alt="Light theme" /><p align="center"><b>Light theme</b>: and an accent colour, in Appearance</p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/commands.png" alt="Commands" /><p align="center"><b>Commands</b>: find a command by describing it</p></td>
-    <td width="50%"><img src="docs/screenshots/snap.png" alt="Snapped windows" /><p align="center"><b>Snap</b>: windows side by side</p></td>
+    <td width="50%"><img src="docs/screenshots/network.png" alt="Network" /><p align="center"><b>Network</b>: the internet, its speed, the routers and the tools</p></td>
+    <td width="50%"><img src="docs/screenshots/speedtest.png" alt="Speed Test" /><p align="center"><b>Speed Test</b>: on a schedule, against the plan you pay for</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/commands.png" alt="Terminal and Commands" /><p align="center"><b>Commands</b>: beside the Terminal, found by describing them</p></td>
+    <td width="50%"><img src="docs/screenshots/code.png" alt="Code" /><p align="center"><b>Code</b>: edit files on the server, like VS Code</p></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/monitor.png" alt="System Monitor" /><p align="center"><b>System Monitor</b>: statistics per container</p></td>
-    <td width="50%"><img src="docs/screenshots/code.png" alt="Code" /><p align="center"><b>Code</b>: edit files on the server</p></td>
+    <td width="50%"><img src="docs/screenshots/kubernetes.png" alt="Kubernetes" /><p align="center"><b>Kubernetes</b>: a k3s cluster, explained as you go</p></td>
   </tr>
 </table>
 

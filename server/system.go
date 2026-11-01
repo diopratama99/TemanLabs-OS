@@ -249,7 +249,7 @@ func diskUsage() []disk {
 		return nil
 	}
 	defer f.Close()
-	disks := listDisks(f, statSpace, zfsPoolSpace)
+	disks := liveDisks(listDisks(f, statSpace, zfsPoolSpace), fileExists)
 	for i := range disks {
 		if disks[i].Pool != "" {
 			disks[i].Health = zfsHealth(disks[i].Pool)
@@ -259,6 +259,25 @@ func diskUsage() []disk {
 		}
 	}
 	return disks
+}
+
+// liveDisks leaves out the mounts of drives that are gone (unplugged without being unmounted) and,
+// where several mounts are stacked on one folder, all but the last: the one that's seen there.
+func liveDisks(disks []disk, exists func(string) bool) []disk {
+	last := map[string]int{}
+	for i, d := range disks {
+		if strings.HasPrefix(d.source, "/dev/") && !exists(d.source) {
+			continue
+		}
+		last[d.Mount] = i
+	}
+	var out []disk
+	for i, d := range disks {
+		if j, ok := last[d.Mount]; ok && j == i {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // externalDrive says whether a partition (or a whole disk) is on a drive plugged in over USB, or a

@@ -4,6 +4,22 @@ What changed in each release of TemanLabsOS. The release workflow puts a version
 
 Versions with `-beta` are released like any other (the installer and Software Update offer them); the final version of the same number is offered after its beta.
 
+## v0.7.0-beta
+
+### New
+- Choose a video's quality in the Video Player: the original, or 1440p, 1080p, 720p, 480p or 360p (sizes below the video's own), with roughly what an hour of each takes. The server converts it as it plays, so a phone on a slow or metered line uses a fraction of the data. Auto, the default, plays the original and steps down a size when playing keeps stalling, whether the line or the server can't keep up. The choice is remembered on the device; the server uses its graphics chip when it can (VAAPI), and converts at a lower priority than its other work.
+- A TemanLabs wallpaper, the new default: the logo glowing on blue, deep blue in the dark theme and light blue in the light one (where the desktop's text and the clock turn dark to stay readable). Settings › Wallpaper › TemanLabs.
+
+### Changed
+- The README says what TemanLabsOS runs on (Linux with systemd: Ubuntu, Debian), with new screenshots, taken by `site/scripts/readme-shots.mjs`.
+- The wallpaper is kept on the server, so every device shows the same one, the lock screen too: change it on one and the others follow when they're looked at again. The first device to open the desktop after updating keeps its wallpaper as everyone's.
+- Remote screens find the other computer's screens on its picture (what no screen covers is black), so one screen is shown at first however they're arranged: stacked, side by side at different heights, or turned upright. Before, only screens side by side in a row were told apart. The screens found are remembered for the device; Find Them Again looks once more.
+
+### Fixed
+- The Storage widget fits three drives: each gets a line and a bar, with its sizes on the line.
+- The Terminal (and apps' terminals) and remote screens connect behind a reverse proxy that changes the host name too, as signing in does since v0.6.1-beta.
+- A USB drive that drops out and comes back (a failing cable, too little power) no longer piles up mounts on the same folder and shows up as many drives in Files and on the desktop: the mounts of a drive that's gone are taken away, and a drive that drops out 3 times in 10 minutes is left unmounted for 10 minutes. Two drives with the same name are mounted side by side (HDD, HDD-2) instead of one on top of the other.
+
 ## v0.6.1-beta
 
 ### Fixed

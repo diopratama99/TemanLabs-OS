@@ -2360,4 +2360,12 @@ export const ID: Record<string, string> = {
   "1 connected computer loses its connection for a moment.": "1 komputer yang tersambung akan terputus sebentar.",
   "{0} connected computers lose their connection for a moment.": "{0} komputer yang tersambung akan terputus sebentar.",
   "Restarting Samba…": "Merestart Samba…",
+  "upright": "tegak",
+  "Find them again": "Cari lagi",
+  "Find them on the picture": "Cari dari gambar layar",
+  "Lowered to {0}p to keep playing": "Diturunkan ke {0}p supaya tetap lancar",
+  "Couldn’t convert this video; playing the original": "Video ini tidak bisa dikonversi; memutar yang asli",
+  "hr": "jam",
+  "Original, smaller when it stalls": "Asli, mengecil kalau tersendat",
+  "Original": "Asli",
 }

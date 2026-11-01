@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { api } from '../api'
 import { defaultWidgets, normalizeWidgets, type WidgetConfig } from './widgets'
 import { browserLanguage, tr, type Language } from './i18n'
 
@@ -118,7 +119,8 @@ function loadSettings(): Settings {
     showDesktopDrive: true,
     menuBar: { ...DEFAULT_MENU_BAR },
     lockAfter: 0,
-    wallpaper: 0,
+    // The TemanLabs logo wallpaper (LOGO_WALLPAPER in components/Wallpaper.tsx).
+    wallpaper: 3,
     customWallpaper: null,
     customWallpaperPreview: null,
     showWidgets: true,
@@ -185,6 +187,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.dataset.accent = settings.accent
     root.dataset.reduceMotion = settings.reduceMotion ? 'on' : 'off'
     root.dataset.dockAutohide = settings.dockAutohide ? 'on' : 'off'
+    // Text drawn on the desktop turns dark over the logo wallpaper's light look (wallpaper 3).
+    root.dataset.wallpaperTone = settings.theme === 'light' && settings.wallpaper === 3 && !settings.customWallpaper ? 'light' : 'dark'
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     } catch {
@@ -192,10 +196,61 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [settings])
 
+  // The wallpaper is the server's, the same on every device: read when the page opens, every
+  // minute and when it's looked at again; a change here goes to the server (server/wallpaper.go).
+  // lookOnServer is what the server has (null until read; "" when no device has chosen one yet).
+  const lookOnServer = useRef<string | null>(null)
+  const savedAt = useRef(0)
+  const [lookRead, setLookRead] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const read = () =>
+      api.desktopLook().then(
+        d => {
+          // A change made here a moment ago wins over an answer that may predate it.
+          if (!alive || Date.now() - savedAt.current < 5000) return
+          if (d.updated.startsWith('0001')) {
+            lookOnServer.current = ''
+          } else {
+            const look = { wallpaper: d.wallpaper, customWallpaper: d.customWallpaper, customWallpaperPreview: d.customWallpaperPreview }
+            lookOnServer.current = JSON.stringify(look)
+            setSettings(s => (lookOf(s) === lookOnServer.current ? s : { ...s, ...look }))
+          }
+          setLookRead(n => n + 1)
+        },
+        () => {},
+      )
+    void read()
+    const timer = setInterval(read, 60_000)
+    const onVisible = () => document.visibilityState === 'visible' && void read()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+  const look = lookOf(settings)
+  useEffect(() => {
+    const before = lookOnServer.current
+    if (before === null || look === before) return
+    lookOnServer.current = look
+    savedAt.current = Date.now()
+    // Refused before signing in: it's tried again on the next read.
+    api.saveDesktopLook(JSON.parse(look)).catch(() => {
+      if (lookOnServer.current === look) lookOnServer.current = before
+    })
+  }, [look, lookRead])
+
   const update = (patch: SettingsPatch) =>
     setSettings(s => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }))
 
   return <SettingsContext.Provider value={{ settings, update }}>{children}</SettingsContext.Provider>
+}
+
+/** The settings that are the server's rather than this device's: the wallpaper. */
+function lookOf(s: Settings) {
+  return JSON.stringify({ wallpaper: s.wallpaper, customWallpaper: s.customWallpaper, customWallpaperPreview: s.customWallpaperPreview })
 }
 
 export function useSettings() {

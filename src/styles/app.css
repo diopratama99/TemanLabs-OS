@@ -587,6 +587,34 @@
   stroke-linecap: round;
 }
 
+/* On the logo wallpaper's light look the clock is drawn dark, like the rest of the desktop's text. */
+[data-wallpaper-tone='light'] .clock-face {
+  filter: none;
+}
+
+[data-wallpaper-tone='light'] .clock-dial {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: rgba(11, 29, 68, 0.25);
+}
+
+[data-wallpaper-tone='light'] .clock-face .tick {
+  stroke: rgba(11, 29, 68, 0.35);
+}
+
+[data-wallpaper-tone='light'] .clock-face .tick-major,
+[data-wallpaper-tone='light'] .hand-h,
+[data-wallpaper-tone='light'] .hand-m {
+  stroke: var(--chrome-text);
+}
+
+[data-wallpaper-tone='light'] .clock-num {
+  fill: var(--chrome-text);
+}
+
+[data-wallpaper-tone='light'] .clock-city {
+  fill: var(--chrome-text-2);
+}
+
 .hand-h {
   stroke-width: 4;
 }
@@ -675,6 +703,32 @@
 .disk-row small {
   font-weight: 500;
   color: var(--chrome-text-2);
+}
+
+/* Three disks: a line and a thinner bar each, to fit the widget. */
+.disks.is-compact {
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.disks.is-compact .disk-row {
+  margin-bottom: 4px;
+  gap: 8px;
+}
+
+.disks.is-compact .disk-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disks.is-compact .disk-row > span:last-child {
+  flex: none;
+}
+
+.disks.is-compact .bar {
+  height: 5px;
 }
 
 .bar {
@@ -5196,7 +5250,7 @@ body.is-sash-dragging iframe {
   left: 50%;
   bottom: 14px;
   z-index: 3;
-  width: min(680px, calc(100% - 28px));
+  width: min(760px, calc(100% - 28px));
   padding: 8px 14px 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -17228,4 +17282,41 @@ a.btn {
 .su-head small {
   font-size: 12px;
   color: var(--text-2);
+}
+
+/* Quality, beside the speed: each size with what an hour of it costs. */
+.vp-quality-menu {
+  min-width: 210px;
+}
+
+.vp-quality-menu .vp-menu-item {
+  height: auto;
+  min-height: 36px;
+  padding: 5px 10px;
+}
+
+.vp-quality-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+}
+
+.vp-quality-item small {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.vp-quality .vp-speed-btn {
+  white-space: nowrap;
+}
+
+/* With the quality button the bar is fuller: picture in picture and download give way first
+   (they stay in the Playback menu, and behind ⋯ on a phone). */
+@container vp (max-width: 820px) {
+  .vp-hud:has(.vp-quality) .vp-optional {
+    display: none;
+  }
 }

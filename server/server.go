@@ -150,6 +150,7 @@ func (s *server) routes() http.Handler {
 	// The lock screen shows the wallpaper before anyone signs in. Names are random (64 bits) and
 	// listing, uploading and deleting them still need a session.
 	mux.HandleFunc("GET /api/wallpapers/{name}", s.handleGetWallpaper)
+	mux.HandleFunc("GET /api/desktop", s.handleGetDesktop)
 	// Share links: pages for whoever has the link, no session needed.
 	mux.HandleFunc("GET /s/{id}", s.handleLinkPage)
 	mux.HandleFunc("POST /s/{id}", s.handleLinkPassword)
@@ -247,6 +248,8 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/commands", s.handleCommands)
 	api.HandleFunc("GET /api/media/position", s.handleGetPosition)
 	api.HandleFunc("PUT /api/media/position", s.handleSetPosition)
+	api.HandleFunc("GET /api/media/probe", s.handleMediaProbe)
+	api.HandleFunc("GET /api/media/transcode", s.handleMediaTranscode)
 	api.HandleFunc("PUT /api/apps/{id}/signin", s.handleAppSignIn)
 	api.HandleFunc("DELETE /api/apps/{id}/signin", s.handleAppSignOut)
 	api.HandleFunc("GET /api/adblock", s.handleAdblock)
@@ -310,6 +313,7 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("GET /api/ports", s.handlePorts)
 	api.HandleFunc("POST /api/processes/{pid}/kill", s.handleKillProcess)
 	api.HandleFunc("GET /api/wallpapers", s.handleListWallpapers)
+	api.HandleFunc("PUT /api/desktop", s.handleSetDesktop)
 	api.HandleFunc("POST /api/wallpapers", s.handleUploadWallpaper)
 	api.HandleFunc("POST /api/wallpapers/from-file", s.handleWallpaperFromFile)
 	api.HandleFunc("DELETE /api/wallpapers/{name}", s.handleDeleteWallpaper)

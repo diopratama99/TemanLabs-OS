@@ -23,7 +23,7 @@ Coming from TrueNAS SCALE? [Moving from TrueNAS SCALE](migrate-truenas.md) shows
 ## Requirements
 
 **Server**
-- Ubuntu 22.04 / 24.04 (tested on 24.04) with systemd.
+- A Linux distribution with systemd: Ubuntu 22.04 / 24.04 or Debian 12 and later (tested most on Ubuntu 24.04). Others with systemd generally work; on apt-based ones the installer also installs ffmpeg.
 - Docker Engine (for the App Center, System Monitor and most features).
 - Optional, for some features:
   - `ffmpeg`: video thumbnails and Remux (the installer adds it).

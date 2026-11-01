@@ -1448,6 +1448,28 @@ export interface SignedInBrowser {
   locked?: boolean
 }
 
+/** A video's size and length, and the smaller sizes the server can play it at (see server/transcode.go). */
+export interface PlaybackInfo {
+  duration: number
+  width: number
+  height: number
+  fps: number
+  /** Bits a second of the whole file. */
+  bitrate: number
+  /** Sizes below its own, by the shorter side (720 = 720p). */
+  qualities: number[]
+  /** What converts: vaapi (the GPU), x264 (the processor), or "" when nothing can. */
+  encoder: string
+}
+
+/** The wallpaper in use, kept on the server so every device shows the same (updated is zero until one's chosen). */
+export interface DesktopLook {
+  wallpaper: number
+  customWallpaper: string | null
+  customWallpaperPreview: { url: string; data: string } | null
+  updated: string
+}
+
 // ----- Speed Test -----
 export type SpeedProvider = 'cloudflare' | 'ookla'
 export type SpeedRange = '24h' | '7d' | '30d' | '90d' | '180d'

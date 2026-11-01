@@ -353,23 +353,29 @@ function StorageWidget({ size, options, data }: { size: WidgetSize; options: Wid
       </>
     )
   }
+  // Three disks fit only a line and a bar each: the sizes go on the name's line, the folder in a tooltip.
+  const shown = disks.slice(0, 3)
+  const compact = shown.length > 2
+  const short = (used: number, total: number) =>
+    options.show === 'free' ? tr('{0} free', formatBytes(total - used)) : `${formatBytes(used)} / ${formatBytes(total, 0)}`
   return (
     <>
       {head}
-      <div className="disks">
-        {disks.slice(0, 3).map(disk => {
+      <div className={`disks ${compact ? 'is-compact' : ''}`}>
+        {shown.map(disk => {
           const used = (disk.used / disk.total) * 100
+          const pct = `${Math.round(pctOf(disk.used, disk.total))}%`
           return (
-            <div className="disk" key={disk.mount}>
+            <div className="disk" key={disk.mount} title={compact ? `${disk.mount} · ${describe(disk.used, disk.total)}` : undefined}>
               <div className="disk-row">
                 <span>
-                  {disk.name} <small>{disk.mount}</small>
+                  {disk.name} {!compact && <small>{disk.mount}</small>}
                   {disk.health && disk.health !== 'ONLINE' && <b className="disk-health">{disk.health}</b>}
                 </span>
-                <span>{Math.round(pctOf(disk.used, disk.total))}%</span>
+                <span>{compact ? <><small>{short(disk.used, disk.total)}</small> {pct}</> : pct}</span>
               </div>
               <Bar pct={used} warn={used > 85} />
-              <div className="w-sub">{describe(disk.used, disk.total)}</div>
+              {!compact && <div className="w-sub">{describe(disk.used, disk.total)}</div>}
             </div>
           )
         })}

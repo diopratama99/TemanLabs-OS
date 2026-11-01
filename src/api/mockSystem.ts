@@ -34,6 +34,7 @@ import type {
   RouterInput,
   RoutersInfo,
   SpeedConfig,
+  DesktopLook,
   SpeedInfo,
   SpeedRange,
   SpeedResult,
@@ -191,6 +192,7 @@ const routerBase = { incidents: [], events: [], restarting: false, gaveUp: false
 const SPEED_SPANS: Record<SpeedRange, number> = { '24h': 24, '7d': 168, '30d': 720, '90d': 2160, '180d': 4320 }
 let mockSpeedConfig: SpeedConfig = { interval: 60, provider: 'cloudflare', size: 'light', ooklaServer: 0, ooklaAccepted: false, planDown: 100, planUp: 50 }
 let mockOokla = false
+let mockLook: DesktopLook = { wallpaper: 0, customWallpaper: null, customWallpaperPreview: null, updated: '0001-01-01T00:00:00Z' }
 let mockSpeedRun: SpeedRun | null = null
 let mockSpeedResults: SpeedResult[] = (() => {
   const out: SpeedResult[] = []
@@ -545,6 +547,13 @@ export const mockSystem = {
   async trueNasApps() {
     return mockTrueNasApps
   },
+  async desktopLook() {
+    return { ...mockLook }
+  },
+  async saveDesktopLook(look: Omit<DesktopLook, 'updated'>) {
+    mockLook = { ...look, updated: new Date().toISOString() }
+    return { ...mockLook }
+  },
   async speedTest(range?: SpeedRange): Promise<SpeedInfo> {
     const cut = range ? Date.now() - SPEED_SPANS[range] * 3600_000 : Infinity
     return {
@@ -728,6 +737,13 @@ export const mockSystem = {
       volume: { mount: '/mnt/HDD_DATA', fstype: 'ext4', size: 491e9, free: 470e9 },
       media: kind === 'video' ? { width: 1920, height: 1080, duration: 5420, video: 'H.264', audio: 'AAC', fps: 23.98, bitrate: 8.2e6, channels: 6 } : kind === 'image' ? { width: 4032, height: 3024 } : undefined,
     }
+  },
+  async playbackInfo() {
+    return { duration: 5420, width: 1920, height: 1080, fps: 30, bitrate: 8.2e6, qualities: [360, 480, 720], encoder: 'x264' }
+  },
+  // No server converts anything here; like the sample videos themselves, nothing plays.
+  transcodeUrl(path: string) {
+    return `about:blank#${encodeURIComponent(path)}`
   },
   async mediaPosition(path: string) {
     return mockPositions.get(path) ?? { position: 0, duration: 0 }

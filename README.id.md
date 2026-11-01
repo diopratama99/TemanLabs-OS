@@ -4,7 +4,7 @@
 
 # TemanLabsOS
 
-**Web desktop untuk home server Ubuntu**
+**Web desktop untuk home server Linux**
 
 Kelola Docker, file, backup, storage, layanan, jaringan, dan komputer lain di rumahmu langsung dari browser, lewat tampilan desktop yang rapi, tanpa harus membuka terminal.
 
@@ -20,6 +20,7 @@ Kelola Docker, file, backup, storage, layanan, jaringan, dan komputer lain di ru
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Kubernetes-k3s-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes" />
   <img src="https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu" />
+  <img src="https://img.shields.io/badge/Debian-12%2B-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian" />
 </p>
 <p>
   <a href="https://github.com/diopratama99/TemanLabs-OS/commits"><img src="https://img.shields.io/github/last-commit/diopratama99/TemanLabs-OS?style=flat-square&color=0479ff" alt="Last commit" /></a>
@@ -160,7 +161,7 @@ Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting)
 |---|---|
 | **Devices** | Komputer lain di jaringanmu: status menyala/mati, **Wake-on-LAN** untuk menyalakannya dari mana saja, pemindaian jaringan yang menemukannya beserta namanya, dan **layarnya di sebuah jendela** lewat VNC atau RDP. Mesin remote desktop-nya berjalan di container kecil yang hanya bisa diakses server sendiri. |
 | **Terminal** | Shell penuh di browser (xterm.js + PTY). |
-| **Terminal → Commands** | Di samping Terminal (tombol buku): ratusan perintah terminal untuk Ubuntu dan tool yang terpasang (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), perintah untuk setiap app terpasang, riwayat shell, dan perintah simpananmu sendiri. Cari dengan kalimat biasa (“cara lihat port yang terbuka”), isi bagian yang kosong, lalu kirim ke Terminal. |
+| **Terminal → Commands** | Di samping Terminal (tombol buku): ratusan perintah terminal untuk Linux dan tool yang terpasang (Docker, Compose, Kubernetes, ffmpeg, rclone, git…), perintah untuk setiap app terpasang, riwayat shell, dan perintah simpananmu sendiri. Cari dengan kalimat biasa (“cara lihat port yang terbuka”), isi bagian yang kosong, lalu kirim ke Terminal. |
 | **Disk Manager** | Drive, partisi, kesehatan SMART, mount dan **mount saat startup**, **format** (ext4, xfs, btrfs, exFAT, NTFS), analisis ruang, **merged storage** (mergerfs), auto-mount dan eject USB, **cloud drive** lewat rclone, serta **pool ZFS**: import dari TrueNAS (baca-saja dulu), kesehatannya, scrub, dan snapshot harian. Lihat [Pindah dari TrueNAS SCALE](docs/migrate-truenas.id.md). |
 | **Pengaturan → Software Update** | Update TemanLabsOS sendiri, update app, dan update paket `apt` dengan log langsung dan pemberitahuan kalau perlu restart. |
 | **System Monitor → Log** | Journal systemd per kategori atau per service. |
@@ -191,15 +192,19 @@ Panduan lengkap (persyaratan, update, konfigurasi, development, troubleshooting)
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/about.png" alt="Tentang Server Ini" /><p align="center"><b>Tentang Server Ini</b>: mesinnya, dibaca dari firmware</p></td>
-    <td width="50%"><img src="docs/screenshots/light.png" alt="Tema terang" /><p align="center"><b>Tema terang</b>: panel status bar dan widget</p></td>
+    <td width="50%"><img src="docs/screenshots/light.png" alt="Tema terang" /><p align="center"><b>Tema terang</b>: dan warna aksen, di Tampilan</p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/commands.png" alt="Commands" /><p align="center"><b>Commands</b>: cari perintah dengan kalimat biasa</p></td>
-    <td width="50%"><img src="docs/screenshots/snap.png" alt="Jendela di-snap" /><p align="center"><b>Snap</b>: dua jendela berdampingan</p></td>
+    <td width="50%"><img src="docs/screenshots/network.png" alt="Jaringan" /><p align="center"><b>Jaringan</b>: internet, kecepatannya, router, dan alat jaringan</p></td>
+    <td width="50%"><img src="docs/screenshots/speedtest.png" alt="Tes Kecepatan" /><p align="center"><b>Tes Kecepatan</b>: terjadwal, dibandingkan dengan paket yang kamu bayar</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/commands.png" alt="Terminal dan Commands" /><p align="center"><b>Commands</b>: di samping Terminal, cari perintah dengan kalimat biasa</p></td>
+    <td width="50%"><img src="docs/screenshots/code.png" alt="Code" /><p align="center"><b>Code</b>: edit file di server, seperti VS Code</p></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/monitor.png" alt="System Monitor" /><p align="center"><b>System Monitor</b>: statistik per container</p></td>
-    <td width="50%"><img src="docs/screenshots/code.png" alt="Code" /><p align="center"><b>Code</b>: edit file di server</p></td>
+    <td width="50%"><img src="docs/screenshots/kubernetes.png" alt="Kubernetes" /><p align="center"><b>Kubernetes</b>: cluster k3s, dijelaskan sambil dipakai</p></td>
   </tr>
 </table>
 

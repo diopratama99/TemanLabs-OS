@@ -375,7 +375,7 @@ func screenQuery(r *http.Request) map[string]string {
 
 // handleRemoteTunnel relays one remote screen between the browser and guacd.
 func (s *server) handleRemoteTunnel(w http.ResponseWriter, r *http.Request) {
-	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"guacamole"}})
+	ws, err := acceptWebSocket(w, r, &websocket.AcceptOptions{Subprotocols: []string{"guacamole"}})
 	if err != nil {
 		return
 	}

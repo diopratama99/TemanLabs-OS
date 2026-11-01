@@ -24,6 +24,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { api } from '../api'
+import type { PlaybackInfo } from '../api/types'
 import { useAppMenus } from '../lib/appMenus'
 import { useContextMenu } from '../lib/contextMenu'
 import { folderOf, formatTime, siblingsOf, type MediaRequest } from '../lib/media'
@@ -55,6 +56,38 @@ const STREAK_MS = 700
 const DRAG_PX = 14
 // Dragging across the whole width moves this many seconds (or the whole video, if shorter).
 const SCRUB_WIDTH_SECONDS = 120
+
+// ----- Quality -----
+// The original file, or the server converting it to a smaller size as it plays (server/transcode.go)
+// to spare a slow or metered line. Auto plays the original and steps down a size when playing keeps
+// stalling, whether the line or the server can't keep up.
+type Quality = 'auto' | 'original' | number
+const QUALITY_KEY = 'video.quality'
+// Video kb/s at each size up to 30 frames a second (more frames: half as much again); as the server.
+const QUALITY_KBPS: Record<number, number> = { 360: 700, 480: 1200, 720: 2500, 1080: 4500, 1440: 8000, 2160: 14000 }
+// A new picture gets this long to settle before its stalls count.
+const STALL_GRACE_MS = 6000
+// Stepping down: a stall this long, or this many within STALL_WINDOW_MS.
+const STALL_LONG_MS = 4000
+const STALL_COUNT = 3
+const STALL_WINDOW_MS = 30_000
+
+function readQuality(): Quality {
+  try {
+    const v = localStorage.getItem(QUALITY_KEY)
+    if (v === 'original' || v === 'auto') return v
+    const n = Number(v)
+    return QUALITY_KBPS[n] ? n : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+/** Roughly how much an hour takes, in GB: the original by its own rate, a size by the server's. */
+function gbPerHour(probe: PlaybackInfo, height: number | null) {
+  const kbps = height === null ? probe.bitrate / 1000 : QUALITY_KBPS[height] * (probe.fps > 31 && height > 720 ? 1.5 : 1) + 128
+  return (kbps * 1000 * 3600) / 8 / 1e9
+}
 
 type Side = 'back' | 'middle' | 'ahead'
 
@@ -96,6 +129,28 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
   titleRef.current = onTitle
   const menu = useContextMenu()
 
+  const [quality, setQualityState] = useState<Quality>(readQuality)
+  const setQuality = (q: Quality) => {
+    setQualityState(q)
+    setAutoHeight(null)
+    try {
+      localStorage.setItem(QUALITY_KEY, String(q))
+    } catch {
+      // Remembered for this session only.
+    }
+  }
+  const [probe, setProbe] = useState<PlaybackInfo | null>(null)
+  // Auto's step down from the original, once playing has kept stalling.
+  const [autoHeight, setAutoHeight] = useState<number | null>(null)
+  // Converting failed for this video (the server busy, say): the original plays.
+  const [noConvert, setNoConvert] = useState(false)
+  // The converted picture playing, and where in the video (path) it starts: its own clock counts
+  // from there. One left from the video before isn't this one's (see live, below).
+  const [stream, setStream] = useState<{ path: string; height: number; start: number } | null>(null)
+  const streamRef = useRef(stream)
+  // A spot to go to once the original has loaded again (after a converted picture).
+  const pendingAt = useRef<number | null>(null)
+
   useEffect(() => {
     if (!request) return
     let alive = true
@@ -121,8 +176,52 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     setTime(0)
     setDuration(0)
     setBuffered(0)
+    setProbe(null)
+    setAutoHeight(null)
+    setNoConvert(false)
+    setStream(null)
+    pendingAt.current = null
     if (current) titleRef.current(nameOf(current))
+    if (!current) return
+    let alive = true
+    api.playbackInfo(current).then(
+      p => alive && setProbe(p),
+      () => {},
+    )
+    return () => {
+      alive = false
+    }
   }, [current])
+
+  // The size to play: none (the original) unless one's chosen and smaller than the video.
+  const short = probe ? Math.min(probe.width, probe.height) : 0
+  const canConvert = !!probe?.encoder && probe.qualities.length > 0 && !noConvert
+  const wanted =
+    !canConvert || !probe
+      ? null
+      : quality === 'auto'
+        ? autoHeight
+        : quality === 'original' || quality >= short - short / 20
+          ? null
+          : (probe.qualities.filter(h => h <= quality).at(-1) ?? probe.qualities[0])
+  const live = stream && stream.path === current ? stream : null
+  streamRef.current = live
+  // Where the video is: the converted picture's clock counts from where it starts.
+  const offset = live?.start ?? 0
+  const pos = () => (streamRef.current?.start ?? 0) + (video.current?.currentTime ?? 0)
+  const total = live && probe ? probe.duration : duration
+  const totalRef = useRef(total)
+  totalRef.current = total
+  // Changing size goes on from the same spot.
+  useEffect(() => {
+    if (!current || (live?.height ?? null) === wanted) return
+    const at = pos()
+    if (wanted === null) {
+      pendingAt.current = at
+      setStream(null)
+    } else setStream({ path: current, height: wanted, start: at })
+  }, [wanted, current])
+  const src = current ? (live ? api.transcodeUrl(current, live.height, live.start) : api.rawFileUrl(current)) : ''
 
   // ----- Continue where you left off -----
   // Where each video was left is kept on the server, so it follows you to other devices.
@@ -137,10 +236,21 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     if (!forget && !finished && p.at < RESUME_MIN) return
     void api.saveMediaPosition(p.path, forget || finished ? 0 : p.at, p.duration).catch(() => {})
   }
-  const jumpTo = (at: number) => {
+  // Goes to a spot: within what the converted picture has brought, there; further, a new one starts
+  // from it.
+  const jumpTo = (to: number) => {
     const v = video.current
     if (!v) return
-    v.currentTime = at
+    const at = Math.min(totalRef.current || v.duration || Infinity, Math.max(0, to))
+    const st = streamRef.current
+    if (st) {
+      const rel = at - st.start
+      let arrived = false
+      for (let i = 0; i < v.buffered.length; i++) arrived ||= rel >= v.buffered.start(i) && rel <= v.buffered.end(i)
+      if (rel >= 0 && arrived) v.currentTime = rel
+      else setStream({ ...st, start: at })
+    } else v.currentTime = at
+    graceUntil.current = performance.now() + STALL_GRACE_MS
     setTime(at)
   }
   useEffect(() => {
@@ -188,7 +298,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
   const startOver = () => {
     jumpTo(0)
     setResumed(null)
-    if (current) savePoint({ path: current, at: 0, duration: duration || 1 }, true)
+    if (current) savePoint({ path: current, at: 0, duration: total || 1 }, true)
   }
 
   useEffect(() => {
@@ -200,7 +310,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     if (!playing || seeking) return
     let frame = 0
     const tick = () => {
-      if (video.current) setTime(video.current.currentTime)
+      if (video.current) setTime(pos())
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -264,7 +374,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
   const jump = (seconds: number) => {
     const v = video.current
     if (!v) return
-    jumpTo(Math.min(v.duration || Infinity, Math.max(0, v.currentTime + seconds)))
+    jumpTo(pos() + seconds)
     show(seconds > 0 ? `+${seconds}s` : `−${-seconds}s`)
   }
 
@@ -298,13 +408,11 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     wake()
     switch (e.key) {
       case 'ArrowRight':
-        v.currentTime = Math.min(v.duration || Infinity, v.currentTime + SKIP_SECONDS)
-        setTime(v.currentTime)
+        jumpTo(pos() + SKIP_SECONDS)
         show(`+${SKIP_SECONDS}s`)
         return true
       case 'ArrowLeft':
-        v.currentTime = Math.max(0, v.currentTime - SKIP_SECONDS)
-        setTime(v.currentTime)
+        jumpTo(pos() - SKIP_SECONDS)
         show(`−${SKIP_SECONDS}s`)
         return true
       case 'j':
@@ -347,28 +455,33 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     const r = track.current!.getBoundingClientRect()
     return { f: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), x: e.clientX - r.left }
   }
+  const dragAt = useRef<number | null>(null)
   const seekTo = (e: ReactPointerEvent) => {
     const v = video.current
-    if (!v || !duration) return
-    const { f } = fraction(e)
-    v.currentTime = f * duration
-    setTime(f * duration)
+    if (!v || !total) return
+    const at = fraction(e).f * total
+    if (streamRef.current) {
+      dragAt.current = at
+      setTime(at)
+    } else jumpTo(at)
   }
   const onTrackDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!duration) return
+    if (!total) return
     e.currentTarget.setPointerCapture(e.pointerId)
     setSeeking(true)
     seekTo(e)
   }
   const onTrackMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!duration) return
+    if (!total) return
     const { f, x } = fraction(e)
-    setHover({ at: f * duration, x })
+    setHover({ at: f * total, x })
     if (seeking) seekTo(e)
   }
   const onTrackUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture(e.pointerId)
     setSeeking(false)
+    if (dragAt.current !== null) jumpTo(dragAt.current)
+    dragAt.current = null
   }
 
   // ----- Touch -----
@@ -397,7 +510,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     const v = video.current
     if (!v) return
     const by = side === 'back' ? -SKIP_SECONDS : SKIP_SECONDS
-    jumpTo(Math.min(v.duration || Infinity, Math.max(0, v.currentTime + by)))
+    jumpTo(pos() + by)
     streak.current = { side, until: performance.now() + STREAK_MS }
     setSkipped(s => ({ side, total: (s?.side === side ? s.total : 0) + SKIP_SECONDS, n: (s?.n ?? 0) + 1 }))
     clearTimeout(skippedTimer.current)
@@ -433,7 +546,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
   }
   const onVideoPointerDown = (e: ReactPointerEvent<HTMLVideoElement>) => {
     if (e.pointerType !== 'touch' || !video.current) return
-    touch.current = { x: e.clientX, y: e.clientY, from: video.current.currentTime, shown, scrub: false, moved: false }
+    touch.current = { x: e.clientX, y: e.clientY, from: pos(), shown, scrub: false, moved: false }
   }
   const onVideoPointerMove = (e: ReactPointerEvent<HTMLVideoElement>) => {
     const t = touch.current
@@ -443,7 +556,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     const dy = e.clientY - t.y
     if (!t.moved && Math.hypot(dx, dy) > DRAG_PX) {
       t.moved = true
-      if (Math.abs(dx) > Math.abs(dy) && duration) {
+      if (Math.abs(dx) > Math.abs(dy) && total) {
         t.scrub = true
         e.currentTarget.setPointerCapture(e.pointerId)
         setSeeking(true)
@@ -451,9 +564,11 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     }
     if (!t.scrub) return
     const width = stage.current?.clientWidth || 1
-    const at = Math.min(duration, Math.max(0, t.from + (dx / width) * Math.min(SCRUB_WIDTH_SECONDS, duration)))
-    v.currentTime = at
-    setTime(at)
+    const at = Math.min(total, Math.max(0, t.from + (dx / width) * Math.min(SCRUB_WIDTH_SECONDS, total)))
+    if (streamRef.current) {
+      dragAt.current = at
+      setTime(at)
+    } else jumpTo(at)
     setScrub({ at, delta: at - t.from })
   }
   const onVideoPointerUp = (e: ReactPointerEvent<HTMLVideoElement>, cancelled = false) => {
@@ -464,6 +579,8 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     if (t.scrub) {
       setSeeking(false)
       setScrub(null)
+      if (dragAt.current !== null) jumpTo(dragAt.current)
+      dragAt.current = null
       return
     }
     if (!cancelled && !t.moved) onTap(e.clientX, t.shown)
@@ -475,11 +592,39 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
     togglePlay()
   }
 
+  // Auto: playing that keeps stalling (the line, or the server converting too slowly) steps down a
+  // size, and on from there. Stalls right after starting or a seek don't count.
+  const graceUntil = useRef(0)
+  const stalls = useRef<number[]>([])
+  const stallTimer = useRef(0)
+  useEffect(() => {
+    graceUntil.current = performance.now() + STALL_GRACE_MS
+    stalls.current = []
+  }, [src])
+  useEffect(() => () => clearTimeout(stallTimer.current), [])
+  const stepDown = () => {
+    if (quality !== 'auto' || !probe || !canConvert) return
+    const now = streamRef.current?.height ?? short
+    const lower = probe.qualities.filter(h => h < now).at(-1)
+    if (!lower) return
+    stalls.current = []
+    setAutoHeight(lower)
+    show(tr('Lowered to {0}p to keep playing', lower))
+  }
+  const onWaiting = () => {
+    const now = performance.now()
+    if (quality !== 'auto' || !canConvert || now < graceUntil.current) return
+    stalls.current = [...stalls.current.filter(t => now - t < STALL_WINDOW_MS), now]
+    clearTimeout(stallTimer.current)
+    if (stalls.current.length >= STALL_COUNT) stepDown()
+    else stallTimer.current = window.setTimeout(stepDown, STALL_LONG_MS)
+  }
+
   const updateBuffered = () => {
     const v = video.current
     if (!v) return
     for (let i = 0; i < v.buffered.length; i++) {
-      if (v.buffered.start(i) <= v.currentTime + 0.5) setBuffered(v.buffered.end(i))
+      if (v.buffered.start(i) <= v.currentTime + 0.5) setBuffered(offset + v.buffered.end(i))
     }
   }
 
@@ -510,6 +655,12 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
       { label: tr('Loop'), icon: Repeat, checked: loop, onSelect: () => setLoop(l => !l) },
       'separator',
       ...SPEEDS.map(s => ({ label: s === 1 ? tr('Normal') : `${s}×`, checked: speed === s, onSelect: () => setSpeed(s) })),
+      ...(canConvert && probe
+        ? [
+            'separator' as const,
+            ...qualityChoices(probe).map(c => ({ label: c.label, checked: quality === c.value, onSelect: () => setQuality(c.value) })),
+          ]
+        : []),
     ])
 
   if (!current) {
@@ -523,7 +674,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
 
   const level = muted ? 0 : volume
   const VolumeIcon = level === 0 ? VolumeX : level < 0.5 ? Volume1 : Volume2
-  const pct = (t: number) => `${duration ? Math.min(100, (t / duration) * 100) : 0}%`
+  const pct = (t: number) => `${total ? Math.min(100, (t / total) * 100) : 0}%`
 
   return (
     <div className="vp">
@@ -594,7 +745,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
           <video
             key={current}
             ref={video}
-            src={api.rawFileUrl(current)}
+            src={src}
             autoPlay
             playsInline
             loop={loop}
@@ -611,11 +762,17 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
             }}
             onTimeUpdate={e => {
               const v = e.currentTarget
-              if (!seeking) setTime(v.currentTime)
-              lastAt.current = { path: current, at: v.currentTime, duration: v.duration }
+              if (!seeking) setTime(offset + v.currentTime)
+              lastAt.current = { path: current, at: offset + v.currentTime, duration: total || v.duration }
             }}
-            onDurationChange={e => setDuration(e.currentTarget.duration || 0)}
-            onLoadedMetadata={() => {
+            onDurationChange={e => !live && setDuration(e.currentTarget.duration || 0)}
+            onWaiting={onWaiting}
+            onPlaying={() => clearTimeout(stallTimer.current)}
+            onLoadedMetadata={e => {
+              if (pendingAt.current !== null) {
+                e.currentTarget.currentTime = pendingAt.current
+                pendingAt.current = null
+              }
               if (resumeAt.current === null) return
               jumpTo(resumeAt.current)
               setResumed(resumeAt.current)
@@ -627,6 +784,13 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
               setMuted(e.currentTarget.muted)
             }}
             onError={() => {
+              // A converted picture that won't come (the server busy): the original instead.
+              if (live) {
+                pendingAt.current = pos()
+                setNoConvert(true)
+                show(tr('Couldn’t convert this video; playing the original'))
+                return
+              }
               setError(true)
               setPlaying(false)
             }}
@@ -648,9 +812,9 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
               role="slider"
               aria-label={tr('Playback position')}
               aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
+              aria-valuemax={Math.round(total)}
               aria-valuenow={Math.round(time)}
-              aria-valuetext={`${formatTime(time)} / ${formatTime(duration)}`}
+              aria-valuetext={`${formatTime(time)} / ${formatTime(total)}`}
               onPointerDown={onTrackDown}
               onPointerMove={onTrackMove}
               onPointerUp={onTrackUp}
@@ -668,7 +832,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
                 </div>
               )}
             </div>
-            <span className="vp-time">−{formatTime(Math.max(0, duration - time))}</span>
+            <span className="vp-time">−{formatTime(Math.max(0, total - time))}</span>
           </div>
 
           <div className="vp-controls">
@@ -712,6 +876,7 @@ export function VideoPlayer({ request, onTitle, onConvert }: Props) {
             </div>
 
             <div className="vp-group vp-end">
+              {canConvert && probe && <QualityMenu probe={probe} quality={quality} playing={live?.height ?? null} onChange={setQuality} visible={shown} />}
               <SpeedMenu speed={speed} onChange={setSpeed} visible={shown} />
               <button className={`vp-btn vp-loop ${loop ? 'is-on' : ''}`} onClick={() => setLoop(l => !l)} aria-label={tr('Loop')} aria-pressed={loop} title={tr('Loop')}>
                 <Repeat size={16} />
@@ -792,6 +957,96 @@ function SpeedMenu({ speed, onChange, visible }: { speed: number; onChange: (spe
             >
               <span>{s === 1 ? tr('Normal') : `${s}×`}</span>
               {s === speed && <Check size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The sizes to choose from: Auto, the original, and the smaller ones, with what an hour costs. */
+function qualityChoices(probe: PlaybackInfo): { value: Quality; label: string; note: string }[] {
+  const short = Math.min(probe.width, probe.height)
+  const gb = (h: number | null) => `≈ ${gbPerHour(probe, h).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB/${tr('hr')}`
+  return [
+    { value: 'auto', label: tr('Auto'), note: tr('Original, smaller when it stalls') },
+    { value: 'original', label: `${tr('Original')} (${short}p)`, note: gb(null) },
+    ...[...probe.qualities].reverse().map(h => ({ value: h, label: `${h}p`, note: gb(h) })),
+  ]
+}
+
+/**
+ * The size picker, beside the speed: the original, or a smaller size the server converts to as it
+ * plays. Like the speed's, its menu opens inside the player, so it works in full screen.
+ */
+function QualityMenu({
+  probe,
+  quality,
+  playing,
+  onChange,
+  visible,
+}: {
+  probe: PlaybackInfo
+  quality: Quality
+  /** The size playing now (null: the original). */
+  playing: number | null
+  onChange: (q: Quality) => void
+  visible: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!visible) setOpen(false)
+  }, [visible])
+  useEffect(() => {
+    if (!open) return
+    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false)
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('pointerdown', outside, true)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [open])
+  const short = Math.min(probe.width, probe.height)
+  // Short, to fit the bar: Auto while the original plays, else the size playing.
+  const label = playing ? `${playing}p` : quality === 'auto' ? tr('Auto') : `${short}p`
+  return (
+    <div className="vp-speed vp-quality" ref={box}>
+      <button
+        className={`vp-speed-btn ${open ? 'is-open' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={tr('Quality')}
+        title={tr('Quality')}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="vp-menu vp-quality-menu" role="menu" aria-label={tr('Quality')}>
+          {qualityChoices(probe).map(c => (
+            <button
+              key={String(c.value)}
+              className={`vp-menu-item ${c.value === quality ? 'is-on' : ''}`}
+              role="menuitemradio"
+              aria-checked={c.value === quality}
+              onClick={() => {
+                onChange(c.value)
+                setOpen(false)
+              }}
+            >
+              <span className="vp-quality-item">
+                {c.label}
+                <small>{c.note}</small>
+              </span>
+              {c.value === quality && <Check size={14} />}
             </button>
           ))}
         </div>

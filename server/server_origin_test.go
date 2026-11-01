@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/coder/websocket"
 )
 
 func TestSameOriginBehindProxy(t *testing.T) {
@@ -37,5 +41,36 @@ func TestSameOriginBehindProxy(t *testing.T) {
 		if w.Code != c.want {
 			t.Errorf("%s: %d, want %d (%s)", c.name, w.Code, c.want, w.Body.String())
 		}
+	}
+}
+
+func TestWebSocketBehindProxy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := acceptWebSocket(w, r, nil)
+		if err != nil {
+			return
+		}
+		c.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer srv.Close()
+	dial := func(headers map[string]string) error {
+		h := http.Header{}
+		for k, v := range headers {
+			h.Set(k, v)
+		}
+		c, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(srv.URL, "http"), &websocket.DialOptions{HTTPHeader: h})
+		if err == nil {
+			c.CloseNow()
+		}
+		return err
+	}
+	if err := dial(map[string]string{"Origin": "https://8080-abc.instabox.tech", "X-Forwarded-Host": "8080-abc.instabox.tech"}); err != nil {
+		t.Errorf("behind a proxy: %v", err)
+	}
+	if err := dial(map[string]string{"Origin": "https://evil.example", "X-Forwarded-Host": "8080-abc.instabox.tech"}); err == nil {
+		t.Error("another site was let in")
+	}
+	if err := dial(map[string]string{"Origin": "https://8080-abc.instabox.tech"}); err == nil {
+		t.Error("a page from another host was let in without a proxy saying so")
 	}
 }

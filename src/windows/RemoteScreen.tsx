@@ -21,7 +21,7 @@ import { api } from '../api'
 import type { Device } from '../api/types'
 import { copyText } from '../lib/clipboard'
 import { tr } from '../lib/i18n'
-import { screenRegions, screenSplits, type Layout } from '../lib/remoteScreens'
+import { findScreens, screenRegions, screenSplits, type Layout, type Region } from '../lib/remoteScreens'
 import { KIND_ICON } from './Devices'
 
 // A device's screen in a window. The server opens the VNC or RDP session (with the saved
@@ -49,6 +49,9 @@ const KEY_V = [0x76, 0x56]
 // How long to wait for the browser's paste event after Ctrl+V before sending the key anyway.
 const PASTE_WAIT_MS = 200
 const RESIZE_DEBOUNCE_MS = 300
+// How long after the picture appears (or changes size) the screens are looked for on it: long
+// enough for the first full picture to be drawn.
+const FIND_SCREENS_MS = 2000
 // Zoom steps on a touch screen, over the picture fitted to the window.
 const ZOOMS = [1, 1.5, 2, 3, 4]
 // How close to the edge the pointer may come before a zoomed picture follows it.
@@ -160,7 +163,16 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
   const [screen, setScreen] = useState(() => readStored(`remote.screen.${device.id}`, '0'))
   const [layout, setLayout] = useState<Layout>(() => readStored(`remote.layout.${device.id}`, 'auto'))
   const [allNotice, setAllNotice] = useState(false)
-  const regions = device.protocol === 'vnc' && size ? screenRegions(size.width, size.height, layout) : []
+  // The screens found on the picture (see findScreens), kept for the device and the picture's size.
+  const [found, setFound] = useState<{ width: number; height: number; screens: Region[] } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`remote.found.${device.id}`) ?? 'null')
+    } catch {
+      return null
+    }
+  })
+  const foundHere = found && size && found.width === size.width && found.height === size.height ? found.screens : null
+  const regions = device.protocol === 'vnc' && size ? screenRegions(size.width, size.height, layout, foundHere) : []
   const shownRegion = screen === 'all' || regions.length < 2 ? null : (regions[Number(screen)] ?? regions[0])
   const regionRef = useRef(shownRegion)
   regionRef.current = shownRegion
@@ -177,6 +189,30 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
   const keysOpenRef = useRef(keysOpen)
   keysOpenRef.current = keysOpen
 
+  // Finds the screens on the picture as it is now: what no screen covers is pure black.
+  const findOnPicture = () => {
+    const display = clientRef.current?.getDisplay()
+    if (!display) return
+    const width = display.getWidth()
+    const height = display.getHeight()
+    const canvas = display.getDefaultLayer().getCanvas()
+    const data = canvas.getContext('2d')?.getImageData(0, 0, width, height).data
+    if (!data || !width || !height) return
+    const screens = findScreens(
+      (x, y) => {
+        const i = (y * width + x) * 4
+        return data[i] > 2 || data[i + 1] > 2 || data[i + 2] > 2
+      },
+      width,
+      height,
+    )
+    // A screen that's off or locked to black says nothing: what was known stays.
+    if (!screens.length) return
+    const next = { width, height, screens }
+    setFound(next)
+    store(`remote.found.${device.id}`, JSON.stringify(next))
+  }
+
   // Scales the picture (or the one screen shown) to the window, or shows it 1:1 with scroll bars,
   // then zoomed. One screen is cut out with a negative margin in a box that hides the rest, which
   // keeps the mouse's positions right (Guacamole reads them from offsets, not transforms).
@@ -190,15 +226,17 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     if (!w || !h) return
     const region = regionRef.current
     const shownW = region ? region.w : w
-    const base = fitRef.current ? Math.min(el.clientWidth / shownW, el.clientHeight / h) : 1 / (window.devicePixelRatio || 1)
+    const shownH = region ? region.h : h
+    const base = fitRef.current ? Math.min(el.clientWidth / shownW, el.clientHeight / shownH) : 1 / (window.devicePixelRatio || 1)
     const scale = base * zoomRef.current
     display.scale(scale)
     const box = crop.current
     const view = display.getElement()
     if (box) {
       box.style.width = region ? `${region.w * scale}px` : ''
-      box.style.height = region ? `${h * scale}px` : ''
+      box.style.height = region ? `${region.h * scale}px` : ''
       view.style.marginLeft = region ? `${-region.x * scale}px` : ''
+      view.style.marginTop = region ? `${-region.y * scale}px` : ''
     }
   }
 
@@ -278,9 +316,15 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
       setPhase('error')
       client.disconnect()
     }
+    // Where the screens are is read off the picture once it's been drawn, and again when its size
+    // changes (a screen added, removed or turned).
+    let findTimer = 0
     display.onresize = (width, height) => {
       setSize({ width, height })
       rescale()
+      if (device.protocol !== 'vnc') return
+      clearTimeout(findTimer)
+      findTimer = window.setTimeout(() => findOnPicture(), FIND_SCREENS_MS)
     }
 
     // Text copied there: onto this computer's clipboard when the browser allows it, otherwise
@@ -429,6 +473,7 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     client.connect(params.toString())
 
     return () => {
+      clearTimeout(findTimer)
       observer.disconnect()
       cleanups.forEach(f => f())
       clearTimeout(resizeTimer)
@@ -450,11 +495,12 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
     // A new session only for another device, or a retry.
   }, [device.id, attempt])
 
-  useEffect(rescale, [fit, shownRegion?.x, shownRegion?.w])
+  useEffect(rescale, [fit, shownRegion?.x, shownRegion?.y, shownRegion?.w, shownRegion?.h])
 
   const chooseScreen = (value: string) => {
     if (value.startsWith('layout:')) {
       const next = value.slice(7)
+      if (next === 'auto') findOnPicture()
       setLayout(next)
       store(`remote.layout.${device.id}`, next)
       setScreen('0')
@@ -603,13 +649,14 @@ export function RemoteScreen({ device, active }: { device: Device; active: boole
             <select value={shownRegion ? String(regions.indexOf(shownRegion)) : regions.length > 1 ? 'all' : '0'} onChange={e => chooseScreen(e.target.value)} aria-label={tr('Which screen to show')}>
               {regions.length > 1 &&
                 regions.map((r, i) => (
-                  <option key={r.x} value={String(i)}>
-                    {tr('Screen {0}', i + 1)} ({r.w} × {size.height})
+                  <option key={`${r.x},${r.y}`} value={String(i)}>
+                    {tr('Screen {0}', i + 1)} ({r.w} × {r.h}
+                    {r.h > r.w ? `, ${tr('upright')}` : ''})
                   </option>
                 ))}
               <option value={regions.length > 1 ? 'all' : '0'}>{regions.length > 1 ? tr('All screens') : tr('One screen')}</option>
               <optgroup label={tr('Screens on {0}', device.name)}>
-                <option value="layout:auto">{tr('Find them by size')}</option>
+                <option value="layout:auto">{layout === 'auto' ? tr('Find them again') : tr('Find them on the picture')}</option>
                 {[1, 2, 3, 4].map(n => (
                   <option key={n} value={`layout:n${n}`}>
                     {n === 1 ? tr('One screen') : tr('{0} equal screens side by side', n)}
