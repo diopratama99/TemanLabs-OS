@@ -42,6 +42,7 @@ import type {
   RoutersInfo,
   SpeedConfig,
   DesktopLook,
+  ServerPort,
   PlaybackInfo,
   SpeedInfo,
   SpeedRange,
@@ -420,6 +421,10 @@ export const httpApi = {
   /** The wallpaper in use, the same on every device (readable before signing in, for the lock screen). */
   desktopLook: () => request<DesktopLook>('GET', '/api/desktop'),
   saveDesktopLook: (look: Omit<DesktopLook, 'updated'>) => request<DesktopLook>('PUT', '/api/desktop', { json: look }),
+  serverPort: () => request<ServerPort>('GET', '/api/server/port'),
+  /** firewall: "allowed" when ufw is on and the port was opened in it, "failed", or "". */
+  setServerPort: (port: number, keepOld: boolean) =>
+    request<{ port: number; firewall: string }>('PUT', '/api/server/port', { json: { port, keepOld } }),
   uploadWallpaper: (image: Blob) => {
     const form = new FormData()
     form.append('file', image, 'wallpaper')

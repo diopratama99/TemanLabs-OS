@@ -254,7 +254,7 @@ var (
 // Ports the firewall must never block: SSH and TemanLabsOS itself (and so this page).
 func (s *server) lifelinePorts() []string {
 	ports := []string{"22/tcp"}
-	if _, port, err := net.SplitHostPort(s.cfg.Addr); err == nil && port != "" {
+	if _, port, err := net.SplitHostPort(s.addr()); err == nil && port != "" {
 		ports = append(ports, port+"/tcp")
 	}
 	return ports

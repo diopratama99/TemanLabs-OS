@@ -35,6 +35,7 @@ import type {
   RoutersInfo,
   SpeedConfig,
   DesktopLook,
+  ServerPort,
   SpeedInfo,
   SpeedRange,
   SpeedResult,
@@ -193,6 +194,7 @@ const SPEED_SPANS: Record<SpeedRange, number> = { '24h': 24, '7d': 168, '30d': 7
 let mockSpeedConfig: SpeedConfig = { interval: 60, provider: 'cloudflare', size: 'light', ooklaServer: 0, ooklaAccepted: false, planDown: 100, planUp: 50 }
 let mockOokla = false
 let mockLook: DesktopLook = { wallpaper: 0, customWallpaper: null, customWallpaperPreview: null, updated: '0001-01-01T00:00:00Z' }
+let mockPort: ServerPort = { port: 80, here: 80, direct: true, oldPorts: [7700] }
 let mockSpeedRun: SpeedRun | null = null
 let mockSpeedResults: SpeedResult[] = (() => {
   const out: SpeedResult[] = []
@@ -553,6 +555,19 @@ export const mockSystem = {
   async saveDesktopLook(look: Omit<DesktopLook, 'updated'>) {
     mockLook = { ...look, updated: new Date().toISOString() }
     return { ...mockLook }
+  },
+  async serverPort(): Promise<ServerPort> {
+    return { ...mockPort, oldPorts: [...mockPort.oldPorts] }
+  },
+  async setServerPort(port: number, keepOld: boolean) {
+    await new Promise(r => setTimeout(r, 400))
+    if (port < 1 || port > 65535) throw new Error('A port is a number from 1 to 65535.')
+    if (port === mockPort.port) throw new Error(`TemanLabsOS already uses port ${port}.`)
+    if (port >= 7710 && port <= 7799) throw new Error('Ports 7710–7799 are kept for apps’ windows. Choose another one.')
+    const old = mockPort.port
+    const oldPorts = mockPort.oldPorts.filter(p => p !== port && p !== old)
+    mockPort = { ...mockPort, port, oldPorts: keepOld ? [...oldPorts, old] : oldPorts }
+    return { port, firewall: '' }
   },
   async speedTest(range?: SpeedRange): Promise<SpeedInfo> {
     const cut = range ? Date.now() - SPEED_SPANS[range] * 3600_000 : Infinity

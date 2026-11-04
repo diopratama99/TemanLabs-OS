@@ -19,8 +19,9 @@ type Config struct {
 	// Address to listen on. The default stays out of the way of CasaOS (which uses :80); without
 	// it, ":80" opens TemanLabsOS without a port in the address.
 	Addr string `json:"addr"`
-	// Earlier addresses (say ":7700" after moving to ":80") that send browsers on to Addr, so
-	// old bookmarks keep working.
+	// Earlier addresses (say ":7700" after moving to ":80") that still open the desktop, so old
+	// bookmarks keep working: a browser that opens one moves itself to Addr, with its settings.
+	// Settings › Network › Port changes Addr and adds the old one here (or not).
 	RedirectFrom []string `json:"redirectFrom,omitempty"`
 	// Root of the file manager and code editor. "/" is the whole filesystem, like CasaOS's file
 	// manager; set e.g. "/DATA" to keep it to user data.

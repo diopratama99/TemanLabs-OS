@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Check, Copy, HardDrive, LoaderCircle, Lock, Power, RotateCw, ShieldCheck } from 'lucide-react'
 import { api, MOCK_MODE } from '../../api'
-import type { AdblockStatus, NetInterface, RemoteEngine, SignedInBrowser, ShareLinks, SmbInfo, StartupApp, SystemStats } from '../../api/types'
+import type { AdblockStatus, NetInterface, RemoteEngine, ServerPort, SignedInBrowser, ShareLinks, SmbInfo, StartupApp, SystemStats } from '../../api/types'
+import { moveToPort } from '../../lib/movePort'
 import { AppIcon } from '../AppIcon'
 import { ShareLinkRow } from '../ShareLinkSheet'
 import { useAuth } from '../../lib/auth'
@@ -191,6 +192,142 @@ export function AboutSection({ stats, version, onUpdates }: { stats: SystemStats
   )
 }
 
+/**
+ * Network › Port: the port TemanLabsOS is opened at. The new one opens beside the old one, so
+ * nothing restarts; this browser then moves to it with its settings, and so does any browser that
+ * opens the old port later (while it's kept).
+ */
+function PortGroup() {
+  const [info, setInfo] = useState<ServerPort | null>(null)
+  const [port, setPort] = useState('')
+  const [keepOld, setKeepOld] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(null)
+  const load = useCallback(
+    () =>
+      api.serverPort().then(
+        p => {
+          setInfo(p)
+          setPort(String(p.port))
+        },
+        () => {},
+      ),
+    [],
+  )
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const wanted = Number(port)
+  const valid = /^\d{1,5}$/.test(port) && wanted >= 1 && wanted <= 65535
+  const changed = !!info && valid && wanted !== info.port
+  // Opened at the server's own port, so the address can just change its port.
+  const canMove = !!info && info.direct && location.protocol === 'http:' && (Number(location.port) || 80) === info.here
+  const host = location.hostname.includes(':') ? `[${location.hostname}]` : location.hostname
+  const addressAt = (p: number) => `http://${host}${p === 80 ? '' : `:${p}`}`
+
+  const change = async () => {
+    if (!changed || busy) return
+    // Without the old port, a page opened through a proxy or tunnel loses its way: ask first.
+    if (!keepOld && !confirm) return setConfirm(true)
+    setConfirm(false)
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    try {
+      const r = await api.setServerPort(wanted, keepOld)
+      const firewall = r.firewall === 'allowed' ? ` ${tr('The firewall lets it in.')}` : r.firewall === 'failed' ? ` ${tr('Opening it in the firewall failed: allow it in Network › Firewall.')}` : ''
+      if (canMove && !MOCK_MODE) {
+        setDone(tr('Moving to {0}…', addressAt(r.port)) + firewall)
+        setTimeout(() => void moveToPort(r.port), 900)
+        return
+      }
+      setDone(
+        (canMove ? tr('TemanLabsOS is open at {0}.', addressAt(r.port)) : tr('TemanLabsOS now listens on port {0}. This page came through another address (a proxy, tunnel or port forward): point it at port {0}.', r.port)) +
+          firewall,
+      )
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <GroupTitle>{tr('Port')}</GroupTitle>
+      <div className="group">
+        <SettingRow
+          label={tr('TemanLabsOS port')}
+          note={
+            info
+              ? info.port === 80
+                ? tr('80: the address needs no port ({0}).', addressAt(80))
+                : tr('Open it at {0}.', addressAt(info.port))
+              : undefined
+          }
+        >
+          <form
+            className="set-inline set-port"
+            onSubmit={e => {
+              e.preventDefault()
+              void change()
+            }}
+          >
+            <input
+              value={port}
+              onChange={e => {
+                setPort(e.target.value.replace(/\D/g, '').slice(0, 5))
+                setConfirm(false)
+              }}
+              inputMode="numeric"
+              aria-label={tr('TemanLabsOS port')}
+              disabled={!info || busy}
+              spellCheck={false}
+            />
+            <button className={`btn ${confirm ? 'btn-danger' : ''}`} disabled={!changed || busy} onBlur={() => setConfirm(false)}>
+              {busy ? <LoaderCircle size={13} className="spin" /> : confirm ? tr('Click Again to Change') : tr('Change')}
+            </button>
+          </form>
+        </SettingRow>
+        <SettingRow
+          label={tr('Keep the old port working')}
+          note={
+            keepOld
+              ? tr('Bookmarks and links to the old port keep working: a browser that opens it moves to the new one, with its settings.')
+              : tr('The old port closes, free for another program. Bookmarks to it stop working.')
+          }
+        >
+          <Switch
+            label={tr('Keep the old port working')}
+            checked={keepOld}
+            disabled={busy}
+            onChange={v => {
+              setKeepOld(v)
+              setConfirm(false)
+            }}
+          />
+        </SettingRow>
+        {!!info?.oldPorts.length && (
+          <SettingRow label={tr('Old ports still open')} note={tr('They move browsers on to port {0}.', info.port)}>
+            {value(info.oldPorts.join(', '))}
+          </SettingRow>
+        )}
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      {done && <p className="pane-note set-port-done">{done}</p>}
+      <p className="pane-note">
+        {tr(
+          'Changing it doesn’t restart anything. A port forward on the router, or a reverse proxy or tunnel (Cloudflare, Tailscale Serve) that points at the old port, needs the new one too. Ports 7710–7799 are kept for apps’ windows.',
+        )}
+      </p>
+    </>
+  )
+}
+
 export function NetworkSection({ stats, onOpenWindow }: { stats: SystemStats | null; onOpenWindow: (id: WindowId) => void }) {
   const [ifaces, setIfaces] = useState<NetInterface[] | null>(null)
   useEffect(() => {
@@ -222,6 +359,8 @@ export function NetworkSection({ stats, onOpenWindow }: { stats: SystemStats | n
           </span>
         </SettingRow>
       </div>
+      <PortGroup />
+
       <GroupTitle>{tr('Interfaces')}</GroupTitle>
       <div className="group">
         {ifaces === null && (

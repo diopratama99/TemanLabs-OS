@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,6 +49,10 @@ type server struct {
 	routers  *routerStore
 	speed    *speedStore
 	owner    *owner
+	// The addresses it listens on (nil in tests), changed one at a time under portMu.
+	listen   *listeners
+	portMu   sync.Mutex
+	handoffs handoffs
 }
 
 // owner is the configured Linux user; files created through the UI are chowned to them and the
@@ -151,6 +156,10 @@ func (s *server) routes() http.Handler {
 	// listing, uploading and deleting them still need a session.
 	mux.HandleFunc("GET /api/wallpapers/{name}", s.handleGetWallpaper)
 	mux.HandleFunc("GET /api/desktop", s.handleGetDesktop)
+	// A page opened at an old port moves to the new one before signing in, settings and all.
+	mux.HandleFunc("GET /api/server/port", s.handleGetPort)
+	mux.HandleFunc("POST /api/server/handoff", s.handlePutHandoff)
+	mux.HandleFunc("GET /api/server/handoff/{token}", s.handleTakeHandoff)
 	// Share links: pages for whoever has the link, no session needed.
 	mux.HandleFunc("GET /s/{id}", s.handleLinkPage)
 	mux.HandleFunc("POST /s/{id}", s.handleLinkPassword)
@@ -165,6 +174,7 @@ func (s *server) routes() http.Handler {
 	api.HandleFunc("DELETE /api/sessions/{id}", s.handleEndSession)
 	api.HandleFunc("POST /api/sessions/end-others", s.handleEndOtherSessions)
 	api.HandleFunc("GET /api/system", s.handleSystem)
+	api.HandleFunc("PUT /api/server/port", s.handleSetPort)
 	api.HandleFunc("GET /api/store", s.handleStore)
 	api.HandleFunc("GET /api/apps", s.handleApps)
 	api.HandleFunc("POST /api/apps/custom", s.handleInstallCustom)

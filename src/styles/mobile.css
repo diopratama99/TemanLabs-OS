@@ -837,6 +837,35 @@ button.m-row:active,
   border-color: var(--accent);
 }
 
+/* The field with Show Password inside it, at the end. */
+.m-login-field {
+  position: relative;
+  width: 100%;
+}
+
+.m-login-field input {
+  padding-right: 54px;
+}
+
+.m-login-field .login-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text-2);
+  background: none;
+  transform: translateY(-50%);
+}
+
+.m-login-field .login-reveal:active:not(:disabled) {
+  background: var(--m-press, rgba(127, 127, 127, 0.16));
+}
+
 .m-login-form input.has-error {
   border-color: var(--red);
 }

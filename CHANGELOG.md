@@ -4,6 +4,15 @@ What changed in each release of TemanLabsOS. The release workflow puts a version
 
 Versions with `-beta` are released like any other (the installer and Software Update offer them); the final version of the same number is offered after its beta.
 
+## v0.8.0-beta
+
+### New
+- Change the port TemanLabsOS is opened at in Settings › Network › Port, without restarting anything: the new port opens beside the old one, and the browser moves to it with its settings (theme, Dock, widgets), still signed in. The old port can keep working, so a browser that opens a bookmark to it moves on by itself, with its settings too; or it closes, free for another program. The firewall (ufw) lets the new port in when it's on. Ports 7710–7799 stay for apps' windows.
+- Show Password on the lock screen and the sign-in screen: an eye in the field shows what's typed, to check it before signing in.
+
+### Changed
+- An old address in `redirectFrom` (such as `:7700` after moving to `:80`) opens the desktop again instead of redirecting, and a browser that opens it moves to the new port with its settings. Through a reverse proxy or tunnel it keeps working as it is.
+
 ## v0.7.0-beta
 
 ### New

@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -125,22 +123,5 @@ func TestParseNodeStatus(t *testing.T) {
 	}
 	if parseNodeStatus(msg[:30]) != "" {
 		t.Fatal("truncated reply parsed")
-	}
-}
-
-func TestRedirectTo(t *testing.T) {
-	cases := []struct{ addr, host, want string }{
-		{":80", "100.106.53.46:7700", "http://100.106.53.46/#/x?y=1"},
-		{":8080", "serverdio:7700", "http://serverdio:8080/#/x?y=1"},
-		{":80", "[fd7a::1]:7700", "http://[fd7a::1]/#/x?y=1"},
-	}
-	for _, c := range cases {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "http://"+c.host+"/%23/x?y=1", nil)
-		req.Host = c.host
-		redirectTo(c.addr).ServeHTTP(rec, req)
-		if got := rec.Header().Get("Location"); got != strings.Replace(c.want, "#", "%23", 1) {
-			t.Errorf("%s via %s: got %q", c.host, c.addr, got)
-		}
 	}
 }

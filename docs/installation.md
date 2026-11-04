@@ -132,8 +132,8 @@ File: `/var/lib/temanlabsos/config.json`
 
 | Key | Default | Meaning |
 |---|---|---|
-| `addr` | `:80` (`:7700` if port 80 was taken at install) | Address and port to listen on. `:80` opens it without a port (`http://<server-ip>/`), as long as nothing else uses port 80. |
-| `redirectFrom` | (empty) | Old addresses that redirect to `addr`, for example `[":7700"]` after moving to `:80`, so old bookmarks keep working. |
+| `addr` | `:80` (`:7700` if port 80 was taken at install) | Address and port to listen on. `:80` opens it without a port (`http://<server-ip>/`), as long as nothing else uses port 80. Change it in **Settings → Network → Port**, without restarting. |
+| `redirectFrom` | (empty) | Old addresses that still open the desktop, for example `[":7700"]` after moving to `:80`, so old bookmarks keep working: a browser that opens one moves on to `addr` with its settings. Changing the port in Settings adds the old one here when it's kept. |
 | `root` | `/` | Top folder for Files and Code. Set `/DATA` to limit it. |
 | `user` | (from the installer) | Linux user for the Terminal and owner of new files. |
 | `stateDir` | `/var/lib/temanlabsos` | Where TemanLabsOS keeps its own files: app compose files, wallpapers, thumbnails, backup plans and the recovery key, share links, tags, the 30-day history and app health. |

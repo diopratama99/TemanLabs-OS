@@ -9,11 +9,9 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 //go:embed all:web
@@ -47,38 +45,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	httpServer := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           srv.routes(),
-		ReadHeaderTimeout: 10 * time.Second,
+	// The desktop's address, and old ones (redirectFrom) that keep working: a browser that opens
+	// one moves itself to the desktop's port (see port.go).
+	srv.listen = newListeners(srv.routes())
+	srv.listen.setMain(cfg.Addr)
+	if _, err := srv.listen.listen(cfg.Addr); err != nil {
+		log.Fatal(err)
 	}
 	for _, addr := range cfg.RedirectFrom {
-		go func() {
-			r := &http.Server{Addr: addr, Handler: redirectTo(cfg.Addr), ReadHeaderTimeout: 10 * time.Second}
-			log.Printf("redirect from %s: %v", addr, r.ListenAndServe())
-		}()
+		if _, err := srv.listen.listen(addr); err != nil {
+			log.Printf("old address %s: %v", addr, err)
+		}
 	}
 	log.Printf("TemanLabsOS %s listening on %s (files root %s, terminal user %s)", version, cfg.Addr, cfg.Root, cfg.User)
-	log.Fatal(httpServer.ListenAndServe())
-}
-
-// redirectTo sends requests on to the same host and path at addr's port (none for 80). The
-// redirect is temporary, so browsers don't remember it if the address changes again.
-func redirectTo(addr string) http.Handler {
-	_, port, _ := net.SplitHostPort(addr)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(r.Host); err == nil {
-			host = h
-		}
-		if strings.Contains(host, ":") {
-			host = "[" + host + "]"
-		}
-		if port != "" && port != "80" {
-			host += ":" + port
-		}
-		http.Redirect(w, r, "http://"+host+r.URL.RequestURI(), http.StatusTemporaryRedirect)
-	})
+	select {}
 }
 
 func setPasswordFromStdin(cfg *Config) error {

@@ -1470,6 +1470,16 @@ export interface DesktopLook {
   updated: string
 }
 
+/** The port the desktop is opened at (Settings › Network › Port). */
+export interface ServerPort {
+  port: number
+  /** The port this page was opened at, and whether the browser asked for it itself (not through a proxy or tunnel). */
+  here: number
+  direct: boolean
+  /** Old ports that still open the desktop; a browser there moves to the new one. */
+  oldPorts: number[]
+}
+
 // ----- Speed Test -----
 export type SpeedProvider = 'cloudflare' | 'ookla'
 export type SpeedRange = '24h' | '7d' | '30d' | '90d' | '180d'

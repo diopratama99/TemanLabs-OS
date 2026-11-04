@@ -132,8 +132,8 @@ File: `/var/lib/temanlabsos/config.json`
 
 | Kunci | Bawaan | Arti |
 |---|---|---|
-| `addr` | `:80` (`:7700` kalau port 80 terpakai saat instalasi) | Alamat dan port yang didengarkan. `:80` membuatnya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. |
-| `redirectFrom` | (kosong) | Alamat lama yang diarahkan ke `addr`, misalnya `[":7700"]` setelah pindah ke `:80`, supaya bookmark lama tetap jalan. |
+| `addr` | `:80` (`:7700` kalau port 80 terpakai saat instalasi) | Alamat dan port yang didengarkan. `:80` membuatnya bisa dibuka tanpa port (`http://<ip-server>/`), asal port 80 tidak dipakai program lain. Bisa diganti di **Pengaturan → Jaringan → Port**, tanpa restart. |
+| `redirectFrom` | (kosong) | Alamat lama yang masih membuka desktop, misalnya `[":7700"]` setelah pindah ke `:80`, supaya bookmark lama tetap jalan: browser yang membukanya pindah ke `addr` beserta setelannya. Mengganti port di Pengaturan menambahkan port lama di sini kalau dipertahankan. |
 | `root` | `/` | Folder teratas untuk Files dan Code. Isi `/DATA` untuk membatasi. |
 | `user` | (dari installer) | User Linux untuk Terminal dan pemilik file baru. |
 | `stateDir` | `/var/lib/temanlabsos` | Tempat file milik TemanLabsOS sendiri: file compose app, wallpaper, thumbnail, rencana backup dan kunci pemulihan, link berbagi, tag, riwayat 30 hari, dan kesehatan app. |

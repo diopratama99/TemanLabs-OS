@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { ArrowRight, LoaderCircle } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { api } from '../api'
 import type { Session } from '../api/types'
 import { useClock } from '../hooks/useClock'
@@ -22,6 +22,7 @@ export function Login({ hostname, onSignedIn, unlock }: Props) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [shown, setShown] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -41,6 +42,22 @@ export function Login({ hostname, onSignedIn, unlock }: Props) {
     }
   }
 
+  // Show the password as it's typed, to check it. The field keeps focus (and the cursor its place).
+  const reveal = (
+    <button
+      type="button"
+      className="login-reveal"
+      onPointerDown={e => e.preventDefault()}
+      onClick={() => setShown(v => !v)}
+      aria-label={shown ? tr('Hide Password') : tr('Show Password')}
+      aria-pressed={shown}
+      title={shown ? tr('Hide Password') : tr('Show Password')}
+      disabled={pending}
+    >
+      {shown ? <EyeOff size={16} /> : <Eye size={16} />}
+    </button>
+  )
+
   if (SHELL === 'mobile') {
     // A phone gets a plain sign-in: no wallpaper or clock, a field and a button big enough for a thumb.
     return (
@@ -49,17 +66,23 @@ export function Login({ hostname, onSignedIn, unlock }: Props) {
           <LogoTile size={76} />
           <h1>{hostname || tr('TemanLabsOS')}</h1>
           <p>{unlock ? tr('Locked. Enter the password to go on.') : tr('Sign in to your server')}</p>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder={tr('Password')}
-            aria-label={tr('Password')}
-            autoComplete="current-password"
-            autoFocus
-            disabled={pending}
-            className={error ? 'has-error' : ''}
-          />
+          <span className="m-login-field">
+            <input
+              type={shown ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder={tr('Password')}
+              aria-label={tr('Password')}
+              autoComplete="current-password"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+              disabled={pending}
+              className={error ? 'has-error' : ''}
+            />
+            {reveal}
+          </span>
           {error && (
             <span className="m-login-error" role="alert">
               {error}
@@ -90,15 +113,19 @@ export function Login({ hostname, onSignedIn, unlock }: Props) {
         <strong className="login-host">{hostname || tr('TemanLabsOS')}</strong>
         <Glass radius={20} bezel={12} depth={12} blur={16} className={`login-field ${error ? 'has-error' : ''}`}>
           <input
-            type="password"
+            type={shown ? 'text' : 'password'}
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder={tr('Enter Password')}
             aria-label={tr('Password')}
             autoComplete="current-password"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
             disabled={pending}
           />
+          {reveal}
           <button type="submit" aria-label={tr('Sign in')} disabled={!password || pending}>
             {pending ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}
           </button>

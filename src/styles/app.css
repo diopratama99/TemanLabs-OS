@@ -2509,6 +2509,23 @@ body:has(.menu) .dock-item .dock-tooltip {
   opacity: 0.4;
 }
 
+/* Show Password: an eye beside the arrow, without the arrow's disc. */
+.login-field .login-reveal {
+  margin-right: -2px;
+  color: rgba(255, 255, 255, 0.72);
+  background: none;
+}
+
+.login-field .login-reveal:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.login-field .login-reveal:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 1px;
+}
+
 .login-message {
   min-height: 18px;
   font-size: 12.5px;
@@ -13479,6 +13496,25 @@ html:not([data-reduce-transparency='on']) .lp-panel .lp-tabs button.is-active {
   font-size: 12.5px;
   color: var(--text);
   background: var(--field-bg);
+}
+
+/* Settings › Network › Port: a field five digits wide. */
+.set-port input {
+  width: 76px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text);
+  background: var(--field-bg);
+}
+
+.set-port-done {
+  color: var(--text);
 }
 
 /* ----- Backups ----- */
